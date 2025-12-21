@@ -13,7 +13,7 @@
             z-index: 4000; text-align: center; pointer-events: none; width: 90%;
         }
         .map-title h1 { 
-            margin: 0; font-size: 22px; color: #2c3e50; font-weight: bold; letter-spacing: 2px;
+            margin: 0; font-size: 20px; color: #2c3e50; font-weight: bold; letter-spacing: 2px;
             text-shadow: 0 0 5px white, 0 0 10px white;
         }
 
@@ -25,21 +25,19 @@
         input#search-input { flex: 1; border: none; padding: 8px; font-size: 16px; outline: none; width: 100%; }
         button#search-btn { background: #2c3e50; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-weight: bold; }
 
+        /* Estilos de botones en Popups */
         .btn-nav {
-            display: inline-block; padding: 8px 15px;
             background-color: #3498db; color: white !important; text-decoration: none !important;
-            border-radius: 5px; font-weight: bold; font-size: 12px; margin-top: 5px;
+            padding: 8px 10px; border-radius: 5px; font-weight: bold; font-size: 11px; text-align: center;
         }
-        
         .btn-ws {
-            display: inline-block; padding: 8px 15px;
             background-color: #25d366; color: white !important; text-decoration: none !important;
-            border-radius: 5px; font-weight: bold; font-size: 12px; margin-top: 5px;
+            padding: 8px 10px; border-radius: 5px; font-weight: bold; font-size: 11px; text-align: center;
         }
 
         .leaflet-top.leaflet-right { top: 65px !important; }
         .grid-label { font-size: 10px; font-weight: bold; color: #2980b9; pointer-events: none; text-shadow: 0 0 2px white; }
-        .locate-button { background: white; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 5px; font-size: 18px; border: 2px solid rgba(0,0,0,0.2); }
+        .locate-button { background: white; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 5px; font-size: 20px; border: 2px solid rgba(0,0,0,0.2); }
 
         @media only screen and (max-width: 600px) {
             .map-title h1 { font-size: 14px; }
@@ -65,7 +63,7 @@
 <script src="https://unpkg.com/@mapbox/leaflet-pip@latest/leaflet-pip.js"></script>
 
 <script>
-// --- CONFIGURACIÓN INICIAL ---
+// --- CONFIGURACIÓN MAPA ---
 const mymap = L.map('mapid', { zoomControl: true }).setView([8.98, -79.52], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 24,
@@ -84,13 +82,13 @@ const GRID7_LON = 0.00045;
 const MICRO_LAT = GRID7_LAT / 10;
 const MICRO_LON = GRID7_LON / 10;
 
-// --- FUNCIONES ---
+// --- FUNCIONES CORE ---
 function abrirNavegacion(lat, lon) {
     window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`, '_blank');
 }
 
 function compartirWhatsApp(lat, lon, codigo) {
-    const msg = `Mi ubicación postal en Panamá es: *${codigo}*\n\nVer en mapa: https://www.google.com/maps?q=${lat},${lon}`;
+    const msg = `Mi Dirección Postal en Panamá es: *${codigo}*\n\nVer en mapa: https://www.google.com/maps?q=${lat},${lon}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
@@ -112,111 +110,100 @@ function generarSub2(lat, lon) {
     return (Math.abs(x) * 10 + Math.abs(y)).toString().padStart(2, '0');
 }
 
-// --- CARGA GEOJSON ---
+// --- CARGA CAPAS GEOJSON ---
 $.getJSON("estafetas.geojson", function(data) {
     rawGeoData = data;
     L.geoJSON(data, { style: { color: "#2c3e50", weight: 2, fillOpacity: 0.1 } }).addTo(estafetasLayer);
 });
 
 $.getJSON("estafetasl.geojson", function(data) {
-    L.geoJSON(data, { style: { color: "#e74c3c", weight: 3 } }).addTo(estafetaslLayer);
+    L.geoJSON(data, {
+        style: { color: "#e74c3c", weight: 3 },
+        onEachFeature: (f, l) => {
+            let n = f.properties.RUTA || "Ruta";
+            l.bindPopup(`<b>RUTA:</b> ${n}`);
+            l.on('click', (e) => L.DomEvent.stopPropagation(e));
+        }
+    }).addTo(estafetaslLayer);
 });
 
 $.getJSON("estafetasp.geojson", function(data) {
     L.geoJSON(data, {
-        pointToLayer: (f, ll) => L.circleMarker(ll, {radius:8, color:"#27ae60", fillColor:"#2ecc71", fillOpacity:1})
+        pointToLayer: (f, ll) => L.circleMarker(ll, {radius:8, color:"#27ae60", fillColor:"#2ecc71", fillOpacity:1}),
+        onEachFeature: (f, l) => {
+            let n = f.properties.ESTAF_NAME || "Estafeta";
+            l.bindPopup(`<div style="text-align:center;"><b>ESTAFETA:</b><br>${n}<br><a href="#" class="btn-nav" style="display:inline-block;margin-top:5px" onclick="abrirNavegacion(${l.getLatLng().lat}, ${l.getLatLng().lng})">📍 IR</a></div>`);
+            l.on('click', (e) => L.DomEvent.stopPropagation(e));
+        }
     }).addTo(estafetaspLayer);
 });
 
 // --- CONTROL DE CAPAS ---
-const overlayMaps = {
-    "Polígonos (Zonas)": estafetasLayer,
-    "Rutas (Líneas)": estafetaslLayer,
-    "Estafetas (Puntos)": estafetaspLayer
-};
-L.control.layers(null, overlayMaps, {collapsed:false, position: 'topright'}).addTo(mymap);
+L.control.layers(null, { "Zonas": estafetasLayer, "Rutas": estafetaslLayer, "Estafetas": estafetaspLayer }, {collapsed:false, position:'topright'}).addTo(mymap);
 
-// --- CLIC EN MAPA ---
+// --- CLIC EN MAPA (DIRECCIÓN POSTAL) ---
 mymap.on("click", function (e) {
+    if (e.originalEvent._leaf_handled) return; 
+
     clickHighlightLayer.clearLayers();
     const lat = e.latlng.lat;
     const lon = e.latlng.lng;
     
-    let vm = null; // Empezamos en null para validar
+    let vm = null;
     if (rawGeoData) {
         const hit = leafletPip.pointInLayer([lon, lat], L.geoJSON(rawGeoData));
-        if (hit.length > 0) {
-            vm = hit[0].feature.properties.VM_LEVEL;
-        }
+        if (hit.length > 0) vm = hit[0].feature.properties.VM_LEVEL;
     }
 
-    // SI NO HAY ZONA DEFINIDA (Fuera de los polígonos)
     if (!vm) {
-        L.popup()
-            .setLatLng(e.latlng)
-            .setContent(`<div style="text-align:center; color: #c0392b;"><b>ZONA NO DEFINIDA</b><br><small>Fuera del área de cobertura</small></div>`)
-            .openOn(mymap);
-        return; // Detenemos la ejecución aquí para que no calcule códigos
+        L.popup().setLatLng(e.latlng).setContent(`<div style="text-align:center;color:#c0392b"><b>ZONA NO DEFINIDA</b></div>`).openOn(mymap);
+        return;
     }
 
-    // SI HAY ZONA, CONTINUAMOS CON EL CÓDIGO NORMAL...
     let contenido = "";
     const zoom = mymap.getZoom();
 
     if (zoom < 17) {
-        contenido = `<div style="text-align:center;"><b>CÓDIGO POSTAL</b><br><span style="font-size:18px; font-weight:bold;">${vm}</span></div>`;
-    } else if (zoom >= 17 && zoom < 21) {
-        const grid7 = generarCOD7(lat, lon);
-        const cod = `${vm}-${grid7}`;
-        contenido = `
-            <div style="text-align:center;">
-                <b>ZONA POSTAL</b><br><span style="font-size:18px; font-weight:bold; color:#e67e22;">${cod}</span><br>
-                <a href="#" class="btn-nav" onclick="abrirNavegacion(${lat}, ${lon})">📍 NAVEGAR</a><br>
-                <a href="#" class="btn-ws" onclick="compartirWhatsApp(${lat, lon, cod})">💬 WHATSAPP</a>
-            </div>`;
+        contenido = `<div style="text-align:center;"><b>ZONA POSTAL</b><br><span style="font-size:18px; font-weight:bold;">${vm}</span></div>`;
     } else {
-        const grid7 = generarCOD7(lat, lon);
-        const sub2 = generarSub2(lat, lon);
-        const codFull = `${vm}-${grid7}-${sub2}`;
-        
-        const snapLat = Math.floor(lat / MICRO_LAT) * MICRO_LAT;
-        const snapLon = Math.floor(lon / MICRO_LON) * MICRO_LON;
-        
-        L.rectangle([[snapLat, snapLon], [snapLat + MICRO_LAT, snapLon + MICRO_LON]], {
-            color: "#d35400", weight: 2, fillOpacity: 0.4, interactive: false
-        }).addTo(clickHighlightLayer);
+        let codFinal = "";
+        if (zoom < 21) {
+            codFinal = `${vm}-${generarCOD7(lat, lon)}`;
+        } else {
+            const snapLat = Math.floor(lat / MICRO_LAT) * MICRO_LAT;
+            const snapLon = Math.floor(lon / MICRO_LON) * MICRO_LON;
+            L.rectangle([[snapLat, snapLon], [snapLat + MICRO_LAT, snapLon + MICRO_LON]], {
+                color: "#d35400", weight: 2, fillOpacity: 0.4, interactive: false
+            }).addTo(clickHighlightLayer);
+            codFinal = `${vm}-${generarCOD7(lat, lon)}-${generarSub2(lat, lon)}`;
+        }
 
         contenido = `
-            <div style="text-align:center; padding: 2px;">
+            <div style="text-align:center; min-width:160px;">
                 <b style="font-size:10px; color:#7f8c8d;">DIRECCIÓN POSTAL</b><br>
-                <span style="font-size:19px; font-weight:bold; color:#d35400;">${codFull}</span><br>
-                <div style="margin-top:5px;">
-                    <a href="#" class="btn-nav" style="padding:4px 8px; font-size:10px;" onclick="abrirNavegacion(${lat}, ${lon})">📍 IR</a>
-                    <a href="#" class="btn-ws" style="padding:4px 8px; font-size:10px;" onclick="compartirWhatsApp(${lat}, ${lon}, '${codFull}')">💬 WS</a>
+                <span style="font-size:18px; font-weight:bold; color:#d35400;">${codFinal}</span><br>
+                <div style="margin-top:10px; display: flex; gap: 5px; justify-content: center;">
+                    <a href="#" class="btn-nav" style="flex:1" onclick="abrirNavegacion(${lat}, ${lon})">📍 IR</a>
+                    <a href="#" class="btn-ws" style="flex:1" onclick="compartirWhatsApp(${lat}, ${lon}, '${codFinal}')">💬 WS</a>
                 </div>
             </div>`;
     }
     
-    L.popup({ offset: [0, -60], autoPan: true, closeButton: false })
-    .setLatLng(e.latlng)
-    .setContent(contenido)
-    .openOn(mymap);
+    L.popup({ offset: [0, -60], closeButton: false, autoPan: true })
+        .setLatLng(e.latlng).setContent(contenido).openOn(mymap);
 });
 
 // --- BUSCADOR ---
 document.getElementById('search-btn').onclick = function() {
     const s = document.getElementById('search-input').value.trim().toUpperCase();
-    const partes = s.split('-');
-    const code = partes.length > 1 ? partes[1] : partes[0];
-    
+    const code = s.includes('-') ? s.split('-')[1] : s;
     if (!/^[A-Z]{3}\d{4}$/.test(code)) { alert("Formato: ABC1234"); return; }
     const ALFABETO = "ABCDEFGHJKLMNPQRSTUVWXYZ";
     let v_x = 0; for(let i=0;i<3;i++){ v_x = v_x*24+ALFABETO.indexOf(code[i]); }
     const lon = ((v_x + 0.5)/13824)*(-77.15 - (-83.05)) + (-83.05);
     const lat = ((parseInt(code.substring(3)) + 0.5)/10000)*(10-7)+7;
-    
     mymap.setView([lat, lon], 21);
-    L.marker([lat, lon]).addTo(mymap).bindPopup(`<b>Código: ${s}</b>`).openPopup();
+    L.marker([lat, lon]).addTo(clickHighlightLayer).bindPopup(`<b>Búsqueda: ${s}</b>`).openPopup();
 };
 
 // --- GPS ---
@@ -226,48 +213,19 @@ const LocateControl = L.Control.extend({
         const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
         const button = L.DomUtil.create('a', 'locate-button', container);
         button.innerHTML = '🎯';
-        button.title = "Mi ubicación actual";
-        button.style.fontSize = "20px";
-        button.style.display = "flex";
-        button.style.alignItems = "center";
-        button.style.justifyContent = "center";
-
-        L.DomEvent.on(button, 'click', function(e) { 
+        L.DomEvent.on(button, 'click', e => { 
             L.DomEvent.stopPropagation(e); 
-            L.DomEvent.preventDefault(e);
-            
-            // Intentar obtener la ubicación
-            mymap.locate({
-                setView: true, 
-                maxZoom: 19, 
-                enableHighAccuracy: true,
-                timeout: 10000 // 10 segundos de espera máxima
-            }); 
+            mymap.locate({enableHighAccuracy: true, setView: true, maxZoom: 19}); 
         });
         return container;
     }
 });
 mymap.addControl(new LocateControl());
 
-// --- MANEJO DE EVENTOS DE UBICACIÓN ---
-mymap.on('locationfound', function(e) {
-    // Limpiar marcadores previos de clic si existen
-    clickHighlightLayer.clearLayers();
-    
-    // Crear un marcador en la posición actual
-    const radius = e.accuracy / 2;
-    L.circle(e.latlng, radius).addTo(clickHighlightLayer); // Círculo de precisión
-    
-    L.marker(e.latlng).addTo(clickHighlightLayer)
-        .bindPopup("Te encuentras dentro de este radio").openPopup();
-    
-    console.log("Ubicación encontrada:", e.latlng);
+mymap.on('locationfound', e => {
+    L.circle(e.latlng, e.accuracy/2).addTo(clickHighlightLayer);
+    L.marker(e.latlng).addTo(clickHighlightLayer).bindPopup("Tu ubicación").openPopup();
 });
-
-mymap.on('locationerror', function(e) {
-    alert("Error de GPS: " + e.message + ". Por favor, asegúrate de haber dado permisos de ubicación al navegador.");
-});
-mymap.addControl(new LocateControl());
 
 // --- REJILLA ---
 function updateGrid() {
@@ -286,8 +244,4 @@ function updateGrid() {
 mymap.on('moveend zoomend', updateGrid);
 </script>
 </body>
-
 </html>
-
-
-
