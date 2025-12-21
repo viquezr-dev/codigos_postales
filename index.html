@@ -226,12 +226,46 @@ const LocateControl = L.Control.extend({
         const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
         const button = L.DomUtil.create('a', 'locate-button', container);
         button.innerHTML = '🎯';
-        L.DomEvent.on(button, 'click', e => { 
+        button.title = "Mi ubicación actual";
+        button.style.fontSize = "20px";
+        button.style.display = "flex";
+        button.style.alignItems = "center";
+        button.style.justifyContent = "center";
+
+        L.DomEvent.on(button, 'click', function(e) { 
             L.DomEvent.stopPropagation(e); 
-            mymap.locate({enableHighAccuracy: true, setView: true, maxZoom: 19}); 
+            L.DomEvent.preventDefault(e);
+            
+            // Intentar obtener la ubicación
+            mymap.locate({
+                setView: true, 
+                maxZoom: 19, 
+                enableHighAccuracy: true,
+                timeout: 10000 // 10 segundos de espera máxima
+            }); 
         });
         return container;
     }
+});
+mymap.addControl(new LocateControl());
+
+// --- MANEJO DE EVENTOS DE UBICACIÓN ---
+mymap.on('locationfound', function(e) {
+    // Limpiar marcadores previos de clic si existen
+    clickHighlightLayer.clearLayers();
+    
+    // Crear un marcador en la posición actual
+    const radius = e.accuracy / 2;
+    L.circle(e.latlng, radius).addTo(clickHighlightLayer); // Círculo de precisión
+    
+    L.marker(e.latlng).addTo(clickHighlightLayer)
+        .bindPopup("Te encuentras dentro de este radio").openPopup();
+    
+    console.log("Ubicación encontrada:", e.latlng);
+});
+
+mymap.on('locationerror', function(e) {
+    alert("Error de GPS: " + e.message + ". Por favor, asegúrate de haber dado permisos de ubicación al navegador.");
 });
 mymap.addControl(new LocateControl());
 
@@ -254,5 +288,6 @@ mymap.on('moveend zoomend', updateGrid);
 </body>
 
 </html>
+
 
 
