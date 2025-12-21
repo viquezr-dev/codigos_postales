@@ -25,7 +25,7 @@
         input#search-input { flex: 1; border: none; padding: 8px; font-size: 16px; outline: none; width: 100%; }
         button#search-btn { background: #2c3e50; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-weight: bold; }
 
-        /* Estilos de botones en Popups */
+        /* Botones en Popups */
         .btn-nav {
             background-color: #3498db; color: white !important; text-decoration: none !important;
             padding: 8px 10px; border-radius: 5px; font-weight: bold; font-size: 11px; text-align: center;
@@ -121,7 +121,7 @@ $.getJSON("estafetasl.geojson", function(data) {
         style: { color: "#e74c3c", weight: 3 },
         onEachFeature: (f, l) => {
             let n = f.properties.RUTA || "Ruta";
-            l.bindPopup(`<b>RUTA:</b> ${n}`);
+            l.bindPopup(`<b>RUTA:</b> ${n}`); // Ahora tiene X por defecto
             l.on('click', (e) => L.DomEvent.stopPropagation(e));
         }
     }).addTo(estafetaslLayer);
@@ -179,7 +179,7 @@ mymap.on("click", function (e) {
         }
 
         contenido = `
-            <div style="text-align:center; min-width:160px;">
+            <div style="text-align:center; min-width:180px; padding-top:10px;">
                 <b style="font-size:10px; color:#7f8c8d;">DIRECCIÓN POSTAL</b><br>
                 <span style="font-size:18px; font-weight:bold; color:#d35400;">${codFinal}</span><br>
                 <div style="margin-top:10px; display: flex; gap: 5px; justify-content: center;">
@@ -189,7 +189,8 @@ mymap.on("click", function (e) {
             </div>`;
     }
     
-    L.popup({ offset: [0, -60], closeButton: false, autoPan: true })
+    // Popup con botón de cerrar habilitado (closeButton: true por defecto)
+    L.popup({ offset: [0, -60], autoPan: true })
         .setLatLng(e.latlng).setContent(contenido).openOn(mymap);
 });
 
