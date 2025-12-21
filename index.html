@@ -170,7 +170,7 @@ mymap.on("click", function (e) {
         const cod = `${vm}-${grid7}`;
         contenido = `
             <div style="text-align:center;">
-                <b>LOTE</b><br><span style="font-size:18px; font-weight:bold; color:#e67e22;">${cod}</span><br>
+                <b>DIRECCIÓN POSTAL</b><br><span style="font-size:18px; font-weight:bold; color:#e67e22;">${cod}</span><br>
                 <a href="#" class="btn-nav" onclick="abrirNavegacion(${lat}, ${lon})">📍 NAVEGAR</a><br>
                 <a href="#" class="btn-ws" onclick="compartirWhatsApp(${lat, lon, cod})">💬 WHATSAPP</a>
             </div>`;
@@ -252,4 +252,5 @@ function updateGrid() {
 mymap.on('moveend zoomend', updateGrid);
 </script>
 </body>
+
 </html>
