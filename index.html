@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+ //* Proyecto realizado por Raul Viquez. Por favor no reproduzca este codigo html. *//
 <html>
 <head>
     <title>SISTEMA POSTAL DE PANAMÁ</title>
@@ -105,9 +106,23 @@ function generarCOD7(lat, lon) {
 }
 
 function generarSub2(lat, lon) {
+    // 1. Coordenadas relativas dentro del lote (0 a 9)
     const x = Math.floor((((lon % GRID7_LON) + GRID7_LON) % GRID7_LON) / MICRO_LON);
     const y = Math.floor((((lat % GRID7_LAT) + GRID7_LAT) % GRID7_LAT) / MICRO_LAT);
-    return (Math.abs(x) * 10 + Math.abs(y)).toString().padStart(2, '0');
+    
+    // 2. Tablas de permutación (orden "caótico" pero fijo)
+    const pX = [4, 0, 7, 2, 9, 5, 8, 1, 3, 6];
+    const pY = [9, 3, 0, 6, 1, 7, 4, 8, 2, 5];
+
+    // 3. Aplicamos la mezcla
+    const valX = pX[Math.abs(x) % 10];
+    const valY = pY[Math.abs(y) % 10];
+
+    // Combinación final: genera un número entre 00 y 99
+    // La fórmula (valX * 7 + valY * 3) % 100 crea saltos no lineales
+    let finalCode = (valX * 13 + valY * 7) % 100;
+
+    return finalCode.toString().padStart(2, '0');
 }
 
 // --- CARGA CAPAS GEOJSON ---
@@ -246,3 +261,4 @@ mymap.on('moveend zoomend', updateGrid);
 </script>
 </body>
 </html>
+
