@@ -1,11 +1,9 @@
 <!DOCTYPE html>
 <html>
- // Proyecto realizado por Raul Viquez. Por favor no reproduzca este codigo html.
 <head>
     <title>SISTEMA POSTAL DE PANAMÁ</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    // Proyecto realizado por Raul Viquez. Por favor no reproduzca este codigo html.
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <style>
         body, html, #mapid { width: 100%; height: 100%; margin: 0; padding: 0; font-family: 'Arial', sans-serif; }
@@ -65,7 +63,7 @@
 <script src="https://unpkg.com/@mapbox/leaflet-pip@latest/leaflet-pip.js"></script>
 
 <script>
-// --- CONFIGURACIÓN MAPA ---
+// --- CONFIGURACIÓN MAPA ---Proyecto realizado por Raul Viquez. Por favor no reproduzca este codigo html.
 const mymap = L.map('mapid', { zoomControl: true }).setView([8.98, -79.52], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 24,
@@ -126,7 +124,7 @@ function generarSub2(lat, lon) {
     return finalCode.toString().padStart(2, '0');
 }
 
-// --- CARGA CAPAS GEOJSON ---
+// --- CARGA CAPAS GEOJSON ---Proyecto realizado por Raul Viquez. Por favor no reproduzca este codigo html.
 $.getJSON("estafetas.geojson", function(data) {
     rawGeoData = data;
     L.geoJSON(data, { style: { color: "#2c3e50", weight: 2, fillOpacity: 0.1 } }).addTo(estafetasLayer);
@@ -260,8 +258,8 @@ function updateGrid() {
 }
 mymap.on('moveend zoomend', updateGrid);
 </script>
-// Proyecto realizado por Raul Viquez. Por favor no reproduzca este codigo html.
 </body>
 </html>
+
 
 
