@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>SISTEMA POSTAL PANAMÁ - Base32</title>
+    <title>PanamaCode - Sistema Postal</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
@@ -13,22 +13,33 @@
         input#search-input { flex: 1; border: none; padding: 8px; outline: none; }
         button#search-btn { background: #2c3e50; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; }
         .toggle-watermark { position: absolute; bottom: 30px; left: 10px; z-index: 5000; background: white; padding: 10px; border-radius: 5px; cursor: pointer; font-size: 11px; border: 1px solid #1a73e8; font-weight: bold; }
-        .watermark-label-fixed { background: none!important; border:none!important; color: #1a73e8!important; text-align: center; pointer-events: none!important; text-shadow: 1px 1px 1px white; }
-        .micro-label-fixed { background: none!important; border:none!important; color: #3498db!important; text-align: center; pointer-events: none!important; text-shadow: 1px 1px 1px white; font-size: 9px; }
-        .nano-label-fixed { background: none!important; border:none!important; color: #2980b9!important; text-align: center; pointer-events: none!important; text-shadow: 1px 1px 1px white; font-size: 8px; }
-        .nano-selection-label { background: none!important; border: none!important; text-align: center; pointer-events: none!important; }
-        .micro-selection-label { background: none!important; border: none!important; text-align: center; pointer-events: none!important; }
+        .code-display {
+            font-family: 'Courier New', monospace;
+            font-size: 20px;
+            font-weight: bold;
+            color: #2c3e50;
+            letter-spacing: 1px;
+            padding: 10px;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-radius: 8px;
+            border: 2px solid #3498db;
+            margin: 10px 0;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .coord-info {
+            font-family: monospace;
+            font-size: 12px;
+            color: #666;
+            background: #f1f8ff;
+            padding: 8px;
+            border-radius: 4px;
+            margin: 5px 0;
+            border-left: 3px solid #3498db;
+        }
         .btn-nav, .btn-ws { display: inline-block; padding: 8px 12px; color: white!important; text-decoration: none!important; border-radius: 5px; font-weight: bold; font-size: 11px; margin: 2px; border:none; cursor: pointer; }
         .btn-nav { background-color: #3498db; }
         .btn-ws { background-color: #25D366; }
-        .locate-button { width: 30px; height: 30px; line-height: 30px; text-align: center; display: block; text-decoration: none; color: black; background: white; font-size: 18px; cursor: pointer; }
-        .user-location-icon { text-align: center; font-size: 20px; }
-        .highlighted-polygon { animation: pulse 2s infinite; }
-        @keyframes pulse {
-            0% { fill-opacity: 0.3; }
-            50% { fill-opacity: 0.7; }
-            100% { fill-opacity: 0.3; }
-        }
         .warning-popup .leaflet-popup-content-wrapper {
             background: #fff3cd;
             border: 2px solid #ffc107;
@@ -37,380 +48,351 @@
         .warning-popup .leaflet-popup-tip {
             background: #ffc107;
         }
-        .code-display {
-            font-family: 'Courier New', monospace;
-            font-size: 16px;
-            font-weight: bold;
-            color: #2c3e50;
-            letter-spacing: 1px;
-            padding: 8px;
-            background: #f8f9fa;
-            border-radius: 5px;
-            border: 2px solid #3498db;
-            margin: 10px 0;
-            text-align: center;
+        .highlighted-cell {
+            animation: pulse 1.5s infinite;
+            stroke-dasharray: 5,5;
         }
-        .info-box {
-            font-size: 11px;
-            color: #666;
-            background: #f1f8ff;
-            padding: 8px;
-            border-radius: 4px;
-            margin: 8px 0;
-            border-left: 3px solid #3498db;
+        @keyframes pulse {
+            0% { fill-opacity: 0.2; stroke-width: 2; }
+            50% { fill-opacity: 0.4; stroke-width: 3; }
+            100% { fill-opacity: 0.2; stroke-width: 2; }
         }
-        .performance-warning {
+        .grid-line { pointer-events: none; }
+        .performance-note {
             position: absolute;
             bottom: 70px;
             left: 10px;
-            background: #ffcc00;
-            color: #333;
+            background: rgba(255,255,255,0.9);
             padding: 5px 10px;
             border-radius: 5px;
-            font-size: 11px;
+            font-size: 10px;
+            color: #666;
             z-index: 5000;
-            display: none;
         }
     </style>
 </head>
 <body>
 
-<div class="performance-warning" id="perf-warning">🔄 Calculando...</div>
-<div class="map-title"><h1>SISTEMA POSTAL PANAMÁ - Base32</h1></div>
+<div class="performance-note">PanamaCode v1.0 | Base32 | 12 chars</div>
+<div class="map-title"><h1>PanamaCode - Sistema Postal por Coordenadas</h1></div>
 <div class="search-container">
-    <input type="text" id="search-input" placeholder="Ej: K4299-8A9B-X3Y7">
+    <input type="text" id="search-input" placeholder="Ej: 8A9B-X3Y7-Z5W2">
     <button id="search-btn">BUSCAR</button>
 </div>
-<div id="toggle-wm" class="toggle-watermark">TEXTO: ON</div>
 <div id="mapid"></div>
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-<script src="https://unpkg.com/@mapbox/leaflet-pip@latest/leaflet-pip.js"></script>
 
 <script>
-// ==================== CONFIGURACIÓN RÁPIDA ====================
+// ==================== CONFIGURACIÓN ====================
 const mymap = L.map('mapid').setView([8.50, -80.0], 8);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mymap);
 
 // Capas
 const zonasGeoLayer = L.layerGroup().addTo(mymap);
-const selectionLayer = L.layerGroup().addTo(mymap);
 const gridLayer = L.layerGroup().addTo(mymap);
-const labelLayer = L.layerGroup().addTo(mymap);
+const selectionLayer = L.layerGroup().addTo(mymap);
 const userLocationLayer = L.layerGroup().addTo(mymap);
 
 let rawZonas = null;
-let labelsEnabled = true;
 
-// ==================== SISTEMA BASE32 (MISMA PRECISIÓN) ====================
+// ==================== SISTEMA PanamaCode ====================
 
-// Base32 optimizada (sin caracteres confusos)
-const BASE32 = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"; // 32 caracteres
+// Base32 optimizada para Panamá (sin caracteres ambiguos)
+const BASE32 = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+const BASE32_MAP = {};
+for (let i = 0; i < BASE32.length; i++) {
+    BASE32_MAP[BASE32[i]] = i;
+}
 
-// Configuración de tu sistema original:
-const MICRO_RES = 24;  // 24×24 celdas micro
-const NANO_RES = 25;   // 25×25 nano por micro
+// Punto de referencia para Panamá (David, Chiriquí)
+const REF_POINT = {
+    lat: 8.431,   // David
+    lng: -82.431  // David
+};
 
-// Función para codificar número a Base32 (2 caracteres = 0-1023)
-function encodeBase32(num, length = 2) {
+// Resoluciones (en grados, aprox)
+// 1 grado ≈ 111km
+const RESOLUTIONS = {
+    'REGION': 1.0,      // ~111km
+    'SECTOR': 0.01,     // ~1.1km
+    'CELDA': 0.0001     // ~11m
+};
+
+// Dimensiones del grid (mismo que tu sistema)
+const GRID_DIMENSIONS = {
+    'REGION': 32,   // 32×32 regiones grandes
+    'SECTOR': 24,   // 24×24 sectores por región
+    'CELDA': 25     // 25×25 celdas por sector
+};
+
+// ==================== FUNCIONES PRINCIPALES ====================
+
+// Codificar número a Base32
+function encodeBase32(number, length = 2) {
     let result = '';
     for (let i = 0; i < length; i++) {
-        result = BASE32[num % 32] + result;
-        num = Math.floor(num / 32);
+        const digit = number & 31; // Módulo 32
+        result = BASE32[digit] + result;
+        number = number >>> 5; // Dividir por 32
     }
     return result;
 }
 
-// Función para decodificar Base32
+// Decodificar Base32
 function decodeBase32(str) {
-    const map = {};
-    for (let i = 0; i < BASE32.length; i++) {
-        map[BASE32[i]] = i;
-    }
-    
     let result = 0;
     for (let i = 0; i < str.length; i++) {
-        result = result * 32 + (map[str[i]] || 0);
+        result = (result * 32) + (BASE32_MAP[str[i]] || 0);
     }
     return result;
 }
 
-// ==================== FUNCIONES DE CÓDIGO ====================
-
-// Obtener VM_LEVEL del polígono donde está el punto
-function getVMLevelFromPoint(lat, lng, polygons) {
-    const point = [lng, lat];
-    for (let polygon of polygons) {
-        if (leafletPip.pointInLayer(point, L.geoJSON(polygon)).length > 0) {
-            return polygon.properties.VM_LEVEL;
-        }
-    }
-    return null;
-}
-
-// Calcular índices micro (0-23) dentro del bounding box del polígono
-function calculateMicroIndices(lat, lng, polygon) {
-    const bounds = L.geoJSON(polygon).getBounds();
-    
-    // Posición relativa dentro del bounding box
-    const relX = (lng - bounds.getWest()) / (bounds.getEast() - bounds.getWest());
-    const relY = (lat - bounds.getSouth()) / (bounds.getNorth() - bounds.getSouth());
-    
-    const safeRelX = Math.max(0.001, Math.min(0.999, relX));
-    const safeRelY = Math.max(0.001, Math.min(0.999, relY));
-    
-    // Índices micro (0-23)
-    const microIx = Math.floor(safeRelX * MICRO_RES);
-    const microIy = Math.floor(safeRelY * MICRO_RES);
-    
-    return { microIx: Math.min(23, microIx), microIy: Math.min(23, microIy) };
-}
-
-// Calcular índices nano (0-24) dentro de micro
-function calculateNanoIndices(lat, lng, polygon, microIx, microIy) {
-    const bounds = L.geoJSON(polygon).getBounds();
-    
-    const relX = (lng - bounds.getWest()) / (bounds.getEast() - bounds.getWest());
-    const relY = (lat - bounds.getSouth()) / (bounds.getNorth() - bounds.getSouth());
-    
-    const safeRelX = Math.max(0.001, Math.min(0.999, relX));
-    const safeRelY = Math.max(0.001, Math.min(0.999, relY));
-    
-    // Posición dentro de la celda micro
-    const microRelX = safeRelX * MICRO_RES - microIx;
-    const microRelY = safeRelY * MICRO_RES - microIy;
-    
-    // Índices nano (0-24)
-    const nix = Math.floor(microRelX * NANO_RES);
-    const niy = Math.floor(microRelY * NANO_RES);
-    
-    return { nix: Math.min(24, nix), niy: Math.min(24, niy) };
-}
-
-// Generar código completo (igual precisión que tu sistema)
-function generatePostalCode(lat, lng) {
-    if (!rawZonas) return null;
-    
-    const point = [lng, lat];
-    const polygons = leafletPip.pointInLayer(point, L.geoJSON(rawZonas));
-    
-    if (polygons.length === 0) return null;
-    
-    const polygon = polygons[0].feature;
-    const vmLevel = polygon.properties.VM_LEVEL;
-    
-    // Calcular índices micro
-    const microIndices = calculateMicroIndices(lat, lng, polygon);
-    
-    // Calcular índices nano
-    const nanoIndices = calculateNanoIndices(lat, lng, polygon, 
-        microIndices.microIx, microIndices.microIy);
-    
-    // Codificar en Base32
-    const microCode = encodeBase32(microIndices.microIx) + encodeBase32(microIndices.microIy);
-    const nanoCode = encodeBase32(nanoIndices.nix) + encodeBase32(nanoIndices.niy);
-    
+// Normalizar coordenada relativa al punto de referencia
+function normalizeCoordinate(lat, lng) {
     return {
-        fullCode: `${vmLevel}-${microCode}-${nanoCode}`,
-        vmLevel: vmLevel,
-        microCode: microCode,
-        nanoCode: nanoCode,
-        microIx: microIndices.microIx,
-        microIy: microIndices.microIy,
-        nix: nanoIndices.nix,
-        niy: nanoIndices.niy,
-        polygon: polygon
+        normLat: (lat - REF_POINT.lat) * 1000, // Convertir a "milésimas"
+        normLng: (lng - REF_POINT.lng) * 1000
     };
 }
 
-// Decodificar código
-function decodePostalCode(code) {
+// Calcular índices de grid
+function calculateGridIndices(lat, lng) {
+    const { normLat, normLng } = normalizeCoordinate(lat, lng);
+    
+    // Convertir a índices positivos
+    const offset = 1000000; // Para evitar negativos
+    
+    // Índices para región (~100km)
+    const regionX = Math.floor((normLng + offset) / (RESOLUTIONS.REGION * 1000));
+    const regionY = Math.floor((normLat + offset) / (RESOLUTIONS.REGION * 1000));
+    
+    // Índices para sector (~1km) dentro de la región
+    const sectorX = Math.floor(((normLng + offset) % (RESOLUTIONS.REGION * 1000)) / (RESOLUTIONS.SECTOR * 1000));
+    const sectorY = Math.floor(((normLat + offset) % (RESOLUTIONS.REGION * 1000)) / (RESOLUTIONS.SECTOR * 1000));
+    
+    // Índices para celda (~10m) dentro del sector
+    const celdaX = Math.floor((((normLng + offset) % (RESOLUTIONS.REGION * 1000)) % (RESOLUTIONS.SECTOR * 1000)) / (RESOLUTIONS.CELDA * 1000));
+    const celdaY = Math.floor((((normLat + offset) % (RESOLUTIONS.REGION * 1000)) % (RESOLUTIONS.SECTOR * 1000)) / (RESOLUTIONS.CELDA * 1000));
+    
+    return {
+        region: { x: regionX % 32, y: regionY % 32 },
+        sector: { x: sectorX % 24, y: sectorY % 24 },
+        celda: { x: celdaX % 25, y: celdaY % 25 }
+    };
+}
+
+// Generar PanamaCode
+function generatePanamaCode(lat, lng) {
+    const indices = calculateGridIndices(lat, lng);
+    
+    // Codificar cada nivel
+    const regionCode = encodeBase32(indices.region.x) + encodeBase32(indices.region.y);
+    const sectorCode = encodeBase32(indices.sector.x) + encodeBase32(indices.sector.y);
+    const celdaCode = encodeBase32(indices.celda.x) + encodeBase32(indices.celda.y);
+    
+    return `${regionCode}-${sectorCode}-${celdaCode}`;
+}
+
+// Decodificar PanamaCode a coordenadas aproximadas
+function decodePanamaCode(code) {
     const parts = code.split('-');
     if (parts.length !== 3) return null;
     
-    const [vmLevel, microStr, nanoStr] = parts;
+    const [regionCode, sectorCode, celdaCode] = parts;
     
-    // Buscar polígono por VM_LEVEL
-    const polygon = rawZonas?.features.find(f => f.properties.VM_LEVEL === vmLevel);
-    if (!polygon) return null;
+    // Decodificar
+    const regionX = decodeBase32(regionCode.substring(0, 2));
+    const regionY = decodeBase32(regionCode.substring(2, 4));
+    const sectorX = decodeBase32(sectorCode.substring(0, 2));
+    const sectorY = decodeBase32(sectorCode.substring(2, 4));
+    const celdaX = decodeBase32(celdaCode.substring(0, 2));
+    const celdaY = decodeBase32(celdaCode.substring(2, 4));
     
-    // Decodificar micro (2 caracteres cada uno)
-    const microIx = decodeBase32(microStr.substring(0, 2));
-    const microIy = decodeBase32(microStr.substring(2, 4));
+    // Calcular coordenadas
+    const offset = 1000000;
     
-    // Decodificar nano (2 caracteres cada uno)
-    const nix = decodeBase32(nanoStr.substring(0, 2));
-    const niy = decodeBase32(nanoStr.substring(2, 4));
+    const lng = REF_POINT.lng + (
+        (regionX * RESOLUTIONS.REGION * 1000) +
+        (sectorX * RESOLUTIONS.SECTOR * 1000) +
+        (celdaX * RESOLUTIONS.CELDA * 1000) - offset
+    ) / 1000;
     
-    // Calcular coordenadas aproximadas (centro de la celda nano)
-    const bounds = L.geoJSON(polygon).getBounds();
+    const lat = REF_POINT.lat + (
+        (regionY * RESOLUTIONS.REGION * 1000) +
+        (sectorY * RESOLUTIONS.SECTOR * 1000) +
+        (celdaY * RESOLUTIONS.CELDA * 1000) - offset
+    ) / 1000;
     
-    // Tamaño de celda micro
-    const microSizeX = (bounds.getEast() - bounds.getWest()) / MICRO_RES;
-    const microSizeY = (bounds.getNorth() - bounds.getSouth()) / MICRO_RES;
-    
-    // Tamaño de celda nano dentro de micro
-    const nanoSizeX = microSizeX / NANO_RES;
-    const nanoSizeY = microSizeY / NANO_RES;
-    
-    // Calcular coordenadas del centro
-    const centerLng = bounds.getWest() + 
-        (microIx + (nix + 0.5) / NANO_RES) * microSizeX;
-    
-    const centerLat = bounds.getSouth() + 
-        (microIy + (niy + 0.5) / NANO_RES) * microSizeY;
-    
-    // Calcular bounds de la celda nano
-    const cellBounds = [
-        [centerLat - nanoSizeY/2, centerLng - nanoSizeX/2],
-        [centerLat - nanoSizeY/2, centerLng + nanoSizeX/2],
-        [centerLat + nanoSizeY/2, centerLng + nanoSizeX/2],
-        [centerLat + nanoSizeY/2, centerLng - nanoSizeX/2]
+    // Calcular bounds de la celda (~11m)
+    const cellSize = RESOLUTIONS.CELDA;
+    const bounds = [
+        [lat - cellSize/2, lng - cellSize/2],
+        [lat - cellSize/2, lng + cellSize/2],
+        [lat + cellSize/2, lng + cellSize/2],
+        [lat + cellSize/2, lng - cellSize/2]
     ];
     
     return {
-        lat: centerLat,
-        lng: centerLng,
-        cellBounds: cellBounds,
-        vmLevel: vmLevel,
-        microCode: microStr,
-        nanoCode: nanoStr,
-        polygon: polygon
+        lat,
+        lng,
+        bounds,
+        regionCode,
+        sectorCode,
+        celdaCode,
+        indices: {
+            region: { x: regionX, y: regionY },
+            sector: { x: sectorX, y: sectorY },
+            celda: { x: celdaX, y: celdaY }
+        }
     };
+}
+
+// Verificar si está dentro de área postal
+function isInPostalArea(lat, lng) {
+    if (!rawZonas) return false;
+    
+    // Crear capa temporal
+    const point = [lng, lat];
+    const geoLayer = L.geoJSON(rawZonas);
+    
+    // Verificar si el punto está dentro de algún polígono
+    let isInside = false;
+    geoLayer.eachLayer(function(layer) {
+        if (layer.getBounds && layer.getBounds().contains([lat, lng])) {
+            isInside = true;
+        }
+    });
+    
+    return isInside;
 }
 
 // ==================== VISUALIZACIÓN ====================
 
-function updateGridAndLabels() {
-    clearTimeout(window.updateTimeout);
+function updateGrid() {
+    gridLayer.clearLayers();
     
-    document.getElementById('perf-warning').style.display = 'block';
+    const z = mymap.getZoom();
     
-    window.updateTimeout = setTimeout(() => {
-        gridLayer.clearLayers();
-        labelLayer.clearLayers();
-        
-        if (!rawZonas) {
-            document.getElementById('perf-warning').style.display = 'none';
-            return;
-        }
-        
-        const z = mymap.getZoom();
-        const bounds = mymap.getBounds();
-        
-        // Labels macro (VM_LEVEL)
-        if (z >= 9 && z < 14 && labelsEnabled) {
-            rawZonas.features.forEach(feature => {
-                const featureBounds = L.geoJSON(feature).getBounds();
-                if (bounds.intersects(featureBounds)) {
-                    const center = featureBounds.getCenter();
-                    const vmLevel = feature.properties.VM_LEVEL;
-                    
-                    L.marker(center, {
-                        icon: L.divIcon({ 
-                            className: 'watermark-label-fixed', 
-                            html: vmLevel, 
-                            iconSize: [60, 20] 
-                        })
-                    }).addTo(labelLayer);
-                }
-            });
-        }
-        
-        // Grid micro (solo en zoom adecuado)
-        if (z >= 14) {
-            drawGridForVisiblePolygons(z);
-        }
-        
-        document.getElementById('perf-warning').style.display = 'none';
-    }, 50);
+    if (z >= 12) {
+        drawGrid(z);
+    }
 }
 
-function drawGridForVisiblePolygons(zoom) {
+function drawGrid(zoom) {
     const bounds = mymap.getBounds();
     
-    rawZonas.features.forEach(feature => {
-        const featureBounds = L.geoJSON(feature).getBounds();
-        if (!bounds.intersects(featureBounds)) return;
-        
-        const polygonBounds = featureBounds;
-        
-        // Dibujar grid micro
-        const cellSizeX = (polygonBounds.getEast() - polygonBounds.getWest()) / MICRO_RES;
-        const cellSizeY = (polygonBounds.getNorth() - polygonBounds.getSouth()) / MICRO_RES;
-        
-        let weight, opacity, color;
-        if (zoom >= 14 && zoom < 17) {
-            weight = 1.5;
-            opacity = 0.4;
-            color = '#3498db';
-            
-            // Dibujar líneas verticales
-            for (let i = 0; i <= MICRO_RES; i++) {
-                const lng = polygonBounds.getWest() + i * cellSizeX;
-                L.polyline([
-                    [polygonBounds.getSouth(), lng],
-                    [polygonBounds.getNorth(), lng]
-                ], {color, weight, opacity}).addTo(gridLayer);
-            }
-            
-            // Dibujar líneas horizontales
-            for (let j = 0; j <= MICRO_RES; j++) {
-                const lat = polygonBounds.getSouth() + j * cellSizeY;
-                L.polyline([
-                    [lat, polygonBounds.getWest()],
-                    [lat, polygonBounds.getEast()]
-                ], {color, weight, opacity}).addTo(gridLayer);
-            }
-            
-            // Labels micro (espaciados)
-            if (labelsEnabled) {
-                for (let i = 0; i < MICRO_RES; i += 3) {
-                    for (let j = 0; j < MICRO_RES; j += 3) {
-                        const centerLng = polygonBounds.getWest() + (i + 0.5) * cellSizeX;
-                        const centerLat = polygonBounds.getSouth() + (j + 0.5) * cellSizeY;
-                        
-                        // Verificar si está dentro del polígono
-                        if (leafletPip.pointInLayer([centerLng, centerLat], L.geoJSON(feature)).length > 0) {
-                            const microCode = encodeBase32(i) + encodeBase32(j);
-                            
-                            L.marker([centerLat, centerLng], {
-                                icon: L.divIcon({ 
-                                    className: 'micro-label-fixed', 
-                                    html: microCode, 
-                                    iconSize: [40, 12] 
-                                })
-                            }).addTo(labelLayer);
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Grid nano (solo zoom alto, espaciado)
-        if (zoom >= 17) {
-            const nanoSizeX = cellSizeX / NANO_RES;
-            const nanoSizeY = cellSizeY / NANO_RES;
-            
-            // Dibujar cada 5 líneas para no saturar
-            for (let i = 0; i <= MICRO_RES * NANO_RES; i += 5) {
-                const lng = polygonBounds.getWest() + i * nanoSizeX;
-                L.polyline([
-                    [bounds.getSouth(), lng],
-                    [bounds.getNorth(), lng]
-                ], {color: '#2980b9', weight: 0.5, opacity: 0.2}).addTo(gridLayer);
-            }
-            
-            for (let j = 0; j <= MICRO_RES * NANO_RES; j += 5) {
-                const lat = polygonBounds.getSouth() + j * nanoSizeY;
-                L.polyline([
-                    [lat, bounds.getWest()],
-                    [lat, bounds.getEast()]
-                ], {color: '#2980b9', weight: 0.5, opacity: 0.2}).addTo(gridLayer);
-            }
-        }
-    });
+    if (zoom >= 12 && zoom < 15) {
+        // Grid de regiones (~100km)
+        drawRegionGrid(bounds);
+    } else if (zoom >= 15 && zoom < 18) {
+        // Grid de sectores (~1km)
+        drawSectorGrid(bounds);
+    } else if (zoom >= 18) {
+        // Grid de celdas (~11m)
+        drawCeldaGrid(bounds);
+    }
+}
+
+function drawRegionGrid(bounds) {
+    const cellSize = RESOLUTIONS.REGION;
+    
+    const startLng = Math.floor(bounds.getWest() / cellSize) * cellSize;
+    const endLng = Math.ceil(bounds.getEast() / cellSize) * cellSize;
+    const startLat = Math.floor(bounds.getSouth() / cellSize) * cellSize;
+    const endLat = Math.ceil(bounds.getNorth() / cellSize) * cellSize;
+    
+    for (let lng = startLng; lng <= endLng; lng += cellSize) {
+        L.polyline([
+            [startLat, lng],
+            [endLat, lng]
+        ], {
+            color: '#3498db',
+            weight: 1,
+            opacity: 0.3,
+            className: 'grid-line'
+        }).addTo(gridLayer);
+    }
+    
+    for (let lat = startLat; lat <= endLat; lat += cellSize) {
+        L.polyline([
+            [lat, startLng],
+            [lat, endLng]
+        ], {
+            color: '#3498db',
+            weight: 1,
+            opacity: 0.3,
+            className: 'grid-line'
+        }).addTo(gridLayer);
+    }
+}
+
+function drawSectorGrid(bounds) {
+    const cellSize = RESOLUTIONS.SECTOR;
+    
+    const startLng = Math.floor(bounds.getWest() / cellSize) * cellSize;
+    const endLng = Math.ceil(bounds.getEast() / cellSize) * cellSize;
+    const startLat = Math.floor(bounds.getSouth() / cellSize) * cellSize;
+    const endLat = Math.ceil(bounds.getNorth() / cellSize) * cellSize;
+    
+    for (let lng = startLng; lng <= endLng; lng += cellSize) {
+        L.polyline([
+            [bounds.getSouth(), lng],
+            [bounds.getNorth(), lng]
+        ], {
+            color: '#2980b9',
+            weight: 0.5,
+            opacity: 0.2,
+            className: 'grid-line'
+        }).addTo(gridLayer);
+    }
+    
+    for (let lat = startLat; lat <= endLat; lat += cellSize) {
+        L.polyline([
+            [lat, bounds.getWest()],
+            [lat, bounds.getEast()]
+        ], {
+            color: '#2980b9',
+            weight: 0.5,
+            opacity: 0.2,
+            className: 'grid-line'
+        }).addTo(gridLayer);
+    }
+}
+
+function drawCeldaGrid(bounds) {
+    const cellSize = RESOLUTIONS.CELDA;
+    
+    const startLng = Math.floor(bounds.getWest() / cellSize) * cellSize;
+    const endLng = Math.ceil(bounds.getEast() / cellSize) * cellSize;
+    const startLat = Math.floor(bounds.getSouth() / cellSize) * cellSize;
+    const endLat = Math.ceil(bounds.getNorth() / cellSize) * cellSize;
+    
+    // Dibujar cada 5 líneas para no saturar
+    for (let lng = startLng; lng <= endLng; lng += cellSize * 5) {
+        L.polyline([
+            [bounds.getSouth(), lng],
+            [bounds.getNorth(), lng]
+        ], {
+            color: '#2c3e50',
+            weight: 0.3,
+            opacity: 0.1,
+            className: 'grid-line'
+        }).addTo(gridLayer);
+    }
+    
+    for (let lat = startLat; lat <= endLat; lat += cellSize * 5) {
+        L.polyline([
+            [lat, bounds.getWest()],
+            [lat, bounds.getEast()]
+        ], {
+            color: '#2c3e50',
+            weight: 0.3,
+            opacity: 0.1,
+            className: 'grid-line'
+        }).addTo(gridLayer);
+    }
 }
 
 // ==================== EVENTO CLIC ====================
@@ -418,191 +400,104 @@ function drawGridForVisiblePolygons(zoom) {
 mymap.on("click", function (e) {
     selectionLayer.clearLayers();
     
-    if (!rawZonas) return;
+    const lat = e.latlng.lat;
+    const lng = e.latlng.lng;
     
-    // Verificar si está dentro de polígono postal
-    const point = [e.latlng.lng, e.latlng.lat];
-    const polygons = leafletPip.pointInLayer(point, L.geoJSON(rawZonas));
+    // Verificar si está en área postal
+    const inPostalArea = isInPostalArea(lat, lng);
     
-    if (polygons.length === 0) {
-        // Fuera de área postal
-        showNoPostalAreaPopup(e.latlng);
+    if (!inPostalArea) {
+        showNoCodePopup(e.latlng);
         return;
     }
     
-    // Dentro de área postal
-    const postalData = generatePostalCode(e.latlng.lat, e.latlng.lng);
+    // Generar PanamaCode
+    const code = generatePanamaCode(lat, lng);
+    const decoded = decodePanamaCode(code);
     
-    if (!postalData) return;
+    if (!decoded) return;
     
-    const z = mymap.getZoom();
+    // Destacar celda
+    L.polygon(decoded.bounds, {
+        color: '#e74c3c',
+        weight: 2,
+        fillColor: '#e74c3c',
+        fillOpacity: 0.3,
+        className: 'highlighted-cell'
+    }).addTo(selectionLayer);
     
-    // Destacar según zoom
-    if (z < 14) {
-        // Destacar polígono completo
-        L.geoJSON(postalData.polygon, {
-            style: {
-                color: "#1a73e8", 
-                weight: 4, 
-                fillColor: "#1a73e8",
-                fillOpacity: 0.3
-            }
-        }).addTo(selectionLayer);
-    } 
-    else if (z >= 14 && z < 17) {
-        // Destacar celda micro
-        highlightMicroCell(postalData);
-    }
-    else {
-        // Destacar celda nano
-        highlightNanoCell(postalData);
-    }
-    
-    // Mostrar popup con código
-    showPostalCodePopup(e.latlng, postalData);
+    // Mostrar popup
+    showCodePopup(e.latlng, code, decoded);
 });
 
-function highlightMicroCell(postalData) {
-    const bounds = L.geoJSON(postalData.polygon).getBounds();
-    const cellSizeX = (bounds.getEast() - bounds.getWest()) / MICRO_RES;
-    const cellSizeY = (bounds.getNorth() - bounds.getSouth()) / MICRO_RES;
-    
-    const cellBounds = [
-        [bounds.getSouth() + postalData.microIy * cellSizeY, 
-         bounds.getWest() + postalData.microIx * cellSizeX],
-        [bounds.getSouth() + postalData.microIy * cellSizeY, 
-         bounds.getWest() + (postalData.microIx + 1) * cellSizeX],
-        [bounds.getSouth() + (postalData.microIy + 1) * cellSizeY, 
-         bounds.getWest() + (postalData.microIx + 1) * cellSizeX],
-        [bounds.getSouth() + (postalData.microIy + 1) * cellSizeY, 
-         bounds.getWest() + postalData.microIx * cellSizeX]
-    ];
-    
-    L.polygon(cellBounds, {
-        color: "#3498db", 
-        weight: 3, 
-        fillColor: "#3498db",
-        fillOpacity: 0.3
-    }).addTo(selectionLayer);
-    
-    // Mostrar código micro
-    const center = [
-        bounds.getSouth() + (postalData.microIy + 0.5) * cellSizeY,
-        bounds.getWest() + (postalData.microIx + 0.5) * cellSizeX
-    ];
-    
-    L.marker(center, {
-        icon: L.divIcon({ 
-            className: 'micro-selection-label', 
-            html: `<div style="background: white; padding: 3px 6px; border: 2px solid #3498db; border-radius: 3px; color: #3498db; font-weight: bold;">${postalData.microCode}</div>`, 
-            iconSize: [45, 25],
-            iconAnchor: [22, 12]
-        })
-    }).addTo(selectionLayer);
-}
-
-function highlightNanoCell(postalData) {
-    const bounds = L.geoJSON(postalData.polygon).getBounds();
-    const microSizeX = (bounds.getEast() - bounds.getWest()) / MICRO_RES;
-    const microSizeY = (bounds.getNorth() - bounds.getSouth()) / MICRO_RES;
-    const nanoSizeX = microSizeX / NANO_RES;
-    const nanoSizeY = microSizeY / NANO_RES;
-    
-    const cellBounds = [
-        [bounds.getSouth() + (postalData.microIy + postalData.niy/NANO_RES) * microSizeY, 
-         bounds.getWest() + (postalData.microIx + postalData.nix/NANO_RES) * microSizeX],
-        [bounds.getSouth() + (postalData.microIy + postalData.niy/NANO_RES) * microSizeY, 
-         bounds.getWest() + (postalData.microIx + (postalData.nix+1)/NANO_RES) * microSizeX],
-        [bounds.getSouth() + (postalData.microIy + (postalData.niy+1)/NANO_RES) * microSizeY, 
-         bounds.getWest() + (postalData.microIx + (postalData.nix+1)/NANO_RES) * microSizeX],
-        [bounds.getSouth() + (postalData.microIy + (postalData.niy+1)/NANO_RES) * microSizeY, 
-         bounds.getWest() + (postalData.microIx + postalData.nix/NANO_RES) * microSizeX]
-    ];
-    
-    L.polygon(cellBounds, {
-        color: "#2980b9", 
-        weight: 2, 
-        fillColor: "#2980b9",
-        fillOpacity: 0.4
-    }).addTo(selectionLayer);
-    
-    // Mostrar código nano
-    const center = [
-        bounds.getSouth() + (postalData.microIy + (postalData.niy + 0.5)/NANO_RES) * microSizeY,
-        bounds.getWest() + (postalData.microIx + (postalData.nix + 0.5)/NANO_RES) * microSizeX
-    ];
-    
-    L.marker(center, {
-        icon: L.divIcon({ 
-            className: 'nano-selection-label', 
-            html: `<div style="background: white; padding: 2px 5px; border: 2px solid #2980b9; border-radius: 3px; color: #2980b9; font-weight: bold;">${postalData.nanoCode}</div>`, 
-            iconSize: [40, 22],
-            iconAnchor: [20, 11]
-        })
-    }).addTo(selectionLayer);
-}
-
-function showNoPostalAreaPopup(latlng) {
+function showNoCodePopup(latlng) {
     const popup = L.popup()
-        .setLatLng([latlng.lat + 0.0004, latlng.lng])
+        .setLatLng([latlng.lat, latlng.lng])
         .setContent(`
-            <div style="text-align:center; padding: 15px;">
+            <div style="text-align:center; padding: 15px; min-width: 250px;">
                 <div style="color: #e74c3c; font-size: 16px; margin-bottom: 10px;">
                     ⚠️ SIN CÓDIGO POSTAL
                 </div>
                 <div style="color: #7f8c8d; font-size: 13px; margin-bottom: 15px;">
-                    Esta ubicación está fuera de las zonas postales definidas
+                    Fuera del área de cobertura postal
                 </div>
-                <div style="font-family: monospace; font-size: 12px; color: #666; background: #f8f9fa; padding: 8px; border-radius: 4px; margin: 10px 0;">
+                <div class="coord-info">
                     ${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}
                 </div>
-                <div>
-                    <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${latlng.lat},${latlng.lng}')">📍 MAPS</button>
-                    <button class="btn-ws" onclick="window.open('https://wa.me/?text=${encodeURIComponent(`📍 Ubicación sin código postal\nGPS: ${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`)}')">💬 WS</button>
+                <div style="margin-top: 15px;">
+                    <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${latlng.lat},${latlng.lng}')">
+                        📍 Maps
+                    </button>
+                    <button class="btn-ws" onclick="window.open('https://wa.me/?text=${encodeURIComponent(`📍 ${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`)}')">
+                        💬 Compartir
+                    </button>
                 </div>
             </div>
         `)
         .openOn(mymap);
 }
 
-function showPostalCodePopup(latlng, postalData) {
-    const props = postalData.polygon.properties;
-    const areaKm2 = props.AREA ? (props.AREA / 1000000).toFixed(1) : '';
-    
+function showCodePopup(latlng, code, decoded) {
     const popupContent = `
         <div style="text-align:center; padding: 15px; min-width: 280px;">
             <div style="font-size: 14px; color: #3498db; margin-bottom: 5px;">
-                🏷️ CÓDIGO POSTAL
+                🏷️ PanamaCode
             </div>
             
             <div class="code-display">
-                ${postalData.fullCode}
+                ${code}
             </div>
             
-            <div class="info-box">
-                <div><strong>${props.VM_LEVEL}</strong> - ${props.PROV_NOMB || 'Panamá'}</div>
-                ${areaKm2 ? `<div>Área: ${areaKm2} km²</div>` : ''}
-                <div>Micro: ${postalData.microCode} (${postalData.microIx},${postalData.microIy})</div>
-                <div>Nano: ${postalData.nanoCode} (${postalData.nix},${postalData.niy})</div>
+            <div style="font-size: 12px; color: #666; margin: 10px 0;">
+                <div><strong>Formato:</strong> Región-Sector-Celda</div>
+                <div><strong>Precisión:</strong> ~11 metros</div>
+                <div><strong>Sistema:</strong> Base32</div>
             </div>
             
-            <div style="font-family: monospace; font-size: 11px; color: #666; background: #f8f9fa; padding: 6px; border-radius: 3px; margin: 8px 0;">
-                📍 ${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}
+            <div class="coord-info">
+                <div>📍 ${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}</div>
+                <div>🗺️ Región: ${decoded.regionCode}</div>
+                <div>📦 Sector: ${decoded.sectorCode}</div>
+                <div>📭 Celda: ${decoded.celdaCode}</div>
             </div>
             
-            <div>
-                <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${latlng.lat},${latlng.lng}')">📍 MAPS</button>
-                <button class="btn-ws" onclick="window.open('https://wa.me/?text=${encodeURIComponent(`📍 Código Postal: ${postalData.fullCode}\n📌 GPS: ${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}\n🗺️ ${props.PROV_NOMB || ''}`)}')">💬 WS</button>
+            <div style="margin-top: 15px;">
+                <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${latlng.lat},${latlng.lng}')">
+                    📍 MAPS
+                </button>
+                <button class="btn-ws" onclick="window.open('https://wa.me/?text=${encodeURIComponent(`📍 PanamaCode: ${code}\n📌 ${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`)}')">
+                    💬 WS
+                </button>
             </div>
             
             <div style="margin-top: 10px; font-size: 10px; color: #95a5a6;">
-                Base32 | ${MICRO_RES}×${MICRO_RES} micro | ${NANO_RES}×${NANO_RES} nano
+                v1.0 | 12 caracteres | Base32
             </div>
         </div>
     `;
     
     const popup = L.popup()
-        .setLatLng([latlng.lat + 0.0004, latlng.lng])
+        .setLatLng([latlng.lat, latlng.lng])
         .setContent(popupContent)
         .openOn(mymap);
     
@@ -616,79 +511,84 @@ function showPostalCodePopup(latlng, postalData) {
 document.getElementById('search-btn').addEventListener('click', () => {
     const code = document.getElementById('search-input').value.trim().toUpperCase();
     
-    if (!code || !rawZonas) return;
+    if (!code) return;
     
-    const decoded = decodePostalCode(code);
-    
-    if (!decoded) {
-        alert('Código postal no encontrado: ' + code);
+    // Validar formato
+    const codeRegex = /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/;
+    if (!codeRegex.test(code)) {
+        alert('Formato inválido. Use: XXXX-XXXX-XXXX (solo Base32)');
         return;
     }
     
+    const decoded = decodePanamaCode(code);
+    
+    if (!decoded) {
+        alert('Código no válido o fuera de rango');
+        return;
+    }
+    
+    // Limpiar selección
     selectionLayer.clearLayers();
     
     // Centrar mapa
-    mymap.setView([decoded.lat, decoded.lng], 16);
+    mymap.setView([decoded.lat, decoded.lng], 18);
     
     // Destacar celda
-    L.polygon(decoded.cellBounds, {
+    L.polygon(decoded.bounds, {
         color: '#e74c3c',
         weight: 3,
         fillColor: '#e74c3c',
         fillOpacity: 0.3
     }).addTo(selectionLayer);
     
-    // Mostrar código en input
+    // Actualizar input
     document.getElementById('search-input').value = code;
 });
 
 // ==================== CARGA DE DATOS ====================
 
+// Cargar zonas postales (solo para visualización)
 $.getJSON("estafetas.geojson", d => { 
     rawZonas = d; 
     
     L.geoJSON(d, {
-        style: {color: "#2c3e50", weight: 1, fillOpacity: 0.03},
+        style: {
+            color: '#2c3e50',
+            weight: 1.5,
+            fillOpacity: 0.03,
+            opacity: 0.6
+        },
         interactive: false
     }).addTo(zonasGeoLayer);
     
-    updateGridAndLabels();
+    updateGrid();
+}).fail(() => {
+    console.log("No se encontró estafetas.geojson");
 });
 
 // ==================== CONTROLES ====================
 
-// GPS
+// Control de GPS
 const LocateControl = L.Control.extend({
     options: { position: 'topleft' },
     onAdd: function() {
-        const c = L.DomUtil.create('div', 'leaflet-bar');
-        const b = L.DomUtil.create('a', '', c);
-        b.innerHTML = '🎯';
-        b.style.cssText = 'width:30px;height:30px;line-height:30px;text-align:center;display:block;background:white;border-radius:5px;cursor:pointer;';
-        b.onclick = () => mymap.locate({setView:true, maxZoom:16});
-        return c;
+        const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+        const button = L.DomUtil.create('a', '', container);
+        button.innerHTML = '🎯';
+        button.style.cssText = 'width: 30px; height: 30px; line-height: 30px; text-align: center; display: block; background: white; border-radius: 5px; cursor: pointer;';
+        button.title = "Mi ubicación";
+        
+        L.DomEvent.on(button, 'click', (e) => {
+            L.DomEvent.stopPropagation(e);
+            mymap.locate({setView: true, maxZoom: 16});
+        });
+        
+        return container;
     }
 });
 mymap.addControl(new LocateControl());
 
-// Toggle labels
-$('#toggle-wm').click(function() {
-    labelsEnabled = !labelsEnabled;
-    $(this).text(labelsEnabled ? "TEXTO: ON" : "TEXTO: OFF");
-    updateGridAndLabels();
-});
-
-// Eventos optimizados
-let moveTimeout;
-mymap.on('moveend', () => {
-    clearTimeout(moveTimeout);
-    moveTimeout = setTimeout(updateGridAndLabels, 200);
-});
-
-mymap.on('zoomend', updateGridAndLabels);
-mymap.on('zoomstart', () => selectionLayer.clearLayers());
-
-// GPS
+// Evento de ubicación
 mymap.on('locationfound', function(e) {
     userLocationLayer.clearLayers();
     
@@ -699,27 +599,47 @@ mymap.on('locationfound', function(e) {
         fillOpacity: 0.7
     }).addTo(userLocationLayer);
     
-    // Generar código para ubicación
-    const postalData = generatePostalCode(e.latlng.lat, e.latlng.lng);
+    // Generar PanamaCode para ubicación actual
+    const code = generatePanamaCode(e.latlng.lat, e.latlng.lng);
+    const inPostalArea = isInPostalArea(e.latlng.lat, e.latlng.lng);
     
-    if (postalData) {
-        const popup = L.popup()
-            .setLatLng(e.latlng)
-            .setContent(`
-                <div style="text-align:center; padding: 10px;">
-                    <div style="font-weight:bold; margin-bottom: 5px;">📍 Tu ubicación</div>
-                    <div class="code-display" style="font-size: 14px;">${postalData.fullCode}</div>
-                    <div style="font-size: 11px; color: #666; margin-top: 5px;">
-                        ${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}
-                    </div>
+    let popupContent;
+    if (inPostalArea) {
+        popupContent = `
+            <div style="text-align:center; padding: 10px;">
+                <div style="font-weight:bold; margin-bottom: 5px;">📍 Tu ubicación</div>
+                <div class="code-display" style="font-size: 16px;">${code}</div>
+                <div style="font-size: 11px; color: #666; margin-top: 5px;">
+                    ${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}
                 </div>
-            `)
-            .openOn(mymap);
+            </div>
+        `;
+    } else {
+        popupContent = `
+            <div style="text-align:center; padding: 10px;">
+                <div style="font-weight:bold; margin-bottom: 5px;">📍 Fuera de cobertura</div>
+                <div style="color: #e74c3c; font-size: 12px; margin-bottom: 5px;">
+                    Sin código postal asignado
+                </div>
+                <div style="font-size: 11px; color: #666;">
+                    ${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}
+                </div>
+            </div>
+        `;
     }
+    
+    L.popup()
+        .setLatLng(e.latlng)
+        .setContent(popupContent)
+        .openOn(mymap);
 });
 
+// Eventos del mapa
+mymap.on('zoomend moveend', updateGrid);
+mymap.on('zoomstart', () => selectionLayer.clearLayers());
+
 // Inicializar
-updateGridAndLabels();
+updateGrid();
 </script>
 </body>
 </html>
