@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>PanamaCode - Sistema Postal (13 caracteres)</title>
+    <title>PanamaCode - Sistema Postal Determinístico</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
@@ -23,7 +23,10 @@
         .btn-ws { background-color: #25D366; }
         .locate-button { width: 30px; height: 30px; line-height: 30px; text-align: center; display: block; text-decoration: none; color: black; background: white; font-size: 18px; cursor: pointer; }
         .user-location-icon { text-align: center; font-size: 20px; }
-        .highlighted-cell { animation: pulse 2s infinite; }
+        .highlighted-cell { 
+            animation: pulse 2s infinite;
+            stroke-dasharray: 5, 3;
+        }
         @keyframes pulse {
             0% { fill-opacity: 0.3; stroke-width: 3; }
             50% { fill-opacity: 0.6; stroke-width: 4; }
@@ -50,18 +53,24 @@
             margin: 10px 0;
             text-align: center;
         }
-        .simple-popup { min-width: 200px; }
+        .simple-popup { 
+            min-width: 200px;
+            margin-bottom: 40px !important; /* Alejar popup de los cuadros */
+        }
         .grid-line { pointer-events: none; }
-        .grid-region { stroke-dasharray: 10,5; }
-        .grid-sector { stroke-dasharray: 5,3; }
-        .grid-cell { stroke-dasharray: 2,2; }
+        .grid-region { stroke-dasharray: 10,5; stroke-width: 2.5; }
+        .grid-sector { stroke-dasharray: 5,3; stroke-width: 1.5; }
+        .grid-cell { stroke-dasharray: 2,2; stroke-width: 1; }
+        .popup-offset {
+            margin-top: -50px; /* Levantar popup para que no tape */
+        }
     </style>
 </head>
 <body>
 
 <div class="map-title"><h1>PanamaCode - Sistema Postal (13 caracteres)</h1></div>
 <div class="search-container">
-    <input type="text" id="search-input" placeholder="Ej: 8A9B2-X3Y7K-ABC">
+    <input type="text" id="search-input" placeholder="Ej: 8A9B-X3Y7-ABC">
     <button id="search-btn">BUSCAR</button>
 </div>
 <div id="toggle-wm" class="toggle-watermark">TEXTO: ON</div>
@@ -72,10 +81,10 @@
 
 <script>
 // ==================== CONFIGURACIÓN ====================
-const mymap = L.map('mapid').setView([8.50, -80.0], 10); // Empezar en zoom 10 para ver grid
+const mymap = L.map('mapid').setView([8.50, -80.0], 10);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mymap);
 
-// Capas
+// Capas SIN CACHE (para evitar problemas)
 const gridLayer = L.layerGroup().addTo(mymap);
 const labelLayer = L.layerGroup().addTo(mymap);
 const selectionLayer = L.layerGroup().addTo(mymap);
@@ -83,12 +92,16 @@ const userLocationLayer = L.layerGroup().addTo(mymap);
 
 let labelsEnabled = true;
 
-// ==================== SISTEMA PanamaCode 13 CARACTERES ====================
+// ==================== SISTEMA PanamaCode OPCIÓN A ====================
 
 // Base32 optimizada
 const BASE32 = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+const BASE32_MAP = {};
+for (let i = 0; i < BASE32.length; i++) {
+    BASE32_MAP[BASE32[i]] = i;
+}
 
-// Área de cobertura de Panamá
+// Área de Panamá
 const PANAMA_BOUNDS = {
     south: 7.0,
     north: 9.8,
@@ -96,137 +109,121 @@ const PANAMA_BOUNDS = {
     east: -77.0
 };
 
-// Configuración para 13 caracteres (5+5+3)
+// Configuración del sistema 24×24 micro y 25×25 nano
 const GRID_CONFIG = {
-    regionSize: 0.05,      // ~5.5km (más pequeño para más precisión)
-    sectorSize: 0.001,     // ~110m (más pequeño)
-    cellSize: 0.00002,     // ~2.2m (muy preciso!)
-    regionChars: 5,        // 5 caracteres para región
-    sectorChars: 5,        // 5 caracteres para sector
-    cellChars: 3           // 3 caracteres para celda
+    microSize: 0.02,      // ~2.2km para 24 divisiones
+    nanoSize: 0.0008,     // ~90m para 25 divisiones dentro de micro
+    regionSize: 0.5       // ~55km para región
 };
 
-// Codificar número a Base32 (n caracteres)
-function encodeBase32(num, length) {
-    let result = '';
-    for (let i = 0; i < length; i++) {
-        result = BASE32[num % 32] + result;
-        num = Math.floor(num / 32);
-    }
-    return result;
-}
+// ==================== FUNCIONES DE CODIFICACIÓN DETERMINÍSTICA ====================
 
-// Decodificar Base32
-function decodeBase32(str) {
-    const map = {};
-    for (let i = 0; i < BASE32.length; i++) {
-        map[BASE32[i]] = i;
-    }
-    
-    let result = 0;
-    for (let i = 0; i < str.length; i++) {
-        result = result * 32 + (map[str[i]] || 0);
-    }
-    return result;
-}
-
-// Calcular índices desde coordenadas
-function latLngToIndices(lat, lng) {
+// Codificar región (4 caracteres: AABB)
+function encodeRegion(lat, lng) {
+    // Calcular posición relativa en Panamá
     const relX = (lng - PANAMA_BOUNDS.west) / (PANAMA_BOUNDS.east - PANAMA_BOUNDS.west);
     const relY = (lat - PANAMA_BOUNDS.south) / (PANAMA_BOUNDS.north - PANAMA_BOUNDS.south);
     
-    const safeRelX = Math.max(0.0001, Math.min(0.9999, relX));
-    const safeRelY = Math.max(0.0001, Math.min(0.9999, relY));
+    const safeRelX = Math.max(0.001, Math.min(0.999, relX));
+    const safeRelY = Math.max(0.001, Math.min(0.999, relY));
     
-    // Calcular número total de celdas
-    const regionCellsX = Math.floor((PANAMA_BOUNDS.east - PANAMA_BOUNDS.west) / GRID_CONFIG.regionSize);
-    const regionCellsY = Math.floor((PANAMA_BOUNDS.north - PANAMA_BOUNDS.south) / GRID_CONFIG.regionSize);
-    const sectorCellsX = Math.floor((PANAMA_BOUNDS.east - PANAMA_BOUNDS.west) / GRID_CONFIG.sectorSize);
-    const sectorCellsY = Math.floor((PANAMA_BOUNDS.north - PANAMA_BOUNDS.south) / GRID_CONFIG.sectorSize);
-    const cellCellsX = Math.floor((PANAMA_BOUNDS.east - PANAMA_BOUNDS.west) / GRID_CONFIG.cellSize);
-    const cellCellsY = Math.floor((PANAMA_BOUNDS.north - PANAMA_BOUNDS.south) / GRID_CONFIG.cellSize);
+    // 8×8 regiones (64 total)
+    const regionX = Math.floor(safeRelX * 8);
+    const regionY = Math.floor(safeRelY * 8);
     
-    return {
-        region: {
-            x: Math.floor(safeRelX * regionCellsX),
-            y: Math.floor(safeRelY * regionCellsY)
-        },
-        sector: {
-            x: Math.floor(safeRelX * sectorCellsX),
-            y: Math.floor(safeRelY * sectorCellsY)
-        },
-        cell: {
-            x: Math.floor(safeRelX * cellCellsX),
-            y: Math.floor(safeRelY * cellCellsY)
-        }
-    };
+    // Codificar en Base32 (2 chars por eje)
+    const char1 = BASE32[Math.floor(regionX / 4)];  // 0-1
+    const char2 = BASE32[regionX % 4];              // 0-3
+    const char3 = BASE32[Math.floor(regionY / 4)];  // 0-1
+    const char4 = BASE32[regionY % 4];              // 0-3
+    
+    return char1 + char2 + char3 + char4;
 }
 
-// Generar PanamaCode (13 caracteres: 5+5+3)
+// Codificar micro (4 caracteres: CCDD) - 24×24
+function encodeMicro(lat, lng) {
+    const relX = (lng - PANAMA_BOUNDS.west) / (PANAMA_BOUNDS.east - PANAMA_BOUNDS.west);
+    const relY = (lat - PANAMA_BOUNDS.south) / (PANAMA_BOUNDS.north - PANAMA_BOUNDS.south);
+    
+    const safeRelX = Math.max(0.001, Math.min(0.999, relX));
+    const safeRelY = Math.max(0.001, Math.min(0.999, relY));
+    
+    // Índices micro (0-23)
+    const microX = Math.floor(safeRelX * 24);
+    const microY = Math.floor(safeRelY * 24);
+    
+    // Codificar: dividir 24 en 3×8
+    const char1 = BASE32[Math.floor(microX / 8)];    // 0-2 (3 valores)
+    const char2 = BASE32[microX % 8];               // 0-7
+    const char3 = BASE32[Math.floor(microY / 8)];    // 0-2
+    const char4 = BASE32[microY % 8];               // 0-7
+    
+    return char1 + char2 + char3 + char4;
+}
+
+// Codificar nano (3 caracteres: EEE) - 25×25 dentro de micro
+function encodeNano(lat, lng) {
+    const relX = (lng - PANAMA_BOUNDS.west) / (PANAMA_BOUNDS.east - PANAMA_BOUNDS.west);
+    const relY = (lat - PANAMA_BOUNDS.south) / (PANAMA_BOUNDS.north - PANAMA_BOUNDS.south);
+    
+    const safeRelX = Math.max(0.00001, Math.min(0.99999, relX));
+    const safeRelY = Math.max(0.00001, Math.min(0.99999, relY));
+    
+    // Primero encontrar micro
+    const microX = Math.floor(safeRelX * 24);
+    const microY = Math.floor(safeRelY * 24);
+    
+    // Dentro del micro, calcular nano (0-24)
+    const nanoX = Math.floor((safeRelX * 24 - microX) * 25);
+    const nanoY = Math.floor((safeRelY * 24 - microY) * 25);
+    
+    // Combinar en un solo número 0-624 (25×25)
+    const combined = nanoX * 25 + nanoY;
+    
+    // Codificar en 3 chars Base32 (32³ = 32768 > 625)
+    const char1 = BASE32[Math.floor(combined / 1024)];        // 0-1
+    const char2 = BASE32[Math.floor((combined % 1024) / 32)]; // 0-31
+    const char3 = BASE32[combined % 32];                      // 0-31
+    
+    return char1 + char2 + char3;
+}
+
+// Generar código completo (13 caracteres: AABB-CCDD-EEE)
 function generatePanamaCode(lat, lng) {
-    const indices = latLngToIndices(lat, lng);
+    const regionCode = encodeRegion(lat, lng);    // 4 chars
+    const microCode = encodeMicro(lat, lng);      // 4 chars
+    const nanoCode = encodeNano(lat, lng);        // 3 chars
     
-    const regionCode = encodeBase32(indices.region.x, GRID_CONFIG.regionChars);
-    const sectorCode = encodeBase32(indices.sector.x, GRID_CONFIG.sectorChars);
-    const cellCode = encodeBase32(indices.cell.x, GRID_CONFIG.cellChars);
-    
-    return `${regionCode}-${sectorCode}-${cellCode}`;
+    return `${regionCode}-${microCode}-${nanoCode}`;
 }
 
-// Decodificar PanamaCode
-function decodePanamaCode(code) {
-    const parts = code.split('-');
-    if (parts.length !== 3) return null;
+// Calcular índices para visualización
+function calculateIndices(lat, lng) {
+    const relX = (lng - PANAMA_BOUNDS.west) / (PANAMA_BOUNDS.east - PANAMA_BOUNDS.west);
+    const relY = (lat - PANAMA_BOUNDS.south) / (PANAMA_BOUNDS.north - PANAMA_BOUNDS.south);
     
-    const [regionCode, sectorCode, cellCode] = parts;
+    const safeRelX = Math.max(0.00001, Math.min(0.99999, relX));
+    const safeRelY = Math.max(0.00001, Math.min(0.99999, relY));
     
-    // Verificar longitudes
-    if (regionCode.length !== 5 || sectorCode.length !== 5 || cellCode.length !== 3) {
-        return null;
-    }
+    // Micro índices (0-23)
+    const microX = Math.floor(safeRelX * 24);
+    const microY = Math.floor(safeRelY * 24);
     
-    const regionX = decodeBase32(regionCode);
-    const regionY = decodeBase32(regionCode); // Simplificado para demo
-    const sectorX = decodeBase32(sectorCode);
-    const sectorY = decodeBase32(sectorCode); // Simplificado
-    const cellX = decodeBase32(cellCode);
-    const cellY = decodeBase32(cellCode); // Simplificado
-    
-    // Calcular posición aproximada
-    const regionCellsX = Math.floor((PANAMA_BOUNDS.east - PANAMA_BOUNDS.west) / GRID_CONFIG.regionSize);
-    const regionCellsY = Math.floor((PANAMA_BOUNDS.north - PANAMA_BOUNDS.south) / GRID_CONFIG.regionSize);
-    
-    const relX = (regionX / regionCellsX) + 
-                 (sectorX / (32 * regionCellsX)) + 
-                 (cellX / (32 * 32 * regionCellsX));
-    
-    const relY = (regionY / regionCellsY) + 
-                 (sectorY / (32 * regionCellsY)) + 
-                 (cellY / (32 * 32 * regionCellsY));
-    
-    // Calcular coordenadas
-    const lng = PANAMA_BOUNDS.west + relX * (PANAMA_BOUNDS.east - PANAMA_BOUNDS.west);
-    const lat = PANAMA_BOUNDS.south + relY * (PANAMA_BOUNDS.north - PANAMA_BOUNDS.south);
-    
-    // Calcular bounds
-    const cellBounds = [
-        [lat - GRID_CONFIG.cellSize/2, lng - GRID_CONFIG.cellSize/2],
-        [lat - GRID_CONFIG.cellSize/2, lng + GRID_CONFIG.cellSize/2],
-        [lat + GRID_CONFIG.cellSize/2, lng + GRID_CONFIG.cellSize/2],
-        [lat + GRID_CONFIG.cellSize/2, lng - GRID_CONFIG.cellSize/2]
-    ];
+    // Nano índices dentro de micro (0-24)
+    const nanoX = Math.floor((safeRelX * 24 - microX) * 25);
+    const nanoY = Math.floor((safeRelY * 24 - microY) * 25);
     
     return {
-        lat,
-        lng,
-        bounds: cellBounds,
-        regionCode,
-        sectorCode,
-        cellCode
+        microX: Math.min(23, microX),
+        microY: Math.min(23, microY),
+        nanoX: Math.min(24, nanoX),
+        nanoY: Math.min(24, nanoY),
+        relX: safeRelX,
+        relY: safeRelY
     };
 }
 
-// ==================== VISUALIZACIÓN DE GRID (MEJORADA) ====================
+// ==================== VISUALIZACIÓN DE GRID ====================
 
 function updateGridAndLabels() {
     gridLayer.clearLayers();
@@ -235,31 +232,28 @@ function updateGridAndLabels() {
     const z = mymap.getZoom();
     const bounds = mymap.getBounds();
     
-    console.log(`Zoom: ${z}, Dibujando grid...`);
-    
-    // SIEMPRE mostrar algún tipo de grid
+    // Dibujar grid según zoom
     if (z >= 8) {
         drawGrid(z, bounds);
     }
 }
 
 function drawGrid(zoom, bounds) {
-    // GRID DE REGIONES (5.5km) - Zoom 8-12
+    // Grid de regiones (zoom 8-12)
     if (zoom >= 8 && zoom < 13) {
         drawRegionGrid(bounds);
         if (labelsEnabled) drawRegionLabels(bounds);
     }
     
-    // GRID DE SECTORES (110m) - Zoom 13-16
+    // Grid de micro (zoom 13-16)
     if (zoom >= 13 && zoom < 17) {
-        drawSectorGrid(bounds);
-        if (labelsEnabled && zoom >= 14) drawSectorLabels(bounds);
+        drawMicroGrid(bounds);
+        if (labelsEnabled) drawMicroLabels(bounds);
     }
     
-    // GRID DE CELDAS (2.2m) - Zoom 17+
+    // Grid de nano (zoom 17+)
     if (zoom >= 17) {
-        drawCellGrid(bounds);
-        if (labelsEnabled && zoom >= 18) drawCellLabels(bounds);
+        drawNanoGrid(bounds);
     }
 }
 
@@ -269,9 +263,6 @@ function drawRegionGrid(bounds) {
     const startLat = Math.floor(bounds.getSouth() / GRID_CONFIG.regionSize) * GRID_CONFIG.regionSize;
     const endLat = Math.ceil(bounds.getNorth() / GRID_CONFIG.regionSize) * GRID_CONFIG.regionSize;
     
-    console.log(`Regiones: ${startLng} to ${endLng}, ${startLat} to ${endLat}`);
-    
-    // Líneas verticales
     for (let lng = startLng; lng <= endLng; lng += GRID_CONFIG.regionSize) {
         L.polyline([
             [Math.max(bounds.getSouth(), PANAMA_BOUNDS.south), lng],
@@ -280,12 +271,11 @@ function drawRegionGrid(bounds) {
             color: '#1a73e8',
             weight: 2.5,
             opacity: 0.8,
-            dashArray: '8, 5',
+            dashArray: '10,5',
             className: 'grid-line grid-region'
         }).addTo(gridLayer);
     }
     
-    // Líneas horizontales
     for (let lat = startLat; lat <= endLat; lat += GRID_CONFIG.regionSize) {
         L.polyline([
             [lat, Math.max(bounds.getWest(), PANAMA_BOUNDS.west)],
@@ -294,22 +284,20 @@ function drawRegionGrid(bounds) {
             color: '#1a73e8',
             weight: 2.5,
             opacity: 0.8,
-            dashArray: '8, 5',
+            dashArray: '10,5',
             className: 'grid-line grid-region'
         }).addTo(gridLayer);
     }
 }
 
-function drawSectorGrid(bounds) {
-    const startLng = Math.floor(bounds.getWest() / GRID_CONFIG.sectorSize) * GRID_CONFIG.sectorSize;
-    const endLng = Math.ceil(bounds.getEast() / GRID_CONFIG.sectorSize) * GRID_CONFIG.sectorSize;
-    const startLat = Math.floor(bounds.getSouth() / GRID_CONFIG.sectorSize) * GRID_CONFIG.sectorSize;
-    const endLat = Math.ceil(bounds.getNorth() / GRID_CONFIG.sectorSize) * GRID_CONFIG.sectorSize;
+function drawMicroGrid(bounds) {
+    const startLng = Math.floor(bounds.getWest() / GRID_CONFIG.microSize) * GRID_CONFIG.microSize;
+    const endLng = Math.ceil(bounds.getEast() / GRID_CONFIG.microSize) * GRID_CONFIG.microSize;
+    const startLat = Math.floor(bounds.getSouth() / GRID_CONFIG.microSize) * GRID_CONFIG.microSize;
+    const endLat = Math.ceil(bounds.getNorth() / GRID_CONFIG.microSize) * GRID_CONFIG.microSize;
     
-    console.log(`Sectores: ${startLng} to ${endLng}, ${startLat} to ${endLat}`);
-    
-    // Dibujar cada 5 líneas para no saturar
-    for (let lng = startLng; lng <= endLng; lng += GRID_CONFIG.sectorSize * 5) {
+    // Dibujar cada 2 líneas para no saturar
+    for (let lng = startLng; lng <= endLng; lng += GRID_CONFIG.microSize * 2) {
         L.polyline([
             [bounds.getSouth(), lng],
             [bounds.getNorth(), lng]
@@ -317,12 +305,12 @@ function drawSectorGrid(bounds) {
             color: '#3498db',
             weight: 1.5,
             opacity: 0.6,
-            dashArray: '4, 3',
+            dashArray: '5,3',
             className: 'grid-line grid-sector'
         }).addTo(gridLayer);
     }
     
-    for (let lat = startLat; lat <= endLat; lat += GRID_CONFIG.sectorSize * 5) {
+    for (let lat = startLat; lat <= endLat; lat += GRID_CONFIG.microSize * 2) {
         L.polyline([
             [lat, bounds.getWest()],
             [lat, bounds.getEast()]
@@ -330,22 +318,20 @@ function drawSectorGrid(bounds) {
             color: '#3498db',
             weight: 1.5,
             opacity: 0.6,
-            dashArray: '4, 3',
+            dashArray: '5,3',
             className: 'grid-line grid-sector'
         }).addTo(gridLayer);
     }
 }
 
-function drawCellGrid(bounds) {
-    const startLng = Math.floor(bounds.getWest() / GRID_CONFIG.cellSize) * GRID_CONFIG.cellSize;
-    const endLng = Math.ceil(bounds.getEast() / GRID_CONFIG.cellSize) * GRID_CONFIG.cellSize;
-    const startLat = Math.floor(bounds.getSouth() / GRID_CONFIG.cellSize) * GRID_CONFIG.cellSize;
-    const endLat = Math.ceil(bounds.getNorth() / GRID_CONFIG.cellSize) * GRID_CONFIG.cellSize;
+function drawNanoGrid(bounds) {
+    const startLng = Math.floor(bounds.getWest() / GRID_CONFIG.nanoSize) * GRID_CONFIG.nanoSize;
+    const endLng = Math.ceil(bounds.getEast() / GRID_CONFIG.nanoSize) * GRID_CONFIG.nanoSize;
+    const startLat = Math.floor(bounds.getSouth() / GRID_CONFIG.nanoSize) * GRID_CONFIG.nanoSize;
+    const endLat = Math.ceil(bounds.getNorth() / GRID_CONFIG.nanoSize) * GRID_CONFIG.nanoSize;
     
-    console.log(`Celdas: ${startLng} to ${endLng}, ${startLat} to ${endLat}`);
-    
-    // Dibujar cada 50 líneas para no saturar
-    for (let lng = startLng; lng <= endLng; lng += GRID_CONFIG.cellSize * 50) {
+    // Dibujar cada 10 líneas para no saturar
+    for (let lng = startLng; lng <= endLng; lng += GRID_CONFIG.nanoSize * 10) {
         L.polyline([
             [bounds.getSouth(), lng],
             [bounds.getNorth(), lng]
@@ -353,12 +339,12 @@ function drawCellGrid(bounds) {
             color: '#2980b9',
             weight: 1,
             opacity: 0.4,
-            dashArray: '2, 2',
+            dashArray: '2,2',
             className: 'grid-line grid-cell'
         }).addTo(gridLayer);
     }
     
-    for (let lat = startLat; lat <= endLat; lat += GRID_CONFIG.cellSize * 50) {
+    for (let lat = startLat; lat <= endLat; lat += GRID_CONFIG.nanoSize * 10) {
         L.polyline([
             [lat, bounds.getWest()],
             [lat, bounds.getEast()]
@@ -366,32 +352,25 @@ function drawCellGrid(bounds) {
             color: '#2980b9',
             weight: 1,
             opacity: 0.4,
-            dashArray: '2, 2',
+            dashArray: '2,2',
             className: 'grid-line grid-cell'
         }).addTo(gridLayer);
     }
 }
 
 function drawRegionLabels(bounds) {
-    const startX = Math.floor((bounds.getWest() - PANAMA_BOUNDS.west) / GRID_CONFIG.regionSize);
-    const endX = Math.ceil((bounds.getEast() - PANAMA_BOUNDS.west) / GRID_CONFIG.regionSize);
-    const startY = Math.floor((bounds.getSouth() - PANAMA_BOUNDS.south) / GRID_CONFIG.regionSize);
-    const endY = Math.ceil((bounds.getNorth() - PANAMA_BOUNDS.south) / GRID_CONFIG.regionSize);
+    const step = GRID_CONFIG.regionSize;
     
-    // Mostrar solo algunos labels
-    for (let x = Math.max(0, startX); x <= endX; x += 2) {
-        for (let y = Math.max(0, startY); y <= endY; y += 2) {
-            const centerLng = PANAMA_BOUNDS.west + (x + 0.5) * GRID_CONFIG.regionSize;
-            const centerLat = PANAMA_BOUNDS.south + (y + 0.5) * GRID_CONFIG.regionSize;
-            
-            if (bounds.contains([centerLat, centerLng])) {
-                const regionCode = encodeBase32(x, 2); // Solo 2 chars para label
+    for (let lng = Math.floor(bounds.getWest() / step) * step; lng <= bounds.getEast(); lng += step) {
+        for (let lat = Math.floor(bounds.getSouth() / step) * step; lat <= bounds.getNorth(); lat += step) {
+            if (bounds.contains([lat + step/2, lng + step/2])) {
+                const regionCode = encodeRegion(lat + step/2, lng + step/2);
                 
-                L.marker([centerLat, centerLng], {
+                L.marker([lat + step/2, lng + step/2], {
                     icon: L.divIcon({ 
                         className: 'watermark-label-fixed', 
-                        html: `<div style="background: rgba(255,255,255,0.8); padding: 3px 6px; border-radius: 4px; border: 1px solid #1a73e8;">${regionCode}</div>`, 
-                        iconSize: [50, 25] 
+                        html: `<div style="background: rgba(255,255,255,0.8); padding: 3px 6px; border-radius: 4px;">${regionCode.substring(0,2)}</div>`, 
+                        iconSize: [40, 25] 
                     })
                 }).addTo(labelLayer);
             }
@@ -399,34 +378,7 @@ function drawRegionLabels(bounds) {
     }
 }
 
-function drawSectorLabels(bounds) {
-    const startX = Math.floor((bounds.getWest() - PANAMA_BOUNDS.west) / GRID_CONFIG.sectorSize);
-    const endX = Math.ceil((bounds.getEast() - PANAMA_BOUNDS.west) / GRID_CONFIG.sectorSize);
-    const startY = Math.floor((bounds.getSouth() - PANAMA_BOUNDS.south) / GRID_CONFIG.sectorSize);
-    const endY = Math.ceil((bounds.getNorth() - PANAMA_BOUNDS.south) / GRID_CONFIG.sectorSize);
-    
-    // Mostrar cada 10 sectores
-    for (let x = Math.max(0, startX); x <= endX; x += 10) {
-        for (let y = Math.max(0, startY); y <= endY; y += 10) {
-            const centerLng = PANAMA_BOUNDS.west + (x + 0.5) * GRID_CONFIG.sectorSize;
-            const centerLat = PANAMA_BOUNDS.south + (y + 0.5) * GRID_CONFIG.sectorSize;
-            
-            if (bounds.contains([centerLat, centerLng])) {
-                const sectorCode = encodeBase32(x % 1024, 2); // Solo 2 chars
-                
-                L.marker([centerLat, centerLng], {
-                    icon: L.divIcon({ 
-                        className: 'micro-label-fixed', 
-                        html: `<div style="background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 3px; border: 1px solid #3498db;">${sectorCode}</div>`, 
-                        iconSize: [40, 20] 
-                    })
-                }).addTo(labelLayer);
-            }
-        }
-    }
-}
-
-// ==================== EVENTO CLIC ====================
+// ==================== EVENTO CLIC CORREGIDO ====================
 
 mymap.on("click", function (e) {
     selectionLayer.clearLayers();
@@ -442,148 +394,151 @@ mymap.on("click", function (e) {
         return;
     }
     
+    // Calcular índices EXACTOS
+    const indices = calculateIndices(lat, lng);
+    
     // Generar código
     const fullCode = generatePanamaCode(lat, lng);
+    const [regionCode, microCode, nanoCode] = fullCode.split('-');
     
     let displayCode = '';
     let titulo = '';
-    let highlightBounds = null;
     
-    // NIVEL MACRO (zoom < 13) - REGIÓN
+    // NIVEL REGIÓN (zoom < 13)
     if (z < 13) {
         titulo = "REGIÓN";
-        displayCode = fullCode.split('-')[0];
+        displayCode = regionCode;
         
-        const indices = latLngToIndices(lat, lng);
-        const centerLng = PANAMA_BOUNDS.west + (indices.region.x + 0.5) * GRID_CONFIG.regionSize;
-        const centerLat = PANAMA_BOUNDS.south + (indices.region.y + 0.5) * GRID_CONFIG.regionSize;
+        // Calcular bounds de región
+        const regionLng = PANAMA_BOUNDS.west + (indices.relX * (PANAMA_BOUNDS.east - PANAMA_BOUNDS.west));
+        const regionLat = PANAMA_BOUNDS.south + (indices.relY * (PANAMA_BOUNDS.north - PANAMA_BOUNDS.south));
         
-        highlightBounds = [
-            [centerLat - GRID_CONFIG.regionSize/2, centerLng - GRID_CONFIG.regionSize/2],
-            [centerLat - GRID_CONFIG.regionSize/2, centerLng + GRID_CONFIG.regionSize/2],
-            [centerLat + GRID_CONFIG.regionSize/2, centerLng + GRID_CONFIG.regionSize/2],
-            [centerLat + GRID_CONFIG.regionSize/2, centerLng - GRID_CONFIG.regionSize/2]
+        const regionBounds = [
+            [regionLat - GRID_CONFIG.regionSize/2, regionLng - GRID_CONFIG.regionSize/2],
+            [regionLat - GRID_CONFIG.regionSize/2, regionLng + GRID_CONFIG.regionSize/2],
+            [regionLat + GRID_CONFIG.regionSize/2, regionLng + GRID_CONFIG.regionSize/2],
+            [regionLat + GRID_CONFIG.regionSize/2, regionLng - GRID_CONFIG.regionSize/2]
         ];
-    }
-    
-    // NIVEL MICRO (zoom 13-16) - SECTOR
-    else if (z >= 13 && z < 17) {
-        titulo = "SECTOR";
-        const parts = fullCode.split('-');
-        displayCode = `${parts[0]}-${parts[1]}`;
         
-        const indices = latLngToIndices(lat, lng);
-        const centerLng = PANAMA_BOUNDS.west + (indices.sector.x + 0.5) * GRID_CONFIG.sectorSize;
-        const centerLat = PANAMA_BOUNDS.south + (indices.sector.y + 0.5) * GRID_CONFIG.sectorSize;
-        
-        highlightBounds = [
-            [centerLat - GRID_CONFIG.sectorSize/2, centerLng - GRID_CONFIG.sectorSize/2],
-            [centerLat - GRID_CONFIG.sectorSize/2, centerLng + GRID_CONFIG.sectorSize/2],
-            [centerLat + GRID_CONFIG.sectorSize/2, centerLng + GRID_CONFIG.sectorSize/2],
-            [centerLat + GRID_CONFIG.sectorSize/2, centerLng - GRID_CONFIG.sectorSize/2]
-        ];
-    }
-    
-    // NIVEL NANO (zoom 17+) - CELDA
-    else {
-        titulo = "CELDA";
-        displayCode = fullCode;
-        
-        const indices = latLngToIndices(lat, lng);
-        const centerLng = PANAMA_BOUNDS.west + (indices.cell.x + 0.5) * GRID_CONFIG.cellSize;
-        const centerLat = PANAMA_BOUNDS.south + (indices.cell.y + 0.5) * GRID_CONFIG.cellSize;
-        
-        highlightBounds = [
-            [centerLat - GRID_CONFIG.cellSize/2, centerLng - GRID_CONFIG.cellSize/2],
-            [centerLat - GRID_CONFIG.cellSize/2, centerLng + GRID_CONFIG.cellSize/2],
-            [centerLat + GRID_CONFIG.cellSize/2, centerLng + GRID_CONFIG.cellSize/2],
-            [centerLat + GRID_CONFIG.cellSize/2, centerLng - GRID_CONFIG.cellSize/2]
-        ];
-    }
-    
-    // Destacar celda
-    if (highlightBounds) {
-        const color = z < 13 ? "#1a73e8" : (z < 17 ? "#3498db" : "#2980b9");
-        
-        L.polygon(highlightBounds, {
-            color: color,
+        L.polygon(regionBounds, {
+            color: "#1a73e8",
             weight: 3,
-            fillColor: color,
+            fillColor: "#1a73e8",
             fillOpacity: 0.3,
             className: 'highlighted-cell'
         }).addTo(selectionLayer);
     }
     
-    // Popup simple
+    // NIVEL MICRO (zoom 13-16)
+    else if (z >= 13 && z < 17) {
+        titulo = "MICRO";
+        displayCode = `${regionCode}-${microCode}`;
+        
+        // Calcular bounds EXACTOS del micro
+        const microWest = PANAMA_BOUNDS.west + (indices.microX / 24) * (PANAMA_BOUNDS.east - PANAMA_BOUNDS.west);
+        const microEast = PANAMA_BOUNDS.west + ((indices.microX + 1) / 24) * (PANAMA_BOUNDS.east - PANAMA_BOUNDS.west);
+        const microSouth = PANAMA_BOUNDS.south + (indices.microY / 24) * (PANAMA_BOUNDS.north - PANAMA_BOUNDS.south);
+        const microNorth = PANAMA_BOUNDS.south + ((indices.microY + 1) / 24) * (PANAMA_BOUNDS.north - PANAMA_BOUNDS.south);
+        
+        const microBounds = [
+            [microSouth, microWest],
+            [microSouth, microEast],
+            [microNorth, microEast],
+            [microNorth, microWest]
+        ];
+        
+        L.polygon(microBounds, {
+            color: "#3498db",
+            weight: 3,
+            fillColor: "#3498db",
+            fillOpacity: 0.3,
+            className: 'highlighted-cell'
+        }).addTo(selectionLayer);
+    }
+    
+    // NIVEL NANO (zoom 17+)
+    else {
+        titulo = "NANO";
+        displayCode = fullCode;
+        
+        // Calcular bounds EXACTOS del nano dentro del micro
+        const microWest = PANAMA_BOUNDS.west + (indices.microX / 24) * (PANAMA_BOUNDS.east - PANAMA_BOUNDS.west);
+        const microSouth = PANAMA_BOUNDS.south + (indices.microY / 24) * (PANAMA_BOUNDS.north - PANAMA_BOUNDS.south);
+        
+        const microWidth = (PANAMA_BOUNDS.east - PANAMA_BOUNDS.west) / 24;
+        const microHeight = (PANAMA_BOUNDS.north - PANAMA_BOUNDS.south) / 24;
+        
+        const nanoWidth = microWidth / 25;
+        const nanoHeight = microHeight / 25;
+        
+        const nanoWest = microWest + (indices.nanoX * nanoWidth);
+        const nanoEast = nanoWest + nanoWidth;
+        const nanoSouth = microSouth + (indices.nanoY * nanoHeight);
+        const nanoNorth = nanoSouth + nanoHeight;
+        
+        const nanoBounds = [
+            [nanoSouth, nanoWest],
+            [nanoSouth, nanoEast],
+            [nanoNorth, nanoEast],
+            [nanoNorth, nanoWest]
+        ];
+        
+        L.polygon(nanoBounds, {
+            color: "#2980b9",
+            weight: 2,
+            fillColor: "#2980b9",
+            fillOpacity: 0.4,
+            className: 'highlighted-cell'
+        }).addTo(selectionLayer);
+        
+        // Borde micro para referencia
+        const microBounds = [
+            [microSouth, microWest],
+            [microSouth, microWest + microWidth],
+            [microSouth + microHeight, microWest + microWidth],
+            [microSouth + microHeight, microWest]
+        ];
+        
+        L.polygon(microBounds, {
+            color: "#3498db",
+            weight: 1,
+            fillColor: "transparent",
+            dashArray: "5,5",
+            opacity: 0.5
+        }).addTo(selectionLayer);
+    }
+    
+    // Popup ALEJADO de los cuadros
     showSimplePopup(e.latlng, titulo, displayCode);
 });
 
 function showSimplePopup(latlng, titulo, codigo) {
     const ws = encodeURIComponent(`📍 ${codigo}\nGPS: ${latlng.lat.toFixed(6)},${latlng.lng.toFixed(6)}`);
     
-    const popup = L.popup({ className: 'simple-popup' })
-        .setLatLng([latlng.lat, latlng.lng])
-        .setContent(`
-            <div style="text-align:center; padding: 10px;">
-                <small>${titulo}</small><br>
-                <div class="code-display" style="font-size: 14px;">${codigo}</div>
-                <div style="margin-top: 10px;">
-                    <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${latlng.lat},${latlng.lng}')">📍 MAPS</button>
-                    <button class="btn-ws" onclick="window.open('https://wa.me/?text=${ws}')">💬 WS</button>
-                </div>
+    // Popup offset para que no tape los cuadros
+    const popupOffset = [0, -40];
+    
+    const popup = L.popup({ 
+        offset: popupOffset,
+        className: 'simple-popup popup-offset'
+    })
+    .setLatLng([latlng.lat + 0.0002, latlng.lng]) // Levantar un poco
+    .setContent(`
+        <div style="text-align:center; padding: 10px;">
+            <small>${titulo}</small><br>
+            <div class="code-display" style="font-size: 14px;">${codigo}</div>
+            <div style="margin-top: 10px;">
+                <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${latlng.lat},${latlng.lng}')">📍 MAPS</button>
+                <button class="btn-ws" onclick="window.open('https://wa.me/?text=${ws}')">💬 WS</button>
             </div>
-        `)
-        .openOn(mymap);
+        </div>
+    `)
+    .openOn(mymap);
     
     popup.on('remove', () => {
         selectionLayer.clearLayers();
     });
 }
-
-// ==================== BUSCADOR ====================
-
-document.getElementById('search-btn').addEventListener('click', () => {
-    const code = document.getElementById('search-input').value.trim().toUpperCase();
-    
-    if (!code) return;
-    
-    // Validar formato básico
-    if (!code.includes('-') || code.length < 8) {
-        alert('Formato: XXXXX-YYYYY-ZZZ (13 caracteres)');
-        return;
-    }
-    
-    const decoded = decodePanamaCode(code);
-    
-    if (!decoded) {
-        alert('Código no válido o fuera de rango');
-        return;
-    }
-    
-    selectionLayer.clearLayers();
-    
-    // Determinar nivel
-    const parts = code.split('-');
-    let zoomLevel = 12;
-    
-    if (parts.length >= 2) {
-        zoomLevel = 15;
-    }
-    if (parts.length === 3) {
-        zoomLevel = 18;
-    }
-    
-    // Centrar mapa
-    mymap.setView([decoded.lat, decoded.lng], zoomLevel);
-    
-    // Destacar celda
-    L.polygon(decoded.bounds, {
-        color: '#e74c3c',
-        weight: 3,
-        fillColor: '#e74c3c',
-        fillOpacity: 0.3
-    }).addTo(selectionLayer);
-});
 
 // ==================== CONTROLES ====================
 
@@ -604,13 +559,6 @@ const LocateControl = L.Control.extend({
 });
 mymap.addControl(new LocateControl());
 
-// Control de capas
-L.control.layers(null, {
-    "Grid": gridLayer,
-    "Selección": selectionLayer,
-    "Mi ubicación": userLocationLayer
-}, {collapsed: false}).addTo(mymap);
-
 // Toggle labels
 $('#toggle-wm').click(function() {
     labelsEnabled = !labelsEnabled;
@@ -618,45 +566,11 @@ $('#toggle-wm').click(function() {
     updateGridAndLabels();
 });
 
-// Eventos - FORZAR ACTUALIZACIÓN DEL GRID
-mymap.on('moveend', updateGridAndLabels);
-mymap.on('zoomend', function() {
-    updateGridAndLabels();
-    console.log("Zoom cambiado, actualizando grid...");
-});
-mymap.on('zoomstart', () => {
-    selectionLayer.clearLayers();
-});
+// Eventos
+mymap.on('moveend zoomend', updateGridAndLabels);
+mymap.on('zoomstart', () => selectionLayer.clearLayers());
 
-// GPS
-mymap.on('locationfound', function(e) {
-    userLocationLayer.clearLayers();
-    
-    L.circleMarker(e.latlng, {
-        radius: 8,
-        color: '#3498db',
-        fillColor: '#3498db',
-        fillOpacity: 0.7
-    }).addTo(userLocationLayer);
-    
-    // Generar código para ubicación
-    const code = generatePanamaCode(e.latlng.lat, e.latlng.lng);
-    
-    const popup = L.popup()
-        .setLatLng(e.latlng)
-        .setContent(`
-            <div style="text-align:center; padding: 10px;">
-                <div style="font-weight:bold; margin-bottom: 5px;">📍 Tu ubicación</div>
-                <div class="code-display" style="font-size: 14px;">${code}</div>
-                <div style="font-size: 11px; color: #666; margin-top: 5px;">
-                    ${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}
-                </div>
-            </div>
-        `)
-        .openOn(mymap);
-});
-
-// Inicializar con grid visible
+// Inicializar
 updateGridAndLabels();
 </script>
 </body>
