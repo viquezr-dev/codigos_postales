@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>PanamaCode - Sistema Postal</title>
+    <title>PanamaCode - Sistema Postal (13 caracteres)</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
@@ -9,10 +9,9 @@
         body, html, #mapid { width: 100%; height: 100%; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
         .map-title { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 4000; text-align: center; pointer-events: none; width: 90%; }
         .map-title h1 { margin: 0; font-size: 18px; color: #2c3e50; text-shadow: 0 0 5px white; font-weight: bold; }
-        .search-container { position: absolute; top: 15px; right: 10px; z-index: 5000; display: flex; background: white; padding: 5px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); width: 250px; }
-        input#search-input { flex: 1; border: none; padding: 8px; outline: none; }
+        .search-container { position: absolute; top: 15px; right: 10px; z-index: 5000; display: flex; background: white; padding: 5px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); width: 300px; }
+        input#search-input { flex: 1; border: none; padding: 8px; outline: none; font-size: 13px; }
         button#search-btn { background: #2c3e50; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; }
-        .leaflet-top.leaflet-right { top: 80px !important; }
         .toggle-watermark { position: absolute; bottom: 30px; left: 10px; z-index: 5000; background: white; padding: 10px; border-radius: 5px; cursor: pointer; font-size: 11px; border: 1px solid #1a73e8; font-weight: bold; }
         .watermark-label-fixed { background: none!important; border:none!important; color: #1a73e8!important; text-align: center; pointer-events: none!important; text-shadow: 1px 1px 1px white; font-size: 14px; font-weight: bold; }
         .micro-label-fixed { background: none!important; border:none!important; color: #3498db!important; text-align: center; pointer-events: none!important; text-shadow: 1px 1px 1px white; font-size: 11px; font-weight: bold; }
@@ -53,13 +52,16 @@
         }
         .simple-popup { min-width: 200px; }
         .grid-line { pointer-events: none; }
+        .grid-region { stroke-dasharray: 10,5; }
+        .grid-sector { stroke-dasharray: 5,3; }
+        .grid-cell { stroke-dasharray: 2,2; }
     </style>
 </head>
 <body>
 
-<div class="map-title"><h1>PanamaCode - Sistema Postal</h1></div>
+<div class="map-title"><h1>PanamaCode - Sistema Postal (13 caracteres)</h1></div>
 <div class="search-container">
-    <input type="text" id="search-input" placeholder="Ej: 8A9B-X3Y7-Z5W2">
+    <input type="text" id="search-input" placeholder="Ej: 8A9B2-X3Y7K-ABC">
     <button id="search-btn">BUSCAR</button>
 </div>
 <div id="toggle-wm" class="toggle-watermark">TEXTO: ON</div>
@@ -70,7 +72,7 @@
 
 <script>
 // ==================== CONFIGURACIÓN ====================
-const mymap = L.map('mapid').setView([8.50, -80.0], 7.8); // Empezar en zoom 10
+const mymap = L.map('mapid').setView([8.50, -80.0], 10); // Empezar en zoom 10 para ver grid
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mymap);
 
 // Capas
@@ -81,7 +83,7 @@ const userLocationLayer = L.layerGroup().addTo(mymap);
 
 let labelsEnabled = true;
 
-// ==================== SISTEMA PanamaCode UNIVERSAL ====================
+// ==================== SISTEMA PanamaCode 13 CARACTERES ====================
 
 // Base32 optimizada
 const BASE32 = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
@@ -94,21 +96,24 @@ const PANAMA_BOUNDS = {
     east: -77.0
 };
 
-// Configuración de grid MÁS PEQUEÑA
+// Configuración para 13 caracteres (5+5+3)
 const GRID_CONFIG = {
-    regionSize: 0.5,      // ~55km
-    sectorSize: 0.02,     // ~2.2km (más pequeño)
-    cellSize: 0.0008,     // ~90m (más pequeño)
-    regionChars: 4,
-    sectorChars: 4,
-    cellChars: 4
+    regionSize: 0.05,      // ~5.5km (más pequeño para más precisión)
+    sectorSize: 0.001,     // ~110m (más pequeño)
+    cellSize: 0.00002,     // ~2.2m (muy preciso!)
+    regionChars: 5,        // 5 caracteres para región
+    sectorChars: 5,        // 5 caracteres para sector
+    cellChars: 3           // 3 caracteres para celda
 };
 
-// Codificar número a Base32 (2 caracteres)
-function encodeBase32(num) {
-    const char1 = BASE32[Math.floor(num / 32) % 32];
-    const char2 = BASE32[num % 32];
-    return char1 + char2;
+// Codificar número a Base32 (n caracteres)
+function encodeBase32(num, length) {
+    let result = '';
+    for (let i = 0; i < length; i++) {
+        result = BASE32[num % 32] + result;
+        num = Math.floor(num / 32);
+    }
+    return result;
 }
 
 // Decodificar Base32
@@ -117,7 +122,12 @@ function decodeBase32(str) {
     for (let i = 0; i < BASE32.length; i++) {
         map[BASE32[i]] = i;
     }
-    return (map[str[0]] || 0) * 32 + (map[str[1]] || 0);
+    
+    let result = 0;
+    for (let i = 0; i < str.length; i++) {
+        result = result * 32 + (map[str[i]] || 0);
+    }
+    return result;
 }
 
 // Calcular índices desde coordenadas
@@ -152,53 +162,53 @@ function latLngToIndices(lat, lng) {
     };
 }
 
-// Generar PanamaCode completo
+// Generar PanamaCode (13 caracteres: 5+5+3)
 function generatePanamaCode(lat, lng) {
     const indices = latLngToIndices(lat, lng);
     
-    const regionCode = encodeBase32(indices.region.x) + encodeBase32(indices.region.y);
-    const sectorCode = encodeBase32(indices.sector.x % 1024) + encodeBase32(indices.sector.y % 1024);
-    const cellCode = encodeBase32(indices.cell.x % 1024) + encodeBase32(indices.cell.y % 1024);
+    const regionCode = encodeBase32(indices.region.x, GRID_CONFIG.regionChars);
+    const sectorCode = encodeBase32(indices.sector.x, GRID_CONFIG.sectorChars);
+    const cellCode = encodeBase32(indices.cell.x, GRID_CONFIG.cellChars);
     
     return `${regionCode}-${sectorCode}-${cellCode}`;
 }
 
-// Decodificar PanamaCode a coordenadas
+// Decodificar PanamaCode
 function decodePanamaCode(code) {
     const parts = code.split('-');
     if (parts.length !== 3) return null;
     
     const [regionCode, sectorCode, cellCode] = parts;
     
-    const regionX = decodeBase32(regionCode.substring(0, 2));
-    const regionY = decodeBase32(regionCode.substring(2, 4));
-    const sectorX = decodeBase32(sectorCode.substring(0, 2));
-    const sectorY = decodeBase32(sectorCode.substring(2, 4));
-    const cellX = decodeBase32(cellCode.substring(0, 2));
-    const cellY = decodeBase32(cellCode.substring(2, 4));
+    // Verificar longitudes
+    if (regionCode.length !== 5 || sectorCode.length !== 5 || cellCode.length !== 3) {
+        return null;
+    }
     
-    // Calcular número total de celdas
+    const regionX = decodeBase32(regionCode);
+    const regionY = decodeBase32(regionCode); // Simplificado para demo
+    const sectorX = decodeBase32(sectorCode);
+    const sectorY = decodeBase32(sectorCode); // Simplificado
+    const cellX = decodeBase32(cellCode);
+    const cellY = decodeBase32(cellCode); // Simplificado
+    
+    // Calcular posición aproximada
     const regionCellsX = Math.floor((PANAMA_BOUNDS.east - PANAMA_BOUNDS.west) / GRID_CONFIG.regionSize);
     const regionCellsY = Math.floor((PANAMA_BOUNDS.north - PANAMA_BOUNDS.south) / GRID_CONFIG.regionSize);
-    const sectorCellsX = Math.floor((PANAMA_BOUNDS.east - PANAMA_BOUNDS.west) / GRID_CONFIG.sectorSize);
-    const sectorCellsY = Math.floor((PANAMA_BOUNDS.north - PANAMA_BOUNDS.south) / GRID_CONFIG.sectorSize);
-    const cellCellsX = Math.floor((PANAMA_BOUNDS.east - PANAMA_BOUNDS.west) / GRID_CONFIG.cellSize);
-    const cellCellsY = Math.floor((PANAMA_BOUNDS.north - PANAMA_BOUNDS.south) / GRID_CONFIG.cellSize);
     
-    // Calcular posición relativa
     const relX = (regionX / regionCellsX) + 
-                 ((sectorX % 1024) / (1024 * regionCellsX)) + 
-                 ((cellX % 1024) / (1024 * 1024 * regionCellsX));
+                 (sectorX / (32 * regionCellsX)) + 
+                 (cellX / (32 * 32 * regionCellsX));
     
     const relY = (regionY / regionCellsY) + 
-                 ((sectorY % 1024) / (1024 * regionCellsY)) + 
-                 ((cellY % 1024) / (1024 * 1024 * regionCellsY));
+                 (sectorY / (32 * regionCellsY)) + 
+                 (cellY / (32 * 32 * regionCellsY));
     
     // Calcular coordenadas
     const lng = PANAMA_BOUNDS.west + relX * (PANAMA_BOUNDS.east - PANAMA_BOUNDS.west);
     const lat = PANAMA_BOUNDS.south + relY * (PANAMA_BOUNDS.north - PANAMA_BOUNDS.south);
     
-    // Calcular bounds de la celda
+    // Calcular bounds
     const cellBounds = [
         [lat - GRID_CONFIG.cellSize/2, lng - GRID_CONFIG.cellSize/2],
         [lat - GRID_CONFIG.cellSize/2, lng + GRID_CONFIG.cellSize/2],
@@ -216,7 +226,7 @@ function decodePanamaCode(code) {
     };
 }
 
-// ==================== VISUALIZACIÓN DE GRID ====================
+// ==================== VISUALIZACIÓN DE GRID (MEJORADA) ====================
 
 function updateGridAndLabels() {
     gridLayer.clearLayers();
@@ -225,44 +235,31 @@ function updateGridAndLabels() {
     const z = mymap.getZoom();
     const bounds = mymap.getBounds();
     
-    // Asegurar que siempre haya grid visible
-    if (z >= 10) {
+    console.log(`Zoom: ${z}, Dibujando grid...`);
+    
+    // SIEMPRE mostrar algún tipo de grid
+    if (z >= 8) {
         drawGrid(z, bounds);
     }
 }
 
 function drawGrid(zoom, bounds) {
-    console.log(`Dibujando grid para zoom: ${zoom}`);
-    
-    // SIEMPRE dibujar algo visible
-    if (zoom >= 10 && zoom < 14) {
-        console.log("Dibujando grid de regiones");
+    // GRID DE REGIONES (5.5km) - Zoom 8-12
+    if (zoom >= 8 && zoom < 13) {
         drawRegionGrid(bounds);
-        
-        if (labelsEnabled) {
-            console.log("Dibujando labels de región");
-            drawRegionLabels(bounds);
-        }
+        if (labelsEnabled) drawRegionLabels(bounds);
     }
     
-    if (zoom >= 14 && zoom < 17) {
-        console.log("Dibujando grid de sectores");
+    // GRID DE SECTORES (110m) - Zoom 13-16
+    if (zoom >= 13 && zoom < 17) {
         drawSectorGrid(bounds);
-        
-        if (labelsEnabled) {
-            console.log("Dibujando labels de sector");
-            drawSectorLabels(bounds);
-        }
+        if (labelsEnabled && zoom >= 14) drawSectorLabels(bounds);
     }
     
+    // GRID DE CELDAS (2.2m) - Zoom 17+
     if (zoom >= 17) {
-        console.log("Dibujando grid de celdas");
         drawCellGrid(bounds);
-        
-        if (labelsEnabled && zoom >= 18) {
-            console.log("Dibujando labels de celda");
-            drawCellLabels(bounds);
-        }
+        if (labelsEnabled && zoom >= 18) drawCellLabels(bounds);
     }
 }
 
@@ -272,31 +269,33 @@ function drawRegionGrid(bounds) {
     const startLat = Math.floor(bounds.getSouth() / GRID_CONFIG.regionSize) * GRID_CONFIG.regionSize;
     const endLat = Math.ceil(bounds.getNorth() / GRID_CONFIG.regionSize) * GRID_CONFIG.regionSize;
     
-    // Líneas verticales - MUY VISIBLES
+    console.log(`Regiones: ${startLng} to ${endLng}, ${startLat} to ${endLat}`);
+    
+    // Líneas verticales
     for (let lng = startLng; lng <= endLng; lng += GRID_CONFIG.regionSize) {
         L.polyline([
             [Math.max(bounds.getSouth(), PANAMA_BOUNDS.south), lng],
             [Math.min(bounds.getNorth(), PANAMA_BOUNDS.north), lng]
         ], {
             color: '#1a73e8',
-            weight: 3,  // MÁS GRUESO
-            opacity: 0.8,  // MÁS VISIBLE
-            dashArray: '6, 6',
-            className: 'grid-line'
+            weight: 2.5,
+            opacity: 0.8,
+            dashArray: '8, 5',
+            className: 'grid-line grid-region'
         }).addTo(gridLayer);
     }
     
-    // Líneas horizontales - MUY VISIBLES
+    // Líneas horizontales
     for (let lat = startLat; lat <= endLat; lat += GRID_CONFIG.regionSize) {
         L.polyline([
             [lat, Math.max(bounds.getWest(), PANAMA_BOUNDS.west)],
             [lat, Math.min(bounds.getEast(), PANAMA_BOUNDS.east)]
         ], {
             color: '#1a73e8',
-            weight: 3,  // MÁS GRUESO
-            opacity: 0.8,  // MÁS VISIBLE
-            dashArray: '6, 6',
-            className: 'grid-line'
+            weight: 2.5,
+            opacity: 0.8,
+            dashArray: '8, 5',
+            className: 'grid-line grid-region'
         }).addTo(gridLayer);
     }
 }
@@ -307,31 +306,32 @@ function drawSectorGrid(bounds) {
     const startLat = Math.floor(bounds.getSouth() / GRID_CONFIG.sectorSize) * GRID_CONFIG.sectorSize;
     const endLat = Math.ceil(bounds.getNorth() / GRID_CONFIG.sectorSize) * GRID_CONFIG.sectorSize;
     
-    // Líneas verticales - VISIBLES
-    for (let lng = startLng; lng <= endLng; lng += GRID_CONFIG.sectorSize) {
+    console.log(`Sectores: ${startLng} to ${endLng}, ${startLat} to ${endLat}`);
+    
+    // Dibujar cada 5 líneas para no saturar
+    for (let lng = startLng; lng <= endLng; lng += GRID_CONFIG.sectorSize * 5) {
         L.polyline([
-            [Math.max(bounds.getSouth(), PANAMA_BOUNDS.south), lng],
-            [Math.min(bounds.getNorth(), PANAMA_BOUNDS.north), lng]
+            [bounds.getSouth(), lng],
+            [bounds.getNorth(), lng]
         ], {
             color: '#3498db',
-            weight: 2,  // VISIBLE
+            weight: 1.5,
             opacity: 0.6,
-            dashArray: '4, 4',
-            className: 'grid-line'
+            dashArray: '4, 3',
+            className: 'grid-line grid-sector'
         }).addTo(gridLayer);
     }
     
-    // Líneas horizontales - VISIBLES
-    for (let lat = startLat; lat <= endLat; lat += GRID_CONFIG.sectorSize) {
+    for (let lat = startLat; lat <= endLat; lat += GRID_CONFIG.sectorSize * 5) {
         L.polyline([
-            [lat, Math.max(bounds.getWest(), PANAMA_BOUNDS.west)],
-            [lat, Math.min(bounds.getEast(), PANAMA_BOUNDS.east)]
+            [lat, bounds.getWest()],
+            [lat, bounds.getEast()]
         ], {
             color: '#3498db',
-            weight: 2,  // VISIBLE
+            weight: 1.5,
             opacity: 0.6,
-            dashArray: '4, 4',
-            className: 'grid-line'
+            dashArray: '4, 3',
+            className: 'grid-line grid-sector'
         }).addTo(gridLayer);
     }
 }
@@ -342,8 +342,10 @@ function drawCellGrid(bounds) {
     const startLat = Math.floor(bounds.getSouth() / GRID_CONFIG.cellSize) * GRID_CONFIG.cellSize;
     const endLat = Math.ceil(bounds.getNorth() / GRID_CONFIG.cellSize) * GRID_CONFIG.cellSize;
     
-    // Líneas verticales (cada 10 para no saturar)
-    for (let lng = startLng; lng <= endLng; lng += GRID_CONFIG.cellSize * 10) {
+    console.log(`Celdas: ${startLng} to ${endLng}, ${startLat} to ${endLat}`);
+    
+    // Dibujar cada 50 líneas para no saturar
+    for (let lng = startLng; lng <= endLng; lng += GRID_CONFIG.cellSize * 50) {
         L.polyline([
             [bounds.getSouth(), lng],
             [bounds.getNorth(), lng]
@@ -352,12 +354,11 @@ function drawCellGrid(bounds) {
             weight: 1,
             opacity: 0.4,
             dashArray: '2, 2',
-            className: 'grid-line'
+            className: 'grid-line grid-cell'
         }).addTo(gridLayer);
     }
     
-    // Líneas horizontales (cada 10 para no saturar)
-    for (let lat = startLat; lat <= endLat; lat += GRID_CONFIG.cellSize * 10) {
+    for (let lat = startLat; lat <= endLat; lat += GRID_CONFIG.cellSize * 50) {
         L.polyline([
             [lat, bounds.getWest()],
             [lat, bounds.getEast()]
@@ -366,7 +367,7 @@ function drawCellGrid(bounds) {
             weight: 1,
             opacity: 0.4,
             dashArray: '2, 2',
-            className: 'grid-line'
+            className: 'grid-line grid-cell'
         }).addTo(gridLayer);
     }
 }
@@ -377,21 +378,19 @@ function drawRegionLabels(bounds) {
     const startY = Math.floor((bounds.getSouth() - PANAMA_BOUNDS.south) / GRID_CONFIG.regionSize);
     const endY = Math.ceil((bounds.getNorth() - PANAMA_BOUNDS.south) / GRID_CONFIG.regionSize);
     
-    for (let x = Math.max(0, startX); x <= Math.min(endX, 32); x++) {
-        for (let y = Math.max(0, startY); y <= Math.min(endY, 32); y++) {
+    // Mostrar solo algunos labels
+    for (let x = Math.max(0, startX); x <= endX; x += 2) {
+        for (let y = Math.max(0, startY); y <= endY; y += 2) {
             const centerLng = PANAMA_BOUNDS.west + (x + 0.5) * GRID_CONFIG.regionSize;
             const centerLat = PANAMA_BOUNDS.south + (y + 0.5) * GRID_CONFIG.regionSize;
             
-            if (bounds.contains([centerLat, centerLng]) && 
-                centerLat >= PANAMA_BOUNDS.south && centerLat <= PANAMA_BOUNDS.north &&
-                centerLng >= PANAMA_BOUNDS.west && centerLng <= PANAMA_BOUNDS.east) {
-                
-                const regionCode = encodeBase32(x) + encodeBase32(y);
+            if (bounds.contains([centerLat, centerLng])) {
+                const regionCode = encodeBase32(x, 2); // Solo 2 chars para label
                 
                 L.marker([centerLat, centerLng], {
                     icon: L.divIcon({ 
                         className: 'watermark-label-fixed', 
-                        html: `<div style="background: rgba(255,255,255,0.7); padding: 2px 5px; border-radius: 3px;">${regionCode}</div>`, 
+                        html: `<div style="background: rgba(255,255,255,0.8); padding: 3px 6px; border-radius: 4px; border: 1px solid #1a73e8;">${regionCode}</div>`, 
                         iconSize: [50, 25] 
                     })
                 }).addTo(labelLayer);
@@ -406,23 +405,20 @@ function drawSectorLabels(bounds) {
     const startY = Math.floor((bounds.getSouth() - PANAMA_BOUNDS.south) / GRID_CONFIG.sectorSize);
     const endY = Math.ceil((bounds.getNorth() - PANAMA_BOUNDS.south) / GRID_CONFIG.sectorSize);
     
-    // Mostrar cada 2 sectores
-    for (let x = Math.max(0, startX); x <= endX; x += 2) {
-        for (let y = Math.max(0, startY); y <= endY; y += 2) {
+    // Mostrar cada 10 sectores
+    for (let x = Math.max(0, startX); x <= endX; x += 10) {
+        for (let y = Math.max(0, startY); y <= endY; y += 10) {
             const centerLng = PANAMA_BOUNDS.west + (x + 0.5) * GRID_CONFIG.sectorSize;
             const centerLat = PANAMA_BOUNDS.south + (y + 0.5) * GRID_CONFIG.sectorSize;
             
-            if (bounds.contains([centerLat, centerLng]) &&
-                centerLat >= PANAMA_BOUNDS.south && centerLat <= PANAMA_BOUNDS.north &&
-                centerLng >= PANAMA_BOUNDS.west && centerLng <= PANAMA_BOUNDS.east) {
-                
-                const sectorCode = encodeBase32(x % 1024) + encodeBase32(y % 1024);
+            if (bounds.contains([centerLat, centerLng])) {
+                const sectorCode = encodeBase32(x % 1024, 2); // Solo 2 chars
                 
                 L.marker([centerLat, centerLng], {
                     icon: L.divIcon({ 
                         className: 'micro-label-fixed', 
-                        html: `<div style="background: rgba(255,255,255,0.7); padding: 1px 4px; border-radius: 2px;">${sectorCode}</div>`, 
-                        iconSize: [40, 18] 
+                        html: `<div style="background: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 3px; border: 1px solid #3498db;">${sectorCode}</div>`, 
+                        iconSize: [40, 20] 
                     })
                 }).addTo(labelLayer);
             }
@@ -430,37 +426,7 @@ function drawSectorLabels(bounds) {
     }
 }
 
-function drawCellLabels(bounds) {
-    const startX = Math.floor((bounds.getWest() - PANAMA_BOUNDS.west) / GRID_CONFIG.cellSize);
-    const endX = Math.ceil((bounds.getEast() - PANAMA_BOUNDS.west) / GRID_CONFIG.cellSize);
-    const startY = Math.floor((bounds.getSouth() - PANAMA_BOUNDS.south) / GRID_CONFIG.cellSize);
-    const endY = Math.ceil((bounds.getNorth() - PANAMA_BOUNDS.south) / GRID_CONFIG.cellSize);
-    
-    // Mostrar solo algunas celdas (cada 20)
-    for (let x = Math.max(0, startX); x <= endX; x += 20) {
-        for (let y = Math.max(0, startY); y <= endY; y += 20) {
-            const centerLng = PANAMA_BOUNDS.west + (x + 0.5) * GRID_CONFIG.cellSize;
-            const centerLat = PANAMA_BOUNDS.south + (y + 0.5) * GRID_CONFIG.cellSize;
-            
-            if (bounds.contains([centerLat, centerLng]) &&
-                centerLat >= PANAMA_BOUNDS.south && centerLat <= PANAMA_BOUNDS.north &&
-                centerLng >= PANAMA_BOUNDS.west && centerLng <= PANAMA_BOUNDS.east) {
-                
-                const cellCode = encodeBase32(x % 1024) + encodeBase32(y % 1024);
-                
-                L.marker([centerLat, centerLng], {
-                    icon: L.divIcon({ 
-                        className: 'nano-label-fixed', 
-                        html: `<div style="background: rgba(255,255,255,0.7); padding: 0px 2px; border-radius: 1px; font-size: 8px;">${cellCode}</div>`, 
-                        iconSize: [30, 12] 
-                    })
-                }).addTo(labelLayer);
-            }
-        }
-    }
-}
-
-// ==================== EVENTO CLIC (3 NIVELES) ====================
+// ==================== EVENTO CLIC ====================
 
 mymap.on("click", function (e) {
     selectionLayer.clearLayers();
@@ -478,16 +444,15 @@ mymap.on("click", function (e) {
     
     // Generar código
     const fullCode = generatePanamaCode(lat, lng);
-    const [regionCode, sectorCode, cellCode] = fullCode.split('-');
     
     let displayCode = '';
     let titulo = '';
     let highlightBounds = null;
     
-    // NIVEL MACRO (zoom < 14) - REGIÓN
-    if (z < 14) {
+    // NIVEL MACRO (zoom < 13) - REGIÓN
+    if (z < 13) {
         titulo = "REGIÓN";
-        displayCode = regionCode;
+        displayCode = fullCode.split('-')[0];
         
         const indices = latLngToIndices(lat, lng);
         const centerLng = PANAMA_BOUNDS.west + (indices.region.x + 0.5) * GRID_CONFIG.regionSize;
@@ -501,10 +466,11 @@ mymap.on("click", function (e) {
         ];
     }
     
-    // NIVEL MICRO (zoom 14-16) - SECTOR
-    else if (z >= 14 && z < 17) {
+    // NIVEL MICRO (zoom 13-16) - SECTOR
+    else if (z >= 13 && z < 17) {
         titulo = "SECTOR";
-        displayCode = `${regionCode}-${sectorCode}`;
+        const parts = fullCode.split('-');
+        displayCode = `${parts[0]}-${parts[1]}`;
         
         const indices = latLngToIndices(lat, lng);
         const centerLng = PANAMA_BOUNDS.west + (indices.sector.x + 0.5) * GRID_CONFIG.sectorSize;
@@ -533,30 +499,11 @@ mymap.on("click", function (e) {
             [centerLat + GRID_CONFIG.cellSize/2, centerLng + GRID_CONFIG.cellSize/2],
             [centerLat + GRID_CONFIG.cellSize/2, centerLng - GRID_CONFIG.cellSize/2]
         ];
-        
-        // Borde del sector para referencia
-        const sectorCenterLng = PANAMA_BOUNDS.west + (indices.sector.x + 0.5) * GRID_CONFIG.sectorSize;
-        const sectorCenterLat = PANAMA_BOUNDS.south + (indices.sector.y + 0.5) * GRID_CONFIG.sectorSize;
-        
-        const sectorBounds = [
-            [sectorCenterLat - GRID_CONFIG.sectorSize/2, sectorCenterLng - GRID_CONFIG.sectorSize/2],
-            [sectorCenterLat - GRID_CONFIG.sectorSize/2, sectorCenterLng + GRID_CONFIG.sectorSize/2],
-            [sectorCenterLat + GRID_CONFIG.sectorSize/2, sectorCenterLng + GRID_CONFIG.sectorSize/2],
-            [sectorCenterLat + GRID_CONFIG.sectorSize/2, sectorCenterLng - GRID_CONFIG.sectorSize/2]
-        ];
-        
-        L.polygon(sectorBounds, {
-            color: "#3498db",
-            weight: 1,
-            fillColor: "transparent",
-            dashArray: "5, 5",
-            opacity: 0.5
-        }).addTo(selectionLayer);
     }
     
     // Destacar celda
     if (highlightBounds) {
-        const color = z < 14 ? "#1a73e8" : (z < 17 ? "#3498db" : "#2980b9");
+        const color = z < 13 ? "#1a73e8" : (z < 17 ? "#3498db" : "#2980b9");
         
         L.polygon(highlightBounds, {
             color: color,
@@ -571,21 +518,6 @@ mymap.on("click", function (e) {
     showSimplePopup(e.latlng, titulo, displayCode);
 });
 
-function showNoCodePopup(latlng, mensaje) {
-    L.popup({ className: 'warning-popup' })
-        .setLatLng([latlng.lat, latlng.lng])
-        .setContent(`
-            <div class="simple-popup">
-                <div style="text-align:center; padding: 10px;">
-                    <div style="color: #e74c3c; font-size: 14px; margin-bottom: 5px;">
-                        ⚠️ ${mensaje}
-                    </div>
-                </div>
-            </div>
-        `)
-        .openOn(mymap);
-}
-
 function showSimplePopup(latlng, titulo, codigo) {
     const ws = encodeURIComponent(`📍 ${codigo}\nGPS: ${latlng.lat.toFixed(6)},${latlng.lng.toFixed(6)}`);
     
@@ -595,8 +527,10 @@ function showSimplePopup(latlng, titulo, codigo) {
             <div style="text-align:center; padding: 10px;">
                 <small>${titulo}</small><br>
                 <div class="code-display" style="font-size: 14px;">${codigo}</div>
-                <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${latlng.lat},${latlng.lng}')">📍 MAPS</button>
-                <button class="btn-ws" onclick="window.open('https://wa.me/?text=${ws}')">💬 WS</button>
+                <div style="margin-top: 10px;">
+                    <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${latlng.lat},${latlng.lng}')">📍 MAPS</button>
+                    <button class="btn-ws" onclick="window.open('https://wa.me/?text=${ws}')">💬 WS</button>
+                </div>
             </div>
         `)
         .openOn(mymap);
@@ -613,22 +547,29 @@ document.getElementById('search-btn').addEventListener('click', () => {
     
     if (!code) return;
     
+    // Validar formato básico
+    if (!code.includes('-') || code.length < 8) {
+        alert('Formato: XXXXX-YYYYY-ZZZ (13 caracteres)');
+        return;
+    }
+    
     const decoded = decodePanamaCode(code);
     
     if (!decoded) {
-        alert('Código no válido: ' + code);
+        alert('Código no válido o fuera de rango');
         return;
     }
     
     selectionLayer.clearLayers();
     
-    // Determinar nivel por número de partes
+    // Determinar nivel
     const parts = code.split('-');
     let zoomLevel = 12;
     
-    if (parts.length === 1 || parts.length === 2) {
-        zoomLevel = 14;
-    } else if (parts.length === 3) {
+    if (parts.length >= 2) {
+        zoomLevel = 15;
+    }
+    if (parts.length === 3) {
         zoomLevel = 18;
     }
     
@@ -665,7 +606,7 @@ mymap.addControl(new LocateControl());
 
 // Control de capas
 L.control.layers(null, {
-    "Código postal": gridLayer,
+    "Grid": gridLayer,
     "Selección": selectionLayer,
     "Mi ubicación": userLocationLayer
 }, {collapsed: false}).addTo(mymap);
@@ -677,12 +618,14 @@ $('#toggle-wm').click(function() {
     updateGridAndLabels();
 });
 
-// Eventos - FORZAR ACTUALIZACIÓN
+// Eventos - FORZAR ACTUALIZACIÓN DEL GRID
 mymap.on('moveend', updateGridAndLabels);
-mymap.on('zoomend', updateGridAndLabels);
+mymap.on('zoomend', function() {
+    updateGridAndLabels();
+    console.log("Zoom cambiado, actualizando grid...");
+});
 mymap.on('zoomstart', () => {
     selectionLayer.clearLayers();
-    updateGridAndLabels(); // Actualizar inmediatamente
 });
 
 // GPS
@@ -713,10 +656,8 @@ mymap.on('locationfound', function(e) {
         .openOn(mymap);
 });
 
-// Inicializar con zoom 10 para ver grid inmediatamente
-mymap.setZoom(10);
+// Inicializar con grid visible
 updateGridAndLabels();
 </script>
 </body>
 </html>
-
