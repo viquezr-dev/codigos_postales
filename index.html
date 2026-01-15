@@ -332,63 +332,53 @@ function limpiarLabelsCompletamente() {
     activeLabels = [];
 }
 
-// Función principal de dibujo del grid - VERSIÓN CORREGIDA
+// ==============================================
+// DIBUJAR GRID FÍSICO - VERSIÓN CORREGIDA (CENTROS Y SIN UNDEFINED)
+// ==============================================
+
 function dibujarGridFisico() {
     const z = mymap.getZoom();
-    const bounds = mymap.getBounds();
-    
-    // Evitar redibujar si no ha cambiado significativamente
-    if (lastZoomLevel === z && 
-        lastBounds && 
-        Math.abs(lastBounds.getNorth() - bounds.getNorth()) < 0.01 &&
-        Math.abs(lastBounds.getSouth() - bounds.getSouth()) < 0.01 &&
-        Math.abs(lastBounds.getEast() - bounds.getEast()) < 0.01 &&
-        Math.abs(lastBounds.getWest() - bounds.getWest()) < 0.01 &&
-        z >= 10) {
-        return;
-    }
-    
-    lastZoomLevel = z;
-    lastBounds = bounds;
     
     // Solo mostrar en zooms apropiados
     if (z < 10) {
         gridLayer.clearLayers();
-        limpiarLabelsCompletamente();
+        labelLayer.clearLayers();
         return;
     }
     
-    // LIMPIAR ANTES DE DIBUJAR NUEVO
+    // LIMPIAR COMPLETAMENTE
     gridLayer.clearLayers();
-    limpiarLabelsCompletamente();
+    labelLayer.clearLayers();
     
+    // Limpiar también del DOM manualmente
+    document.querySelectorAll('.watermark-label-fixed, .micro-label-fixed, .nano-label-fixed').forEach(el => {
+        if (el.parentElement && el.parentElement.parentElement) {
+            el.parentElement.parentElement.remove();
+        }
+    });
+    
+    const bounds = mymap.getBounds();
     const { ORIGIN_LAT, ORIGIN_LNG, RES_MACRO, RES_MICRO, RES_NANO, MACROS_X, MACROS_Y } = GRID_CONFIG;
     
-    // Calcular márgenes para dibujar solo lo visible
+    // Calcular márgenes visibles
     const visibleMacroXStart = Math.max(0, Math.floor((bounds.getWest() - ORIGIN_LNG) / RES_MACRO) - 1);
     const visibleMacroXEnd = Math.min(MACROS_X, Math.ceil((bounds.getEast() - ORIGIN_LNG) / RES_MACRO) + 1);
     const visibleMacroYStart = Math.max(0, Math.floor((ORIGIN_LAT - bounds.getNorth()) / RES_MACRO) - 1);
     const visibleMacroYEnd = Math.min(MACROS_Y, Math.ceil((ORIGIN_LAT - bounds.getSouth()) / RES_MACRO) + 1);
     
-    // Dibujar solo macros visibles
-    for (let mx = visibleMacroXStart; mx < visibleMacroXEnd; mx++) {
-        for (let my = visibleMacroYStart; my < visibleMacroYEnd; my++) {
-            const lat1 = ORIGIN_LAT - (my * RES_MACRO);
-            const lng1 = ORIGIN_LNG + (mx * RES_MACRO);
-            const lat2 = lat1 - RES_MACRO;
-            const lng2 = lng1 + RES_MACRO;
-            
-            const coords = [
-                [lat1, lng1],
-                [lat1, lng2],
-                [lat2, lng2],
-                [lat2, lng1]
-            ];
-            
-            // ZOOM 10-13: SÓLO MACROS
-            if (z >= 10 && z < 14) {
-                // Borde macro
-                L.polygon(coords, {
+    // ==============================================
+    // ZOOM 10-13: SOLO MACROS
+    // ==============================================
+    if (z >= 10 && z < 14) {
+        for (let mx = visibleMacroXStart; mx < visibleMacroXEnd; mx++) {
+            for (let my = visibleMacroYStart; my < visibleMacroYEnd; my++) {
+                const lat1 = ORIGIN_LAT - (my * RES_MACRO);
+                const lng1 = ORIGIN_LNG + (mx * RES_MACRO);
+                const lat2 = lat1 - RES_MACRO;
+                const lng2 = lng1 + RES_MACRO;
+                
+                // Dibujar borde macro
+                L.rectangle([[lat1, lng1], [lat2, lng2]], {
                     color: '#1a73e8',
                     weight: 2,
                     opacity: 0.6,
@@ -396,73 +386,50 @@ function dibujarGridFisico() {
                     className: 'grid-macro'
                 }).addTo(gridLayer);
                 
-                // Etiqueta macro (2 caracteres) - SOLO SI ESTÁ HABILITADO
+                // Etiqueta macro CENTRADA
                 if (labelsEnabled) {
-                    const centro = [(lat1 + lat2) / 2, (lng1 + lng2) / 2];
+                    const centroLat = lat1 - (RES_MACRO / 2);
+                    const centroLng = lng1 + (RES_MACRO / 2);
+                    
+                    // Calcular código macro (2 caracteres)
                     const macroNum = mx * 100 + my;
                     const macroCode = toBase30(macroNum, 2);
                     
-                    // VERIFICAR QUE EL CÓDIGO SEA VÁLIDO
-                    if (macroCode && macroCode.length === 2) {
-                        const label = L.marker(centro, {
+                    // VERIFICAR QUE NO SEA undefined
+                    if (macroCode && macroCode !== "undefined" && macroCode.length === 2) {
+                        const label = L.marker([centroLat, centroLng], {
                             icon: L.divIcon({
                                 className: 'watermark-label-fixed',
-                                html: macroCode,
+                                html: `<div style="text-align:center; width:100%;">${macroCode}</div>`,
                                 iconSize: [40, 20],
-                                iconAnchor: [20, 10]
+                                iconAnchor: [20, 10] // CENTRADO
                             }),
-                            zIndexOffset: -1000 // Colocar detrás de otros elementos
-                        }).addTo(labelLayer);
-                        activeLabels.push(label);
+                            zIndexOffset: -1000
+                        });
+                        
+                        // Verificar que esté dentro de bounds antes de agregar
+                        if (bounds.contains([centroLat, centroLng])) {
+                            label.addTo(labelLayer);
+                        }
                     }
                 }
             }
-            
-            // ZOOM 14-16: MICROS VISIBLES
-            else if (z >= 14 && z < 17) {
-                // Dibujar líneas micro
-                for (let i = 0; i <= 24; i += 3) {
-                    // Líneas verticales
-                    const vTop = getPointInGrid(coords, i, 0, 24, 24);
-                    const vBottom = getPointInGrid(coords, i, 24, 24, 24);
-                    
-                    // Líneas horizontales
-                    const hLeft = getPointInGrid(coords, 0, i, 24, 24);
-                    const hRight = getPointInGrid(coords, 24, i, 24, 24);
-                    
-                    if (i % 6 === 0) {
-                        L.polyline([vTop, vBottom], {
-                            color: "#3498db",
-                            weight: 1.5,
-                            opacity: 0.7,
-                            className: 'grid-micro'
-                        }).addTo(gridLayer);
-                        L.polyline([hLeft, hRight], {
-                            color: "#3498db",
-                            weight: 1.5,
-                            opacity: 0.7,
-                            className: 'grid-micro'
-                        }).addTo(gridLayer);
-                    } else {
-                        L.polyline([vTop, vBottom], {
-                            color: "#3498db",
-                            weight: 0.8,
-                            opacity: 0.4,
-                            dashArray: '5, 5',
-                            className: 'grid-micro'
-                        }).addTo(gridLayer);
-                        L.polyline([hLeft, hRight], {
-                            color: "#3498db",
-                            weight: 0.8,
-                            opacity: 0.4,
-                            dashArray: '5, 5',
-                            className: 'grid-micro'
-                        }).addTo(gridLayer);
-                    }
-                }
+        }
+    }
+    
+    // ==============================================
+    // ZOOM 14-16: MICROS
+    // ==============================================
+    else if (z >= 14 && z < 17) {
+        for (let mx = visibleMacroXStart; mx < visibleMacroXEnd; mx++) {
+            for (let my = visibleMacroYStart; my < visibleMacroYEnd; my++) {
+                const macroLat1 = ORIGIN_LAT - (my * RES_MACRO);
+                const macroLng1 = ORIGIN_LNG + (mx * RES_MACRO);
+                const macroLat2 = macroLat1 - RES_MACRO;
+                const macroLng2 = macroLng1 + RES_MACRO;
                 
-                // Borde del macro
-                L.polygon(coords, {
+                // Dibujar borde macro
+                L.rectangle([[macroLat1, macroLng1], [macroLat2, macroLng2]], {
                     color: '#1a73e8',
                     weight: 2,
                     opacity: 0.8,
@@ -470,111 +437,71 @@ function dibujarGridFisico() {
                     className: 'grid-macro'
                 }).addTo(gridLayer);
                 
-                // Etiquetas micro - SOLO SI ESTÁ HABILITADO Y CÓDIGO VÁLIDO
-                if (labelsEnabled) {
-                    for (let ux = 0; ux < 24; ux += 6) {
-                        for (let uy = 0; uy < 24; uy += 6) {
-                            const point = getPointInGrid(coords, ux + 3, uy + 3, 24, 24);
-                            const microNum = ux * 100 + uy;
+                // Dibujar líneas micro (cada 6 para no saturar)
+                for (let i = 0; i <= 24; i += 6) {
+                    for (let j = 0; j <= 24; j += 6) {
+                        // Coordenadas de este micro
+                        const microLat1 = macroLat1 - (j * RES_MICRO);
+                        const microLng1 = macroLng1 + (i * RES_MICRO);
+                        const microLat2 = microLat1 - (6 * RES_MICRO);
+                        const microLng2 = microLng1 + (6 * RES_MICRO);
+                        
+                        // Dibujar borde del grupo de micros
+                        L.rectangle([[microLat1, microLng1], [microLat2, microLng2]], {
+                            color: '#3498db',
+                            weight: i % 12 === 0 ? 1.5 : 0.8,
+                            opacity: i % 12 === 0 ? 0.7 : 0.4,
+                            dashArray: i % 12 === 0 ? 'none' : '5,5',
+                            fillOpacity: 0,
+                            className: 'grid-micro'
+                        }).addTo(gridLayer);
+                        
+                        // Etiqueta micro CENTRADA (cada 12 micros)
+                        if (labelsEnabled && i % 12 === 0 && j % 12 === 0) {
+                            const centroLat = microLat1 - (3 * RES_MICRO); // Centro del grupo de 6x6
+                            const centroLng = microLng1 + (3 * RES_MICRO);
+                            
+                            // Calcular código micro (4 caracteres)
+                            const microNum = i * 100 + j;
                             const microCode = toBase30(microNum, 4);
                             
-                            // VERIFICAR QUE EL CÓDIGO SEA VÁLIDO
-                            if (microCode && microCode.length === 4) {
-                                const label = L.marker([point[0], point[1]], {
+                            // VERIFICAR QUE NO SEA undefined
+                            if (microCode && microCode !== "undefined" && microCode.length === 4) {
+                                const label = L.marker([centroLat, centroLng], {
                                     icon: L.divIcon({
                                         className: 'micro-label-fixed',
-                                        html: microCode,
-                                        iconSize: [50, 15],
-                                        iconAnchor: [25, 7]
+                                        html: `<div style="text-align:center; width:100%;">${microCode}</div>`,
+                                        iconSize: [60, 20],
+                                        iconAnchor: [30, 10] // CENTRADO
                                     }),
                                     zIndexOffset: -1000
-                                }).addTo(labelLayer);
-                                activeLabels.push(label);
+                                });
+                                
+                                if (bounds.contains([centroLat, centroLng])) {
+                                    label.addTo(labelLayer);
+                                }
                             }
                         }
                     }
                 }
             }
-            
-            // ZOOM 17+: NANOS VISIBLES
-            else if (z >= 17) {
-                // Líneas micro como referencia
-                for (let i = 0; i <= 24; i++) {
-                    const vTop = getPointInGrid(coords, i, 0, 24, 24);
-                    const vBottom = getPointInGrid(coords, i, 24, 24, 24);
-                    const hLeft = getPointInGrid(coords, 0, i, 24, 24);
-                    const hRight = getPointInGrid(coords, 24, i, 24, 24);
-                    
-                    L.polyline([vTop, vBottom], {
-                        color: "#3498db",
-                        weight: 1.0,
-                        opacity: 0.6,
-                        className: 'grid-micro grid-helper'
-                    }).addTo(gridLayer);
-                    L.polyline([hLeft, hRight], {
-                        color: "#3498db",
-                        weight: 1.0,
-                        opacity: 0.6,
-                        className: 'grid-micro grid-helper'
-                    }).addTo(gridLayer);
-                }
+        }
+    }
+    
+    // ==============================================
+    // ZOOM 17+: NANOS
+    // ==============================================
+    else if (z >= 17) {
+        for (let mx = visibleMacroXStart; mx < visibleMacroXEnd; mx++) {
+            for (let my = visibleMacroYStart; my < visibleMacroYEnd; my++) {
+                const macroLat1 = ORIGIN_LAT - (my * RES_MACRO);
+                const macroLng1 = ORIGIN_LNG + (mx * RES_MACRO);
                 
-                // Líneas nano
-                for (let i = 0; i < 24; i++) {
-                    for (let j = 0; j < 24; j++) {
-                        const topLeft = getPointInGrid(coords, i, j, 24, 24);
-                        const topRight = getPointInGrid(coords, i+1, j, 24, 24);
-                        const bottomRight = getPointInGrid(coords, i+1, j+1, 24, 24);
-                        const bottomLeft = getPointInGrid(coords, i, j+1, 24, 24);
-                        
-                        // Líneas verticales NANO
-                        for (let ni = 1; ni < 25; ni++) {
-                            if (ni % 5 === 0) {
-                                const t = ni / 25;
-                                const p1 = [
-                                    (1-t) * topLeft[0] + t * topRight[0],
-                                    (1-t) * topLeft[1] + t * topRight[1]
-                                ];
-                                const p2 = [
-                                    (1-t) * bottomLeft[0] + t * bottomRight[0],
-                                    (1-t) * bottomLeft[1] + t * bottomRight[1]
-                                ];
-                                L.polyline([p1, p2], {
-                                    color: "#2980b9",
-                                    weight: 0.4,
-                                    opacity: 0.3,
-                                    dashArray: '2, 3',
-                                    className: 'grid-nano nano-grid-line'
-                                }).addTo(gridLayer);
-                            }
-                        }
-                        
-                        // Líneas horizontales NANO
-                        for (let nj = 1; nj < 25; nj++) {
-                            if (nj % 5 === 0) {
-                                const t = nj / 25;
-                                const p1 = [
-                                    (1-t) * topLeft[0] + t * bottomLeft[0],
-                                    (1-t) * topLeft[1] + t * bottomLeft[1]
-                                ];
-                                const p2 = [
-                                    (1-t) * topRight[0] + t * bottomRight[0],
-                                    (1-t) * topRight[1] + t * bottomRight[1]
-                                ];
-                                L.polyline([p1, p2], {
-                                    color: "#2980b9",
-                                    weight: 0.4,
-                                    opacity: 0.3,
-                                    dashArray: '2, 3',
-                                    className: 'grid-nano nano-grid-line'
-                                }).addTo(gridLayer);
-                            }
-                        }
-                    }
-                }
-                
-                // Borde del macro
-                L.polygon(coords, {
+                // Dibujar borde macro
+                L.rectangle([
+                    [macroLat1, macroLng1],
+                    [macroLat1 - RES_MACRO, macroLng1 + RES_MACRO]
+                ], {
                     color: '#1a73e8',
                     weight: 2,
                     opacity: 0.8,
@@ -582,35 +509,102 @@ function dibujarGridFisico() {
                     className: 'grid-macro'
                 }).addTo(gridLayer);
                 
-                // Etiquetas nano - SOLO SI ESTÁ HABILITADO Y CÓDIGO VÁLIDO
+                // Dibujar líneas micro completas
+                for (let i = 0; i <= 24; i++) {
+                    // Líneas verticales micro
+                    const vLat1 = macroLat1;
+                    const vLng1 = macroLng1 + (i * RES_MICRO);
+                    const vLat2 = macroLat1 - RES_MACRO;
+                    const vLng2 = vLng1;
+                    
+                    L.polyline([[vLat1, vLng1], [vLat2, vLng2]], {
+                        color: '#3498db',
+                        weight: 1.0,
+                        opacity: 0.6,
+                        className: 'grid-micro grid-helper'
+                    }).addTo(gridLayer);
+                    
+                    // Líneas horizontales micro
+                    const hLat1 = macroLat1 - (i * RES_MICRO);
+                    const hLng1 = macroLng1;
+                    const hLat2 = hLat1;
+                    const hLng2 = macroLng1 + RES_MACRO;
+                    
+                    L.polyline([[hLat1, hLng1], [hLat2, hLng2]], {
+                        color: '#3498db',
+                        weight: 1.0,
+                        opacity: 0.6,
+                        className: 'grid-micro grid-helper'
+                    }).addTo(gridLayer);
+                }
+                
+                // Dibujar líneas nano (cada 5)
+                for (let mi = 0; mi < 24; mi++) {
+                    for (let mj = 0; mj < 24; mj++) {
+                        const microLat1 = macroLat1 - (mj * RES_MICRO);
+                        const microLng1 = macroLng1 + (mi * RES_MICRO);
+                        
+                        // Dibujar líneas nano verticales (cada 5)
+                        for (let ni = 5; ni < 25; ni += 5) {
+                            const nanoLng = microLng1 + (ni * RES_NANO);
+                            L.polyline([
+                                [microLat1, nanoLng],
+                                [microLat1 - RES_MICRO, nanoLng]
+                            ], {
+                                color: '#2980b9',
+                                weight: 0.4,
+                                opacity: 0.3,
+                                dashArray: '2, 3',
+                                className: 'grid-nano nano-grid-line'
+                            }).addTo(gridLayer);
+                        }
+                        
+                        // Dibujar líneas nano horizontales (cada 5)
+                        for (let nj = 5; nj < 25; nj += 5) {
+                            const nanoLat = microLat1 - (nj * RES_NANO);
+                            L.polyline([
+                                [nanoLat, microLng1],
+                                [nanoLat, microLng1 + RES_MICRO]
+                            ], {
+                                color: '#2980b9',
+                                weight: 0.4,
+                                opacity: 0.3,
+                                dashArray: '2, 3',
+                                className: 'grid-nano nano-grid-line'
+                            }).addTo(gridLayer);
+                        }
+                    }
+                }
+                
+                // Etiquetas nano (solo algunas)
                 if (labelsEnabled) {
-                    for (let ux = 0; ux < 24; ux += 6) {
-                        for (let uy = 0; uy < 24; uy += 6) {
-                            const baseLat = lat1 - (uy * RES_MICRO);
-                            const baseLng = lng1 + (ux * RES_MICRO);
+                    for (let mi = 0; mi < 24; mi += 12) {
+                        for (let mj = 0; mj < 24; mj += 12) {
+                            const microLat1 = macroLat1 - (mj * RES_MICRO);
+                            const microLng1 = macroLng1 + (mi * RES_MICRO);
                             
-                            for (let nx = 0; nx < 25; nx += 10) {
-                                for (let ny = 0; ny < 25; ny += 10) {
-                                    const nlat = baseLat - (ny * RES_NANO);
-                                    const nlng = baseLng + (nx * RES_NANO);
+                            for (let ni = 12; ni < 25; ni += 12) {
+                                for (let nj = 12; nj < 25; nj += 12) {
+                                    const nanoLat = microLat1 - (nj * RES_NANO);
+                                    const nanoLng = microLng1 + (ni * RES_NANO);
                                     
-                                    if (!bounds.contains([nlat, nlng])) continue;
+                                    if (!bounds.contains([nanoLat, nanoLng])) continue;
                                     
-                                    const nanoNum = nx * 100 + ny;
+                                    // Calcular código nano (2 caracteres)
+                                    const nanoNum = ni * 100 + nj;
                                     const nanoCode = toBase30(nanoNum, 2);
                                     
-                                    // VERIFICAR QUE EL CÓDIGO SEA VÁLIDO
-                                    if (nanoCode && nanoCode.length === 2) {
-                                        const label = L.marker([nlat, nlng], {
+                                    // VERIFICAR QUE NO SEA undefined
+                                    if (nanoCode && nanoCode !== "undefined" && nanoCode.length === 2) {
+                                        const label = L.marker([nanoLat, nanoLng], {
                                             icon: L.divIcon({
                                                 className: 'nano-label-fixed',
-                                                html: nanoCode,
-                                                iconSize: [30, 10],
-                                                iconAnchor: [15, 5]
+                                                html: `<div style="text-align:center; width:100%;">${nanoCode}</div>`,
+                                                iconSize: [30, 12],
+                                                iconAnchor: [15, 6] // CENTRADO
                                             }),
                                             zIndexOffset: -1000
                                         }).addTo(labelLayer);
-                                        activeLabels.push(label);
                                     }
                                 }
                             }
@@ -623,69 +617,113 @@ function dibujarGridFisico() {
 }
 
 // ==============================================
-// FUNCIÓN AUXILIAR MEJORADA PARA BASE30
+// FUNCIÓN toBase30 MEJORADA (SIN UNDEFINED)
 // ==============================================
 
 function toBase30(num, digits) {
     const { ALPHABET } = GRID_CONFIG;
     
-    // Verificar que num sea un número válido
+    // VALIDACIÓN ROBUSTA
     if (typeof num !== 'number' || isNaN(num) || !isFinite(num)) {
+        console.warn("Número inválido para toBase30:", num);
         return "??"; // Fallback seguro
     }
     
-    // Asegurar que num esté en rango para los dígitos solicitados
+    // Asegurar que esté en rango
+    num = Math.abs(Math.floor(num));
     const maxVal = Math.pow(30, digits) - 1;
     if (num > maxVal) {
-        num = maxVal;
+        num = num % maxVal;
     }
     
-    let n = Math.abs(Math.floor(num));
     let result = '';
     
     for (let i = 0; i < digits; i++) {
-        if (n < 0 || n >= 30) {
-            result = ALPHABET[0] + result;
-            n = Math.floor(n / 30);
+        const index = num % 30;
+        
+        // Validar índice
+        if (index >= 0 && index < ALPHABET.length) {
+            result = ALPHABET[index] + result;
         } else {
-            result = ALPHABET[n % 30] + result;
-            n = Math.floor(n / 30);
+            result = ALPHABET[0] + result; // Fallback al primer carácter
         }
+        
+        num = Math.floor(num / 30);
     }
     
     return result;
 }
 
 // ==============================================
-// ACTUALIZAR EL EVENTO TOGGLE PARA LIMPIAR MEJOR
+// ACTUALIZAR CSS PARA MEJOR CENTRADO
 // ==============================================
 
-$('#toggle-wm').click(function() {
-    labelsEnabled = !labelsEnabled;
-    $(this).text(labelsEnabled ? "TEXTO: ON" : "TEXTO: OFF");
+<style>
+    /* ESTILOS ACTUALIZADOS PARA MEJOR CENTRADO */
+    .watermark-label-fixed .leaflet-marker-icon {
+        background: none !important;
+        border: none !important;
+        box-shadow: none !important;
+        margin-left: -20px !important; /* Centrar horizontalmente */
+        margin-top: -10px !important;  /* Centrar verticalmente */
+    }
     
-    // Limpiar completamente y redibujar
-    limpiarLabelsCompletamente();
-    dibujarGridFisico();
-});
+    .micro-label-fixed .leaflet-marker-icon {
+        background: none !important;
+        border: none !important;
+        box-shadow: none !important;
+        margin-left: -30px !important; /* Centrar horizontalmente */
+        margin-top: -7px !important;   /* Centrar verticalmente */
+    }
+    
+    .nano-label-fixed .leaflet-marker-icon {
+        background: none !important;
+        border: none !important;
+        box-shadow: none !important;
+        margin-left: -15px !important; /* Centrar horizontalmente */
+        margin-top: -6px !important;   /* Centrar verticalmente */
+    }
+    
+    .watermark-label-fixed div,
+    .micro-label-fixed div,
+    .nano-label-fixed div {
+        text-align: center;
+        width: 100%;
+        font-weight: bold;
+        text-shadow: 
+            1px 1px 1px white,
+            -1px -1px 1px white,
+            1px -1px 1px white,
+            -1px 1px 1px white;
+    }
+</style>
 
 // ==============================================
-// OPTIMIZAR EVENTOS DEL MAPA
+// OPTIMIZAR EVENTOS PARA EVITAR FLICKERING
 // ==============================================
 
-let moveTimeout;
+let gridRedrawTimeout;
 mymap.on('moveend zoomend', function() {
-    // Debounce para evitar múltiples llamadas
-    if (moveTimeout) clearTimeout(moveTimeout);
-    moveTimeout = setTimeout(() => {
+    // Debounce para evitar redibujos múltiples
+    if (gridRedrawTimeout) clearTimeout(gridRedrawTimeout);
+    gridRedrawTimeout = setTimeout(() => {
         dibujarGridFisico();
-    }, 50);
+    }, 100);
 });
 
 mymap.on('zoomstart movestart', function() {
-    // Limpiar selección pero mantener grid
+    // Solo limpiar selección, no el grid
     selectionLayer.clearLayers();
 });
+
+// ==============================================
+// INICIALIZAR CON UN REDIBUJO LIMPIO
+// ==============================================
+
+// Esperar a que el mapa esté listo
+setTimeout(() => {
+    dibujarGridFisico();
+}, 500);
 
 // ==============================================
 // CARGAR DATOS EXISTENTES
@@ -1433,4 +1471,5 @@ console.log("• Popup código postal solo en zoom >= 17");
 </script>
 </body>
 </html>
+
 
