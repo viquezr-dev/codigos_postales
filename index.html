@@ -240,7 +240,7 @@ function coordenadaAIndices(lat, lng) {
     };
 }
 
-// 2. Convertir número a base30 - VERSIÓN MEJORADA
+// 2. Convertir número a base30
 function toBase30(num, digits) {
     const { ALPHABET } = GRID_CONFIG;
     
@@ -266,7 +266,7 @@ function toBase30(num, digits) {
     return result;
 }
 
-// 3. Generar PanamaCode (8 caracteres, SIN +)
+// 3. Generar PanamaCode (9 caracteres: 3+4+2)
 function generarPanamaCode(lat, lng) {
     const indices = coordenadaAIndices(lat, lng);
     if (!indices) return null;
@@ -288,10 +288,11 @@ function generarPanamaCode(lat, lng) {
     return macroCode + microCode + nanoCode; // 3+4+2 = 9 caracteres
 }
 
-// 4. Obtener últimos 6 dígitos
+// 4. Obtener últimos 6 dígitos (para código postal)
 function obtenerUltimos6Digitos(panamaCode) {
     if (!panamaCode || panamaCode.length < 6) return "ERROR";
-    return panamaCode.slice(-6);
+    // Ahora tomamos desde la posición 3 (después de los 3 dígitos de macro)
+    return panamaCode.slice(3); // 4 micro + 2 nano = 6 caracteres
 }
 
 // 5. Generar código postal completo
@@ -580,18 +581,28 @@ function dibujarGridFisico() {
 // ==============================================
 
 document.getElementById('search-btn').addEventListener('click', () => {
-    const input = document.getElementById('search-input').value.trim().toUpperCase();
+    let input = document.getElementById('search-input').value.trim().toUpperCase();
     
     if (!input) {
-        alert("Ingresa un PanamaCode (8 caracteres) o código postal");
+        alert("Ingresa un PanamaCode (9 caracteres) o código postal");
         return;
     }
     
     console.log("🔍 BUSCANDO:", input);
     selectionLayer.clearLayers();
     
-    // CASO 1: PANAMACODE DE 8 CARACTERES
+    // CONVERTIR AUTOMÁTICAMENTE CÓDIGOS ANTIGUOS
     if (input.length === 8 && !input.includes('-') && !input.includes(',')) {
+        const codigoConvertido = convertirPanamaCodeAntiguo(input);
+        if (codigoConvertido !== input) {
+            console.log("🔄 Código convertido automáticamente:", input, "→", codigoConvertido);
+            input = codigoConvertido;
+            document.getElementById('search-input').value = input; // Actualizar campo
+        }
+    }
+    
+    // CASO 1: PANAMACODE DE 9 CARACTERES
+    if (input.length === 9 && !input.includes('-') && !input.includes(',')) {
         buscarPorPanamaCode(input);
         return;
     }
@@ -609,7 +620,7 @@ document.getElementById('search-btn').addEventListener('click', () => {
     }
     
     alert("Formato no reconocido. Usa:\n" +
-          "• PanamaCode: 8 caracteres (ej: 2B3C4D5E)\n" +
+          "• PanamaCode: 9 caracteres (ej: 2B3C4D5E6)\n" +
           "• Código postal: Zona-Código6Digitos\n" +
           "• Coordenadas: lat, lng");
 });
@@ -638,7 +649,7 @@ function buscarPorPanamaCode(panamaCode) {
         }
     }
     
-    // Decodificar PanamaCode a coordenadas
+    // Decodificar PanamaCode
     const resultado = decodificarPanamaCode(panamaCode);
     
     if (!resultado) {
@@ -649,7 +660,6 @@ function buscarPorPanamaCode(panamaCode) {
     const { lat, lng, macroX, macroY, microX, microY, nanoX, nanoY } = resultado;
     
     console.log("🌍 COORDENADAS DECODIFICADAS:", { lat, lng });
-    console.log("📊 POSICIÓN:", { macro: [macroX, macroY], micro: [microX, microY], nano: [nanoX, nanoY] });
     
     // Centrar mapa
     mymap.setView([lat, lng], 19);
@@ -686,7 +696,7 @@ function buscarPorPanamaCode(panamaCode) {
     
     // Obtener VM_LEVEL si existe
     const vmLevel = obtenerVMLEVEL({lat: lat, lng: lng}) || 'SINVM';
-    const ultimos6 = panamaCode.slice(2); // Últimos 6 caracteres
+    const ultimos6 = panamaCode.slice(3); // Últimos 6 caracteres (micro+nano)
     const codigoPostal = `${vmLevel}-${ultimos6}`;
     
     // Mostrar popup
@@ -694,29 +704,29 @@ function buscarPorPanamaCode(panamaCode) {
         L.popup({ className: 'nano-popup' })
             .setLatLng([lat, lng])
             .setContent(`
-                <div style="text-align:center; padding: 10px; max-width: 250px;">
+                <div style="text-align:center; padding: 10px; max-width: 280px;">
                     <div style="font-size: 12px; color: #1976d2; margin-bottom: 8px; font-weight: bold;">
                         🔍 PANAMACODE ENCONTRADO
                     </div>
                     
-                    <div class="codigo-globo" style="margin: 10px 0; font-size: 16px; letter-spacing: 1px;">
+                    <div class="codigo-globo" style="margin: 10px 0; font-size: 17px; letter-spacing: 1.5px; padding: 10px;">
                         ${panamaCode}
                     </div>
                     
-                    <div style="font-size: 11px; color: #28a745; margin: 8px 0; padding: 8px; background: #d4edda; border-radius: 5px;">
+                    <div style="font-size: 12px; color: #28a745; margin: 8px 0; padding: 8px; background: #d4edda; border-radius: 5px;">
                         <strong>📍 Código Postal:</strong><br>
                         ${codigoPostal}
                     </div>
                     
-                    <div style="font-size: 10px; color: #495057; margin: 6px 0; padding: 6px; background: #f8f9fa; border-radius: 4px; font-family: monospace;">
-                        GPS: ${lat.toFixed(6)}, ${lng.toFixed(6)}
+                    <div style="font-size: 11px; color: #495057; margin: 6px 0; padding: 8px; background: #f8f9fa; border-radius: 4px; font-family: monospace;">
+                        📍 ${lat.toFixed(6)}, ${lng.toFixed(6)}
                     </div>
                     
-                    <div style="font-size: 10px; color: #6c757d; margin: 6px 0; padding: 6px; background: #e9ecef; border-radius: 4px;">
-                        <strong>Desglose:</strong><br>
-                        Macro: ${panamaCode.substring(0, 2)}<br>
-                        Micro: ${panamaCode.substring(2, 6)}<br>
-                        Nano: ${panamaCode.substring(6, 8)}
+                    <div style="font-size: 11px; color: #6c757d; margin: 8px 0; padding: 8px; background: #e9ecef; border-radius: 4px;">
+                        <strong>Desglose (3+4+2):</strong><br>
+                        Macro: ${panamaCode.substring(0, 3)} → [${macroX},${macroY}]<br>
+                        Micro: ${panamaCode.substring(3, 7)} → [${microX},${microY}]<br>
+                        Nano: ${panamaCode.substring(7, 9)} → [${nanoX},${nanoY}]
                     </div>
                     
                     <div style="display: flex; gap: 8px; justify-content: center; margin-top: 12px; flex-wrap: wrap;">
@@ -995,7 +1005,50 @@ function buscarPorCoordenadas(input) {
 }
 
 // ==============================================
-// FUNCIONES AUXILIARES
+// FUNCIÓN PARA CONVERTIR CÓDIGOS ANTIGUOS (8 chars) A NUEVOS (9 chars)
+// ==============================================
+
+function convertirPanamaCodeAntiguo(codigoAntiguo) {
+    const ALFABETO = "23456789BCDFGHJKLMNPQRSTVWXYZ";
+    
+    if (codigoAntiguo.length === 8) {
+        console.log("🔄 Convirtiendo código antiguo (8 chars) a nuevo formato:");
+        console.log("   Código antiguo:", codigoAntiguo);
+        
+        // Código antiguo: 2+4+2 = 8 caracteres
+        const macroAntiguo = codigoAntiguo.substring(0, 2);
+        const micro = codigoAntiguo.substring(2, 6);
+        const nano = codigoAntiguo.substring(6, 8);
+        
+        console.log("   Partes:", { macroAntiguo, micro, nano });
+        
+        // Decodificar macro antiguo (2 dígitos)
+        let macroNum = 0;
+        for (let i = 0; i < 2; i++) {
+            const indice = ALFABETO.indexOf(macroAntiguo.charAt(i));
+            if (indice === -1) {
+                console.error("   ❌ Error: Carácter no válido en macro antiguo");
+                return codigoAntiguo; // Devolver original si hay error
+            }
+            macroNum = macroNum * 30 + indice;
+        }
+        
+        console.log("   Número macro:", macroNum);
+        
+        // Convertir a 3 dígitos
+        const macroNuevo = toBase30(macroNum, 3);
+        
+        const codigoNuevo = macroNuevo + micro + nano; // 3+4+2 = 9 caracteres
+        
+        console.log("   Código nuevo (9 chars):", codigoNuevo);
+        return codigoNuevo;
+    }
+    
+    return codigoAntiguo;
+}
+
+// ==============================================
+// FUNCIÓN PARA DECODIFICAR PANAMACODE (9 caracteres)
 // ==============================================
 
 function decodificarPanamaCode(panamaCode) {
@@ -1005,7 +1058,7 @@ function decodificarPanamaCode(panamaCode) {
     // Verificar longitud correcta
     const longitudEsperada = DIGITS_MACRO + DIGITS_MICRO + DIGITS_NANO; // 3+4+2 = 9
     if (panamaCode.length !== longitudEsperada) {
-        console.error(`PanamaCode debe tener ${longitudEsperada} caracteres (tiene ${panamaCode.length})`);
+        console.error(`❌ PanamaCode debe tener ${longitudEsperada} caracteres (tiene ${panamaCode.length})`);
         return null;
     }
     
@@ -1014,7 +1067,7 @@ function decodificarPanamaCode(panamaCode) {
     const microCode = panamaCode.substring(DIGITS_MACRO, DIGITS_MACRO + DIGITS_MICRO); // 4 caracteres
     const nanoCode = panamaCode.substring(DIGITS_MACRO + DIGITS_MICRO); // 2 caracteres
     
-    console.log("🔢 Componentes:", { macroCode, microCode, nanoCode });
+    console.log("🔢 Componentes decodificados:", { macroCode, microCode, nanoCode });
     
     // Decodificar macro (3 caracteres)
     let macroNum = 0;
@@ -1022,7 +1075,7 @@ function decodificarPanamaCode(panamaCode) {
         const char = macroCode.charAt(i);
         const index = ALFABETO.indexOf(char);
         if (index === -1) {
-            console.error(`Carácter inválido en macro: ${char}`);
+            console.error(`❌ Carácter inválido en macro: ${char}`);
             return null;
         }
         macroNum = macroNum * 30 + index;
@@ -1036,7 +1089,7 @@ function decodificarPanamaCode(panamaCode) {
         const char = microCode.charAt(i);
         const index = ALFABETO.indexOf(char);
         if (index === -1) {
-            console.error(`Carácter inválido en micro: ${char}`);
+            console.error(`❌ Carácter inválido en micro: ${char}`);
             return null;
         }
         microNum = microNum * 30 + index;
@@ -1050,7 +1103,7 @@ function decodificarPanamaCode(panamaCode) {
         const char = nanoCode.charAt(i);
         const index = ALFABETO.indexOf(char);
         if (index === -1) {
-            console.error(`Carácter inválido en nano: ${char}`);
+            console.error(`❌ Carácter inválido en nano: ${char}`);
             return null;
         }
         nanoNum = nanoNum * 30 + index;
@@ -1061,13 +1114,22 @@ function decodificarPanamaCode(panamaCode) {
     console.log("📍 Posiciones decodificadas:", {
         macro: [macroX, macroY],
         micro: [microX, microY],
-        nano: [nanoX, nanoY],
-        válido: macroX >= 0 && macroX < 60 && macroY >= 0 && macroY < 27
+        nano: [nanoX, nanoY]
     });
     
-    // Validar rangos de macro
+    // Validar rangos
     if (macroX >= 60 || macroY >= 27 || macroX < 0 || macroY < 0) {
-        console.error(`Posición macro fuera de rango: [${macroX}, ${macroY}]`);
+        console.error(`❌ Posición macro fuera de rango: [${macroX}, ${macroY}]`);
+        return null;
+    }
+    
+    if (microX >= 24 || microY >= 24 || microX < 0 || microY < 0) {
+        console.error(`❌ Posición micro fuera de rango: [${microX}, ${microY}]`);
+        return null;
+    }
+    
+    if (nanoX >= 25 || nanoY >= 25 || nanoX < 0 || nanoY < 0) {
+        console.error(`❌ Posición nano fuera de rango: [${nanoX}, ${nanoY}]`);
         return null;
     }
     
@@ -1104,6 +1166,7 @@ document.getElementById('search-input').addEventListener('keypress', (e) => {
         document.getElementById('search-btn').click();
     }
 });
+
 
 // ==============================================
 // CARGAR DATOS EXISTENTES
@@ -1638,6 +1701,7 @@ function decodificarConVerificacion(codigo, nombre) {
 </script>
 </body>
 </html>
+
 
 
 
