@@ -1509,9 +1509,38 @@ setTimeout(() => {
 }, 1000);
 
 console.log("✅ Sistema Postal - VERSIÓN MEJORADA");
+
+    // Función para decodificar CON verificación visual
+function decodificarConVerificacion(codigo, nombre) {
+    console.log(`\n🔤 DECODIFICANDO ${nombre}: "${codigo}"`);
+    
+    let resultado = 0;
+    let pasos = [];
+    
+    for (let i = 0; i < codigo.length; i++) {
+        const char = codigo.charAt(i);
+        const indice = ALFABETO.indexOf(char);
+        
+        if (indice === -1) {
+            console.error(`❌ ERROR: Carácter '${char}' no está en el alfabeto Base30`);
+            console.error(`   Alfabeto: ${ALFABETO}`);
+            console.error(`   Caracteres permitidos: números 2-9 y consonantes (sin vocales)`);
+            return null;
+        }
+        
+        pasos.push(`${resultado} × 30 + ${indice} = ${resultado * 30 + indice}`);
+        resultado = resultado * 30 + indice;
+    }
+    
+    console.log(`   Pasos: ${pasos.join(' → ')}`);
+    console.log(`   🔢 Resultado final: ${resultado}`);
+    
+    return resultado;
+}
 </script>
 </body>
 </html>
+
 
 
 
