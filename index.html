@@ -158,7 +158,7 @@
 
 <div class="map-title"><h1>SISTEMA POSTAL DE PANAMÁ</h1></div>
 <div class="search-container">
-    <input type="text" id="search-input" placeholder="Ej: A6218-23YHTV">
+    <input type="text" id="search-input" placeholder="PanamaCode (9 chars) o Código Postal">
     <button id="search-btn">IR</button>
 </div>
 <div id="toggle-wm" class="toggle-watermark">TEXTO: ON</div>
@@ -180,7 +180,10 @@ const GRID_CONFIG = {
     RES_NANO: 0.1 / 600,
     ALPHABET: "23456789BCDFGHJKLMNPQRSTVWXYZ",
     MACROS_X: 60,
-    MACROS_Y: 27
+    MACROS_Y: 27,
+    DIGITS_MACRO: 3,  
+    DIGITS_MICRO: 4,  
+    DIGITS_NANO: 2    
 };
 
 // ==============================================
@@ -242,11 +245,12 @@ function toBase30(num, digits) {
     const { ALPHABET } = GRID_CONFIG;
     
     if (typeof num !== 'number' || isNaN(num) || !isFinite(num)) {
-        return "??";
+        return "?".repeat(digits);
     }
     
     num = Math.abs(Math.floor(num));
     const maxVal = Math.pow(30, digits) - 1;
+    
     if (num > maxVal) {
         num = num % maxVal;
     }
@@ -255,13 +259,7 @@ function toBase30(num, digits) {
     
     for (let i = 0; i < digits; i++) {
         const index = num % 30;
-        
-        if (index >= 0 && index < ALPHABET.length) {
-            result = ALPHABET[index] + result;
-        } else {
-            result = ALPHABET[0] + result;
-        }
-        
+        result = ALPHABET[index] + result;
         num = Math.floor(num / 30);
     }
     
@@ -273,16 +271,21 @@ function generarPanamaCode(lat, lng) {
     const indices = coordenadaAIndices(lat, lng);
     if (!indices) return null;
     
+    const { DIGITS_MACRO, DIGITS_MICRO, DIGITS_NANO } = GRID_CONFIG;
+    
+    // Macro: 3 dígitos
     const macroNum = indices.macroX * 100 + indices.macroY;
-    const macroCode = toBase30(macroNum, 2);
+    const macroCode = toBase30(macroNum, DIGITS_MACRO);
     
+    // Micro: 4 dígitos
     const microNum = indices.microX * 100 + indices.microY;
-    const microCode = toBase30(microNum, 4);
+    const microCode = toBase30(microNum, DIGITS_MICRO);
     
+    // Nano: 2 dígitos
     const nanoNum = indices.nanoX * 100 + indices.nanoY;
-    const nanoCode = toBase30(nanoNum, 2);
+    const nanoCode = toBase30(nanoNum, DIGITS_NANO);
     
-    return macroCode + microCode + nanoCode;
+    return macroCode + microCode + nanoCode; // 3+4+2 = 9 caracteres
 }
 
 // 4. Obtener últimos 6 dígitos
@@ -375,15 +378,15 @@ function dibujarGridFisico() {
                     const centroLng = lng1 + (RES_MACRO / 2);
                     
                     const macroNum = mx * 100 + my;
-                    const macroCode = toBase30(macroNum, 2);
+                    const macroCode = toBase30(macroNum, GRID_CONFIG.DIGITS_MACRO); // Usar 3 dígitos
                     
-                    if (macroCode && macroCode.length === 2) {
+                    if (macroCode && macroCode.length === GRID_CONFIG.DIGITS_MACRO) {
                         L.marker([centroLat, centroLng], {
                             icon: L.divIcon({
                                 className: 'watermark-label-fixed',
                                 html: `<div>${macroCode}</div>`,
-                                iconSize: [50, 25],
-                                iconAnchor: [25, 12]
+                                iconSize: [60, 25], // Un poco más ancho para 3 caracteres
+                                iconAnchor: [30, 12]
                             }),
                             zIndexOffset: -1000
                         }).addTo(labelLayer);
@@ -618,9 +621,12 @@ document.getElementById('search-btn').addEventListener('click', () => {
 function buscarPorPanamaCode(panamaCode) {
     console.log("📍 BUSCANDO POR PANAMACODE:", panamaCode);
     
+    const { DIGITS_MACRO, DIGITS_MICRO, DIGITS_NANO } = GRID_CONFIG;
+    const longitudEsperada = DIGITS_MACRO + DIGITS_MICRO + DIGITS_NANO; // 9
+    
     // Validar formato
-    if (panamaCode.length !== 8) {
-        alert("El PanamaCode debe tener 8 caracteres exactos");
+    if (panamaCode.length !== longitudEsperada) {
+        alert(`El PanamaCode debe tener ${longitudEsperada} caracteres (tiene ${panamaCode.length})`);
         return;
     }
     
@@ -994,42 +1000,76 @@ function buscarPorCoordenadas(input) {
 
 function decodificarPanamaCode(panamaCode) {
     const ALFABETO = "23456789BCDFGHJKLMNPQRSTVWXYZ";
-    const { ORIGIN_LAT, ORIGIN_LNG, RES_MACRO, RES_MICRO, RES_NANO } = GRID_CONFIG;
+    const { ORIGIN_LAT, ORIGIN_LNG, RES_MACRO, RES_MICRO, RES_NANO, DIGITS_MACRO, DIGITS_MICRO, DIGITS_NANO } = GRID_CONFIG;
+    
+    // Verificar longitud correcta
+    const longitudEsperada = DIGITS_MACRO + DIGITS_MICRO + DIGITS_NANO; // 3+4+2 = 9
+    if (panamaCode.length !== longitudEsperada) {
+        console.error(`PanamaCode debe tener ${longitudEsperada} caracteres (tiene ${panamaCode.length})`);
+        return null;
+    }
     
     // Separar componentes
-    const macroCode = panamaCode.substring(0, 2);
-    const microCode = panamaCode.substring(2, 6);
-    const nanoCode = panamaCode.substring(6, 8);
+    const macroCode = panamaCode.substring(0, DIGITS_MACRO); // 3 caracteres
+    const microCode = panamaCode.substring(DIGITS_MACRO, DIGITS_MACRO + DIGITS_MICRO); // 4 caracteres
+    const nanoCode = panamaCode.substring(DIGITS_MACRO + DIGITS_MICRO); // 2 caracteres
     
-    // Decodificar macro
+    console.log("🔢 Componentes:", { macroCode, microCode, nanoCode });
+    
+    // Decodificar macro (3 caracteres)
     let macroNum = 0;
-    for (let i = 0; i < 2; i++) {
-        const index = ALFABETO.indexOf(macroCode.charAt(i));
-        if (index === -1) return null;
+    for (let i = 0; i < DIGITS_MACRO; i++) {
+        const char = macroCode.charAt(i);
+        const index = ALFABETO.indexOf(char);
+        if (index === -1) {
+            console.error(`Carácter inválido en macro: ${char}`);
+            return null;
+        }
         macroNum = macroNum * 30 + index;
     }
     const macroX = Math.floor(macroNum / 100);
     const macroY = macroNum % 100;
     
-    // Decodificar micro
+    // Decodificar micro (4 caracteres)
     let microNum = 0;
-    for (let i = 0; i < 4; i++) {
-        const index = ALFABETO.indexOf(microCode.charAt(i));
-        if (index === -1) return null;
+    for (let i = 0; i < DIGITS_MICRO; i++) {
+        const char = microCode.charAt(i);
+        const index = ALFABETO.indexOf(char);
+        if (index === -1) {
+            console.error(`Carácter inválido en micro: ${char}`);
+            return null;
+        }
         microNum = microNum * 30 + index;
     }
     const microX = Math.floor(microNum / 100);
     const microY = microNum % 100;
     
-    // Decodificar nano
+    // Decodificar nano (2 caracteres)
     let nanoNum = 0;
-    for (let i = 0; i < 2; i++) {
-        const index = ALFABETO.indexOf(nanoCode.charAt(i));
-        if (index === -1) return null;
+    for (let i = 0; i < DIGITS_NANO; i++) {
+        const char = nanoCode.charAt(i);
+        const index = ALFABETO.indexOf(char);
+        if (index === -1) {
+            console.error(`Carácter inválido en nano: ${char}`);
+            return null;
+        }
         nanoNum = nanoNum * 30 + index;
     }
     const nanoX = Math.floor(nanoNum / 100);
     const nanoY = nanoNum % 100;
+    
+    console.log("📍 Posiciones decodificadas:", {
+        macro: [macroX, macroY],
+        micro: [microX, microY],
+        nano: [nanoX, nanoY],
+        válido: macroX >= 0 && macroX < 60 && macroY >= 0 && macroY < 27
+    });
+    
+    // Validar rangos de macro
+    if (macroX >= 60 || macroY >= 27 || macroX < 0 || macroY < 0) {
+        console.error(`Posición macro fuera de rango: [${macroX}, ${macroY}]`);
+        return null;
+    }
     
     // Calcular coordenadas del CENTRO de la celda nano
     const lat = ORIGIN_LAT - 
@@ -1598,6 +1638,7 @@ function decodificarConVerificacion(codigo, nombre) {
 </script>
 </body>
 </html>
+
 
 
 
