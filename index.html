@@ -308,31 +308,6 @@ function limpiarLabels() {
 }
 
 // ==============================================
-// DIBUJAR GRID FÍSICO 0.1° - MEJORADO CON NANO
-// ==============================================
-
-// Variables globales para tracking de labels
-let lastZoomLevel = null;
-let lastBounds = null;
-let labelCleanupScheduled = false;
-
-// Función mejorada para limpiar labels
-function limpiarLabelsCompletamente() {
-    // Limpiar todas las capas de etiquetas
-    labelLayer.clearLayers();
-    
-    // Limpiar también del DOM manualmente si es necesario
-    document.querySelectorAll('.watermark-label-fixed, .micro-label-fixed, .nano-label-fixed').forEach(el => {
-        if (el.parentElement) {
-            el.parentElement.remove();
-        }
-    });
-    
-    // Reiniciar el array
-    activeLabels = [];
-}
-
-// ==============================================
 // DIBUJAR GRID FÍSICO - VERSIÓN CORREGIDA (CENTROS Y SIN UNDEFINED)
 // ==============================================
 
@@ -1471,5 +1446,6 @@ console.log("• Popup código postal solo en zoom >= 17");
 </script>
 </body>
 </html>
+
 
 
