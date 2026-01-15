@@ -573,7 +573,7 @@ function dibujarGridFisico() {
 }
 
 // ==============================================
-// BUSCADOR SIMPLIFICADO - POPUP MÁS PEQUEÑO
+// BUSCADOR CON DECODIFICACIÓN REAL
 // ==============================================
 
 document.getElementById('search-btn').addEventListener('click', () => {
@@ -592,48 +592,175 @@ document.getElementById('search-btn').addEventListener('click', () => {
         const partes = input.split('-');
         
         if (partes.length !== 2) {
-            alert("Formato incorrecto. Usa: Zona-Código\nEj: A6218-23YHTV");
+            alert("Formato incorrecto. Usa: Zona-Código\nEj: A6299-222KQ2");
             return;
         }
         
         const zonaPostal = partes[0];
-        const codigo = partes[1];
+        const codigo6Digitos = partes[1];
         
-        if (codigo.length !== 6) {
-            alert("El código debe tener 6 dígitos\nEj: 23YHTV");
+        if (codigo6Digitos.length !== 6) {
+            alert("El código debe tener 6 dígitos\nEj: 222KQ2");
             return;
         }
         
-        // CENTRAR EN UNA UBICACIÓN DE PANAMÁ
-        const ubicacionPanama = [8.983, -79.517];
-        mymap.setView(ubicacionPanama, 15);
+        // ==============================================
+        // DECODIFICAR EL CÓDIGO PARA ENCONTRAR POSICIÓN
+        // ==============================================
         
-        // Mostrar popup MÁS PEQUEÑO Y SIMPLE
+        // Los 6 dígitos son: Micro(4 chars) + Nano(2 chars)
+        const microCode = codigo6Digitos.substring(0, 4); // "222K"
+        const nanoCode = codigo6Digitos.substring(4, 6);  // "Q2"
+        
+        // DECODIFICAR Micro (base30 a número)
+        let microNum = 0;
+        for (let i = 0; i < 4; i++) {
+            const char = microCode.charAt(i);
+            const index = GRID_CONFIG.ALPHABET.indexOf(char);
+            if (index === -1) {
+                alert(`Carácter inválido en micro código: ${char}`);
+                return;
+            }
+            microNum = microNum * 30 + index;
+        }
+        
+        const microX = Math.floor(microNum / 100);
+        const microY = microNum % 100;
+        
+        // DECODIFICAR Nano (base30 a número)
+        let nanoNum = 0;
+        for (let i = 0; i < 2; i++) {
+            const char = nanoCode.charAt(i);
+            const index = GRID_CONFIG.ALPHABET.indexOf(char);
+            if (index === -1) {
+                alert(`Carácter inválido en nano código: ${char}`);
+                return;
+            }
+            nanoNum = nanoNum * 30 + index;
+        }
+        
+        const nanoX = Math.floor(nanoNum / 100);
+        const nanoY = nanoNum % 100;
+        
+        // Validar rangos
+        if (microX >= 24 || microY >= 24 || nanoX >= 25 || nanoY >= 25) {
+            alert("Código fuera de rango válido");
+            return;
+        }
+        
+        console.log(`Decodificado: Micro(${microX},${microY}) Nano(${nanoX},${nanoY})`);
+        
+        // ==============================================
+        // ENCONTRAR LA MACRO QUE CORRESPONDE A LA ZONA POSTAL
+        // ==============================================
+        
+        // Para esto necesitamos un mapeo Zona Postal → Macro X,Y
+        // Por ahora, usaremos un cálculo basado en el código de zona
+        
+        // EJEMPLO: Si la zona es A6299, podemos extraer números
+        const zonaMatch = zonaPostal.match(/\d+/);
+        let zonaNum = 0;
+        if (zonaMatch) {
+            zonaNum = parseInt(zonaMatch[0]) % 100; // Tomar últimos 2 dígitos
+        }
+        
+        // Calcular macro aproximada basada en zona
+        // Esto es TEMPORAL - en producción necesitarías una base de datos
+        const macroX = 40 + (zonaNum % 10); // Ejemplo
+        const macroY = 15 + Math.floor(zonaNum / 10); // Ejemplo
+        
+        // Asegurar que esté dentro de los límites
+        const macroXFinal = Math.min(Math.max(macroX, 0), GRID_CONFIG.MACROS_X - 1);
+        const macroYFinal = Math.min(Math.max(macroY, 0), GRID_CONFIG.MACROS_Y - 1);
+        
+        // ==============================================
+        // CALCULAR COORDENADAS EXACTAS
+        // ==============================================
+        
+        const { ORIGIN_LAT, ORIGIN_LNG, RES_MACRO, RES_MICRO, RES_NANO } = GRID_CONFIG;
+        
+        // Coordenadas del CENTRO de la celda nano
+        const latCentro = ORIGIN_LAT - 
+                         (macroYFinal * RES_MACRO) - 
+                         (microY * RES_MICRO) - 
+                         ((nanoY + 0.5) * RES_NANO);
+        
+        const lngCentro = ORIGIN_LNG + 
+                         (macroXFinal * RES_MACRO) + 
+                         (microX * RES_MICRO) + 
+                         ((nanoX + 0.5) * RES_NANO);
+        
+        // Coordenadas de la ESQUINA de la celda nano
+        const latEsquina = ORIGIN_LAT - 
+                          (macroYFinal * RES_MACRO) - 
+                          (microY * RES_MICRO) - 
+                          (nanoY * RES_NANO);
+        
+        const lngEsquina = ORIGIN_LNG + 
+                          (macroXFinal * RES_MACRO) + 
+                          (microX * RES_MICRO) + 
+                          (nanoX * RES_NANO);
+        
+        const lat2 = latEsquina - RES_NANO;
+        const lng2 = lngEsquina + RES_NANO;
+        
+        // ==============================================
+        // CENTRAR Y MOSTRAR EN EL MAPA
+        // ==============================================
+        
+        // Centrar en la posición exacta
+        mymap.setView([latCentro, lngCentro], 19);
+        
+        // Resaltar la celda nano EXACTA
+        const rect = L.rectangle([[latEsquina, lngEsquina], [lat2, lng2]], {
+            color: '#e74c3c',
+            weight: 4,
+            fillColor: '#e74c3c',
+            fillOpacity: 0.6,
+            className: 'highlighted-polygon'
+        }).addTo(selectionLayer);
+        
+        // Agregar texto dentro de la casilla
+        const textMarker = L.marker([latCentro, lngCentro], {
+            icon: L.divIcon({
+                className: 'nano-label-inside',
+                html: `<div>${nanoCode}</div>`,
+                iconSize: [40, 20],
+                iconAnchor: [20, 10]
+            }),
+            zIndexOffset: 1000
+        }).addTo(selectionLayer);
+        
+        // Mostrar popup informativo
         setTimeout(() => {
-            L.popup({ className: 'search-popup' })
-                .setLatLng(ubicacionPanama)
+            L.popup({ className: 'nano-popup' })
+                .setLatLng([latCentro, lngCentro])
                 .setContent(`
-                    <div style="text-align:center; padding: 5px; max-width: 170px;">
-                        <div style="font-size: 12px; color: #1976d2; margin-bottom: 6px; font-weight: bold;">
-                            🔍 BÚSQUEDA
+                    <div style="text-align:center; padding: 8px; max-width: 190px;">
+                        <div style="font-size: 11px; color: #1976d2; margin-bottom: 5px; font-weight: bold;">
+                            🔍 CÓDIGO POSTAL ENCONTRADO
                         </div>
                         
-                        <div style="background: #1976d2; color: white; padding: 6px; border-radius: 4px; font-size: 13px; font-weight: bold; margin: 6px 0;">
+                        <div class="codigo-globo" style="margin: 6px 0; font-size: 14px;">
                             ${input}
                         </div>
                         
-                        <div style="font-size: 10px; color: #6c757d; margin: 6px 0;">
-                            <em>Acerca para ver la cuadrícula</em>
+                        <div style="font-size: 9px; color: #495057; margin: 4px 0; padding: 4px; background: #f8f9fa; border-radius: 3px; font-family: monospace;">
+                            GPS: ${latCentro.toFixed(6)}, ${lngCentro.toFixed(6)}
                         </div>
                         
-                        <button class="btn-nav" onclick="mymap.setZoom(17)" 
-                                style="padding: 5px 10px; font-size: 10px;">
-                            🔍 Acercar
-                        </button>
+                        <div style="font-size: 9px; color: #1976d2; margin: 4px 0; padding: 3px; background: #e3f2fd; border-radius: 3px;">
+                            Posición: Macro(${macroXFinal},${macroYFinal}) Micro(${microX},${microY}) Nano(${nanoX},${nanoY})
+                        </div>
+                        
+                        <div style="display: flex; gap: 5px; justify-content: center; margin-top: 6px;">
+                            <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${latCentro},${lngCentro}')">📍 MAPS</button>
+                            <button class="btn-ws" onclick="window.open('https://wa.me/?text=${encodeURIComponent(`📍 Código Postal: ${input}\nGPS: ${latCentro.toFixed(6)}, ${lngCentro.toFixed(6)}`)}')">💬 WS</button>
+                        </div>
                     </div>
                 `)
                 .openOn(mymap);
-        }, 300);
+        }, 500);
     }
     
     // CASO: COORDENADAS
@@ -652,6 +779,27 @@ document.getElementById('search-btn').addEventListener('click', () => {
                 fillOpacity: 0.8,
                 weight: 2
             }).addTo(selectionLayer);
+            
+            setTimeout(() => {
+                L.popup()
+                    .setLatLng([lat, lng])
+                    .setContent(`
+                        <div style="text-align:center; padding: 8px; max-width: 180px;">
+                            <div style="font-size: 11px; color: #1976d2; margin-bottom: 5px; font-weight: bold;">
+                                📍 COORDENADAS
+                            </div>
+                            <div style="font-size: 9px; color: #495057; margin: 4px 0; padding: 4px; background: #f8f9fa; border-radius: 3px; font-family: monospace;">
+                                ${lat.toFixed(6)}, ${lng.toFixed(6)}
+                            </div>
+                            <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${lat},${lng}')" style="padding: 5px 10px; font-size: 10px;">
+                                📍 MAPS
+                            </button>
+                        </div>
+                    `)
+                    .openOn(mymap);
+            }, 300);
+        } else {
+            alert("Coordenadas inválidas");
         }
     }
     
@@ -659,7 +807,7 @@ document.getElementById('search-btn').addEventListener('click', () => {
     else {
         alert("Formato no reconocido. Usa:\n\n" +
               "• Código postal: ZonaPostal-Código6Digitos\n" +
-              "  Ejemplo: A6218-23YHTV\n\n" +
+              "  Ejemplo: A6299-222KQ2\n\n" +
               "• Coordenadas: latitud, longitud\n" +
               "  Ejemplo: 8.123456, -80.123456");
     }
@@ -1175,3 +1323,4 @@ console.log("✅ Sistema Postal - VERSIÓN MEJORADA");
 </script>
 </body>
 </html>
+
