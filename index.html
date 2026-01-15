@@ -67,7 +67,7 @@
             background: #e3f2fd;
             border: 2px solid #1976d2;
             border-radius: 8px;
-            max-width: 280px;
+            max-width: 220px; /* REDUCIDO de 280px */
         }
         .nano-popup .leaflet-popup-tip {
             background: #1976d2;
@@ -75,23 +75,30 @@
         .codigo-final {
             background: #1976d2;
             color: white;
-            padding: 12px 15px;
+            padding: 8px 12px; /* REDUCIDO de 12px 15px */
             border-radius: 5px;
-            font-size: 16px;
+            font-size: 14px; /* REDUCIDO de 16px */
             font-weight: bold;
-            margin: 10px 0;
+            margin: 8px 0; /* REDUCIDO de 10px 0 */
             text-align: center;
             letter-spacing: 1px;
         }
         .codigo-completo {
             background: #f8f9fa;
             color: #495057;
-            padding: 8px;
+            padding: 6px; /* REDUCIDO de 8px */
             border-radius: 5px;
-            font-size: 13px;
-            margin: 5px 0;
+            font-size: 11px; /* REDUCIDO de 13px */
+            margin: 4px 0; /* REDUCIDO de 5px 0 */
             text-align: center;
             border: 1px solid #dee2e6;
+        }
+        /* Estilos mejorados para grid nano */
+        .nano-grid-line {
+            pointer-events: none;
+        }
+        .grid-helper {
+            pointer-events: none;
         }
     </style>
 </head>
@@ -240,6 +247,32 @@ function generarCodigoPostal(lat, lng, vmLevel) {
 // FUNCIONES AUXILIARES
 // ==============================================
 
+// Función auxiliar para obtener punto en grid
+function getPointInGrid(coords, i, j, cols, rows) {
+    const topLeft = coords[0];
+    const topRight = coords[1];
+    const bottomRight = coords[2];
+    const bottomLeft = coords[3];
+    
+    const xRatio = i / cols;
+    const yRatio = j / rows;
+    
+    const top = [
+        topLeft[0] + (topRight[0] - topLeft[0]) * xRatio,
+        topLeft[1] + (topRight[1] - topLeft[1]) * xRatio
+    ];
+    
+    const bottom = [
+        bottomLeft[0] + (bottomRight[0] - bottomLeft[0]) * xRatio,
+        bottomLeft[1] + (bottomRight[1] - bottomLeft[1]) * xRatio
+    ];
+    
+    return [
+        top[0] + (bottom[0] - top[0]) * yRatio,
+        top[1] + (bottom[1] - top[1]) * yRatio
+    ];
+}
+
 // Obtener VM_LEVEL desde polígono
 function obtenerVMLEVEL(latlng) {
     if (!rawZonas) return null;
@@ -275,7 +308,7 @@ function limpiarLabels() {
 }
 
 // ==============================================
-// DIBUJAR GRID FÍSICO 0.1° - CORREGIDO
+// DIBUJAR GRID FÍSICO 0.1° - MEJORADO CON NANO
 // ==============================================
 
 function dibujarGridFisico() {
@@ -306,16 +339,25 @@ function dibujarGridFisico() {
             
             if (!bounds.intersects(macroBounds)) continue;
             
-            // Dibujar borde macro (solo en zoom 10-13)
+            const coords = [
+                [lat1, lng1],
+                [lat1, lng2],
+                [lat2, lng2],
+                [lat2, lng1]
+            ];
+            
+            // ZOOM 10-13: SÓLO MACROS
             if (z >= 10 && z < 14) {
-                L.rectangle([[lat1, lng1], [lat2, lng2]], {
+                // Borde macro
+                L.polygon(coords, {
                     color: '#1a73e8',
                     weight: 2,
+                    opacity: 0.6,
                     fillOpacity: 0,
                     className: 'grid-macro'
                 }).addTo(gridLayer);
                 
-                // Etiqueta macro (4 caracteres: macro + micro resumido)
+                // Etiqueta macro (2 caracteres)
                 if (labelsEnabled) {
                     const centro = [(lat1 + lat2) / 2, (lng1 + lng2) / 2];
                     const macroNum = mx * 100 + my;
@@ -332,33 +374,68 @@ function dibujarGridFisico() {
                 }
             }
             
-            // Dibujar micros si zoom 14-16
-            if (z >= 14 && z < 17) {
-                for (let ux = 0; ux < 24; ux += 3) { // Cada 3 micros para no saturar
-                    for (let uy = 0; uy < 24; uy += 3) {
-                        const mlat1 = lat1 - (uy * RES_MICRO);
-                        const mlng1 = lng1 + (ux * RES_MICRO);
-                        const mlat2 = mlat1 - (RES_MICRO * 3);
-                        const mlng2 = mlng1 + (RES_MICRO * 3);
-                        
-                        const microBounds = L.latLngBounds([mlat1, mlng1], [mlat2, mlng2]);
-                        if (!bounds.intersects(microBounds)) continue;
-                        
-                        // Dibujar borde micro
-                        L.rectangle([[mlat1, mlng1], [mlat2, mlng2]], {
-                            color: '#3498db',
-                            weight: 1,
-                            fillOpacity: 0,
-                            dashArray: '5,5',
+            // ZOOM 14-16: MICROS VISIBLES
+            else if (z >= 14 && z < 17) {
+                // Dibujar líneas micro cada 3 celdas para no saturar
+                for (let i = 0; i <= 24; i += 3) {
+                    // Líneas verticales
+                    const vTop = getPointInGrid(coords, i, 0, 24, 24);
+                    const vBottom = getPointInGrid(coords, i, 24, 24, 24);
+                    
+                    // Líneas horizontales
+                    const hLeft = getPointInGrid(coords, 0, i, 24, 24);
+                    const hRight = getPointInGrid(coords, 24, i, 24, 24);
+                    
+                    // Líneas principales cada 6 celdas
+                    if (i % 6 === 0) {
+                        L.polyline([vTop, vBottom], {
+                            color: "#3498db",
+                            weight: 1.5,
+                            opacity: 0.7,
                             className: 'grid-micro'
                         }).addTo(gridLayer);
-                        
-                        // Etiqueta micro (4 caracteres completos)
-                        if (labelsEnabled && ux % 6 === 0 && uy % 6 === 0) {
+                        L.polyline([hLeft, hRight], {
+                            color: "#3498db",
+                            weight: 1.5,
+                            opacity: 0.7,
+                            className: 'grid-micro'
+                        }).addTo(gridLayer);
+                    } else {
+                        L.polyline([vTop, vBottom], {
+                            color: "#3498db",
+                            weight: 0.8,
+                            opacity: 0.4,
+                            dashArray: '5, 5',
+                            className: 'grid-micro'
+                        }).addTo(gridLayer);
+                        L.polyline([hLeft, hRight], {
+                            color: "#3498db",
+                            weight: 0.8,
+                            opacity: 0.4,
+                            dashArray: '5, 5',
+                            className: 'grid-micro'
+                        }).addTo(gridLayer);
+                    }
+                }
+                
+                // Borde del macro
+                L.polygon(coords, {
+                    color: '#1a73e8',
+                    weight: 2,
+                    opacity: 0.8,
+                    fillOpacity: 0,
+                    className: 'grid-macro'
+                }).addTo(gridLayer);
+                
+                // Etiquetas micro cada 6 celdas
+                if (labelsEnabled) {
+                    for (let ux = 0; ux < 24; ux += 6) {
+                        for (let uy = 0; uy < 24; uy += 6) {
+                            const point = getPointInGrid(coords, ux + 3, uy + 3, 24, 24);
                             const microNum = ux * 100 + uy;
                             const microCode = toBase30(microNum, 4);
                             
-                            const label = L.marker([(mlat1 + mlat2) / 2, (mlng1 + mlng2) / 2], {
+                            const label = L.marker([point[0], point[1]], {
                                 icon: L.divIcon({
                                     className: 'micro-label-fixed',
                                     html: microCode,
@@ -371,22 +448,109 @@ function dibujarGridFisico() {
                 }
             }
             
-            // Dibujar nanos si zoom >= 17 (solo algunos)
-            if (z >= 17) {
-                for (let ux = 0; ux < 24; ux += 6) {
-                    for (let uy = 0; uy < 24; uy += 6) {
-                        const baseLat = lat1 - (uy * RES_MICRO);
-                        const baseLng = lng1 + (ux * RES_MICRO);
+            // ZOOM 17+: NANOS VISIBLES
+            else if (z >= 17) {
+                // Primero dibujar líneas micro como referencia
+                for (let i = 0; i <= 24; i++) {
+                    // Líneas verticales micro
+                    const vTop = getPointInGrid(coords, i, 0, 24, 24);
+                    const vBottom = getPointInGrid(coords, i, 24, 24, 24);
+                    
+                    // Líneas horizontales micro
+                    const hLeft = getPointInGrid(coords, 0, i, 24, 24);
+                    const hRight = getPointInGrid(coords, 24, i, 24, 24);
+                    
+                    L.polyline([vTop, vBottom], {
+                        color: "#3498db",
+                        weight: 1.0,
+                        opacity: 0.6,
+                        className: 'grid-micro grid-helper'
+                    }).addTo(gridLayer);
+                    L.polyline([hLeft, hRight], {
+                        color: "#3498db",
+                        weight: 1.0,
+                        opacity: 0.6,
+                        className: 'grid-micro grid-helper'
+                    }).addTo(gridLayer);
+                }
+                
+                // Dibujar líneas nano (solo cada 5 para no saturar)
+                for (let i = 0; i < 24; i++) {
+                    for (let j = 0; j < 24; j++) {
+                        const topLeft = getPointInGrid(coords, i, j, 24, 24);
+                        const topRight = getPointInGrid(coords, i+1, j, 24, 24);
+                        const bottomRight = getPointInGrid(coords, i+1, j+1, 24, 24);
+                        const bottomLeft = getPointInGrid(coords, i, j+1, 24, 24);
                         
-                        for (let nx = 0; nx < 25; nx += 5) {
-                            for (let ny = 0; ny < 25; ny += 5) {
-                                const nlat = baseLat - (ny * RES_NANO);
-                                const nlng = baseLng + (nx * RES_NANO);
-                                
-                                if (!bounds.contains([nlat, nlng])) continue;
-                                
-                                // Etiqueta nano (solo algunas)
-                                if (labelsEnabled && nx % 10 === 0 && ny % 10 === 0) {
+                        // Líneas verticales NANO (cada 5 líneas)
+                        for (let ni = 1; ni < 25; ni++) {
+                            if (ni % 5 === 0) {
+                                const t = ni / 25;
+                                const p1 = [
+                                    (1-t) * topLeft[0] + t * topRight[0],
+                                    (1-t) * topLeft[1] + t * topRight[1]
+                                ];
+                                const p2 = [
+                                    (1-t) * bottomLeft[0] + t * bottomRight[0],
+                                    (1-t) * bottomLeft[1] + t * bottomRight[1]
+                                ];
+                                L.polyline([p1, p2], {
+                                    color: "#2980b9",
+                                    weight: 0.4,
+                                    opacity: 0.3,
+                                    dashArray: '2, 3',
+                                    className: 'grid-nano nano-grid-line'
+                                }).addTo(gridLayer);
+                            }
+                        }
+                        
+                        // Líneas horizontales NANO (cada 5 líneas)
+                        for (let nj = 1; nj < 25; nj++) {
+                            if (nj % 5 === 0) {
+                                const t = nj / 25;
+                                const p1 = [
+                                    (1-t) * topLeft[0] + t * bottomLeft[0],
+                                    (1-t) * topLeft[1] + t * bottomLeft[1]
+                                ];
+                                const p2 = [
+                                    (1-t) * topRight[0] + t * bottomRight[0],
+                                    (1-t) * topRight[1] + t * bottomRight[1]
+                                ];
+                                L.polyline([p1, p2], {
+                                    color: "#2980b9",
+                                    weight: 0.4,
+                                    opacity: 0.3,
+                                    dashArray: '2, 3',
+                                    className: 'grid-nano nano-grid-line'
+                                }).addTo(gridLayer);
+                            }
+                        }
+                    }
+                }
+                
+                // Borde del macro
+                L.polygon(coords, {
+                    color: '#1a73e8',
+                    weight: 2,
+                    opacity: 0.8,
+                    fillOpacity: 0,
+                    className: 'grid-macro'
+                }).addTo(gridLayer);
+                
+                // Etiquetas nano cada 10 celdas
+                if (labelsEnabled) {
+                    for (let ux = 0; ux < 24; ux += 6) {
+                        for (let uy = 0; uy < 24; uy += 6) {
+                            const baseLat = lat1 - (uy * RES_MICRO);
+                            const baseLng = lng1 + (ux * RES_MICRO);
+                            
+                            for (let nx = 0; nx < 25; nx += 10) {
+                                for (let ny = 0; ny < 25; ny += 10) {
+                                    const nlat = baseLat - (ny * RES_NANO);
+                                    const nlng = baseLng + (nx * RES_NANO);
+                                    
+                                    if (!bounds.contains([nlat, nlng])) continue;
+                                    
                                     const nanoNum = nx * 100 + ny;
                                     const nanoCode = toBase30(nanoNum, 2);
                                     
@@ -500,7 +664,14 @@ mymap.on("click", function (e) {
         return;
     }
     
-    // QUINTO: Generar código postal
+    // QUINTO: SOLO mostrar código postal si estamos en zoom nano (>= 17)
+    const zoomActual = mymap.getZoom();
+    if (zoomActual < 17) {
+        mostrarPopupZoomInsuficiente(e.latlng);
+        return;
+    }
+    
+    // Generar código postal
     const vmLevel = obtenerVMLEVEL(e.latlng) || 'SINVM';
     const codigos = generarCodigoPostal(e.latlng.lat, e.latlng.lng, vmLevel);
     
@@ -528,31 +699,31 @@ mymap.on("click", function (e) {
         }).addTo(selectionLayer);
     }
     
-    // Mostrar popup con código postal
-    const popupOffset = [0, -60];
-    const popupLatLng = L.latLng(e.latlng.lat + 0.00015, e.latlng.lng);
+    // Mostrar popup CON TAMAÑO REDUCIDO
+    const popupOffset = [0, -50];
+    const popupLatLng = L.latLng(e.latlng.lat + 0.00008, e.latlng.lng);
     
     const popup = L.popup({offset: popupOffset, className: 'nano-popup'})
         .setLatLng(popupLatLng)
         .setContent(`
-            <div style="text-align:center; padding: 10px; max-width: 280px;">
-                <div style="font-size: 14px; color: #1976d2; margin-bottom: 8px; font-weight: bold;">
+            <div style="text-align:center; padding: 8px; max-width: 220px;">
+                <div style="font-size: 12px; color: #1976d2; margin-bottom: 6px; font-weight: bold;">
                     📍 CÓDIGO POSTAL
                 </div>
                 
-                <div class="codigo-completo">
+                <div class="codigo-completo" style="font-size: 10px;">
                     <strong>PanamaCode:</strong><br>${codigos.panamaCode}
                 </div>
                 
-                <div class="codigo-final" style="margin: 8px 0;">
+                <div class="codigo-final" style="margin: 6px 0;">
                     ${codigos.codigoPostal}
                 </div>
                 
-                <div style="font-size: 11px; color: #495057; margin: 8px 0; padding: 6px; background: #f8f9fa; border-radius: 4px;">
+                <div style="font-size: 10px; color: #495057; margin: 6px 0; padding: 4px; background: #f8f9fa; border-radius: 4px;">
                     GPS: ${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}
                 </div>
                 
-                <div style="display: flex; gap: 8px; justify-content: center; margin-top: 10px;">
+                <div style="display: flex; gap: 6px; justify-content: center; margin-top: 8px;">
                     <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${e.latlng.lat},${e.latlng.lng}')">📍 MAPS</button>
                     <button class="btn-ws" onclick="window.open('https://wa.me/?text=${encodeURIComponent(`📍 Código Postal: ${codigos.codigoPostal}\nPanamaCode: ${codigos.panamaCode}\nGPS: ${e.latlng.lat.toFixed(6)},${e.latlng.lng.toFixed(6)}`)}')">💬 WS</button>
                 </div>
@@ -564,6 +735,32 @@ mymap.on("click", function (e) {
         selectionLayer.clearLayers();
     });
 });
+
+// ==============================================
+// NUEVA FUNCIÓN: Popup para zoom insuficiente
+// ==============================================
+
+function mostrarPopupZoomInsuficiente(latlng) {
+    const popupOffset = [0, -60];
+    const popupLatLng = L.latLng(latlng.lat + 0.00015, latlng.lng);
+    
+    L.popup({offset: popupOffset, className: 'warning-popup'})
+        .setLatLng(popupLatLng)
+        .setContent(`
+            <div style="text-align:center; padding: 10px; max-width: 220px;">
+                <div style="font-size: 12px; color: #e74c3c; margin-bottom: 5px; font-weight: bold;">
+                    🔍 ACERCA PARA CÓDIGO POSTAL
+                </div>
+                <div style="font-size: 11px; color: #7f8c8d; margin-bottom: 10px;">
+                    Haz zoom (nivel 17+) para obtener el código postal exacto de esta ubicación
+                </div>
+                <div style="display: flex; gap: 8px; justify-content: center;">
+                    <button class="btn-nav" onclick="mymap.setZoom(17)">🔍 ZOOM IN</button>
+                </div>
+            </div>
+        `)
+        .openOn(mymap);
+}
 
 // ==============================================
 // FUNCIONES DE DETECCIÓN
@@ -681,8 +878,8 @@ function mostrarPopupAreaNoDefinida(latlng) {
     L.popup({offset: popupOffset, className: 'warning-popup'})
         .setLatLng(popupLatLng)
         .setContent(`
-            <div style="text-align:center; padding: 10px; max-width: 250px;">
-                <div style="font-size: 14px; color: #e74c3c; margin-bottom: 5px; font-weight: bold;">
+            <div style="text-align:center; padding: 10px; max-width: 220px;">
+                <div style="font-size: 12px; color: #e74c3c; margin-bottom: 5px; font-weight: bold;">
                     ⚠️ ÁREA NO DEFINIDA
                 </div>
                 <div style="font-size: 11px; color: #7f8c8d; margin-bottom: 10px;">
@@ -706,8 +903,8 @@ function mostrarPopupZona(latlng, zona) {
     const popup = L.popup({className: 'zona-popup'})
         .setLatLng(latlng)
         .setContent(`
-            <div style="text-align:center; padding: 10px; max-width: 250px;">
-                <div style="font-size: 14px; color: #6c757d; margin-bottom: 8px; font-weight: bold;">
+            <div style="text-align:center; padding: 10px; max-width: 220px;">
+                <div style="font-size: 12px; color: #6c757d; margin-bottom: 8px; font-weight: bold;">
                     🗺️ ${nombre}
                 </div>
                 <div style="font-size: 11px; color: #495057; margin-bottom: 10px; text-align: left; line-height: 1.4;">
@@ -745,8 +942,8 @@ function mostrarPopupEstafeta(latlng, estafeta) {
     const popup = L.popup({className: 'estafeta-popup'})
         .setLatLng(latlng)
         .setContent(`
-            <div style="text-align:center; padding: 10px; max-width: 250px;">
-                <div style="font-size: 14px; color: #28a745; margin-bottom: 8px; font-weight: bold;">
+            <div style="text-align:center; padding: 10px; max-width: 220px;">
+                <div style="font-size: 12px; color: #28a745; margin-bottom: 8px; font-weight: bold;">
                     📮 ${nombre}
                 </div>
                 <div style="font-size: 11px; color: #155724; margin-bottom: 10px; text-align: left; line-height: 1.4;">
@@ -784,8 +981,8 @@ function mostrarPopupRuta(latlng, ruta) {
     const popup = L.popup({className: 'ruta-popup'})
         .setLatLng(latlng)
         .setContent(`
-            <div style="text-align:center; padding: 10px; max-width: 250px;">
-                <div style="font-size: 14px; color: #dc3545; margin-bottom: 8px; font-weight: bold;">
+            <div style="text-align:center; padding: 10px; max-width: 220px;">
+                <div style="font-size: 12px; color: #dc3545; margin-bottom: 8px; font-weight: bold;">
                     🚚 Ruta: ${rutaNombre}
                 </div>
                 <div style="font-size: 11px; color: #721c24; margin-bottom: 10px; text-align: left; line-height: 1.4;">
@@ -837,7 +1034,7 @@ document.getElementById('search-btn').addEventListener('click', () => {
             .setLatLng([8.5, -80.0])
             .setContent(`
                 <div style="text-align:center; padding: 10px;">
-                    <div style="font-size: 14px; color: #1976d2; margin-bottom: 5px; font-weight: bold;">
+                    <div style="font-size: 12px; color: #1976d2; margin-bottom: 5px; font-weight: bold;">
                         🔍 Búsqueda: ${input}
                     </div>
                     <div style="font-size: 11px; color: #666;">
@@ -941,11 +1138,12 @@ setTimeout(() => {
     dibujarGridFisico();
 }, 1000);
 
-console.log("✅ Sistema Postal 0.1° - VERSIÓN CORREGIDA");
+console.log("✅ Sistema Postal 0.1° - VERSIÓN MEJORADA");
 console.log("• Grid: 0.1° macro (11×11 km)");
 console.log("• Precisión nano: 18.5×18.5 m");
 console.log("• Formato: E8399-9G8F6X (6 dígitos finales)");
 console.log("• Total macros: 1,620");
+console.log("• Popup código postal solo en zoom >= 17");
 </script>
 </body>
 </html>
