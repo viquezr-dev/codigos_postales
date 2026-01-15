@@ -67,7 +67,7 @@
             background: #e3f2fd;
             border: 2px solid #1976d2;
             border-radius: 8px;
-            max-width: 350px;
+            max-width: 280px;
         }
         .nano-popup .leaflet-popup-tip {
             background: #1976d2;
@@ -77,7 +77,7 @@
             color: white;
             padding: 12px 15px;
             border-radius: 5px;
-            font-size: 18px;
+            font-size: 16px;
             font-weight: bold;
             margin: 10px 0;
             text-align: center;
@@ -86,10 +86,10 @@
         .codigo-completo {
             background: #f8f9fa;
             color: #495057;
-            padding: 10px;
+            padding: 8px;
             border-radius: 5px;
-            font-size: 14px;
-            margin: 8px 0;
+            font-size: 13px;
+            margin: 5px 0;
             text-align: center;
             border: 1px solid #dee2e6;
         }
@@ -111,7 +111,7 @@
 
 <script>
 // ==============================================
-// CONFIGURACIÓN DEL SISTEMA 0.1°
+// CONFIGURACIÓN DEL SISTEMA 0.1° - CORREGIDO
 // ==============================================
 const GRID_CONFIG = {
     ORIGIN_LAT: 9.9,      // 9.9°N (norte de Panamá + margen)
@@ -123,9 +123,6 @@ const GRID_CONFIG = {
     MACROS_X: 60,         // -83.1° a -77.1° = 6° ÷ 0.1 = 60
     MACROS_Y: 27          // 9.9° a 7.2° = 2.7° ÷ 0.1 = 27
 };
-
-// Total macros: 60 × 27 = 1,620
-const TOTAL_MACROS = GRID_CONFIG.MACROS_X * GRID_CONFIG.MACROS_Y;
 
 // ==============================================
 // INICIALIZACIÓN DEL MAPA
@@ -145,37 +142,47 @@ const userLocationLayer = L.layerGroup().addTo(mymap);
 let rawZonas = null;
 let rutasData = null, estafetasData = null;
 let labelsEnabled = true;
-const ALFABETO = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 
-// Cache para watermarks
-const microWatermarkCache = new Map();
-const nanoWatermarkCache = new Map();
-let hiddenLabels = [];
+// Cache para limpiar labels correctamente
+let activeLabels = [];
 
 // ==============================================
-// FUNCIONES DEL SISTEMA 0.1°
+// FUNCIONES DEL SISTEMA 0.1° - CORREGIDAS
 // ==============================================
 
-// 1. Convertir coordenada → índices
+// 1. Convertir coordenada → índices (CON LÍMITES)
 function coordenadaAIndices(lat, lng) {
-    const { ORIGIN_LAT, ORIGIN_LNG, RES_MACRO, RES_MICRO, RES_NANO } = GRID_CONFIG;
+    const { ORIGIN_LAT, ORIGIN_LNG, RES_MACRO, RES_MICRO, RES_NANO, MACROS_X, MACROS_Y } = GRID_CONFIG;
+    
+    // Verificar si está dentro del área cubierta
+    if (lat > ORIGIN_LAT || lat < (ORIGIN_LAT - (MACROS_Y * RES_MACRO)) ||
+        lng < ORIGIN_LNG || lng > (ORIGIN_LNG + (MACROS_X * RES_MACRO))) {
+        return null; // Fuera del área
+    }
     
     const deltaLng = lng - ORIGIN_LNG;
-    const deltaLat = ORIGIN_LAT - lat; // Invertido porque lat disminuye hacia sur
+    const deltaLat = ORIGIN_LAT - lat;
     
-    const macroX = Math.max(0, Math.min(GRID_CONFIG.MACROS_X - 1, Math.floor(deltaLng / RES_MACRO)));
-    const macroY = Math.max(0, Math.min(GRID_CONFIG.MACROS_Y - 1, Math.floor(deltaLat / RES_MACRO)));
+    const macroX = Math.floor(deltaLng / RES_MACRO);
+    const macroY = Math.floor(deltaLat / RES_MACRO);
     
-    const microX = Math.max(0, Math.min(23, Math.floor((deltaLng % RES_MACRO) / RES_MICRO)));
-    const microY = Math.max(0, Math.min(23, Math.floor((deltaLat % RES_MACRO) / RES_MICRO)));
+    const microX = Math.floor((deltaLng % RES_MACRO) / RES_MICRO);
+    const microY = Math.floor((deltaLat % RES_MACRO) / RES_MICRO);
     
-    const nanoX = Math.max(0, Math.min(24, Math.floor((((deltaLng % RES_MACRO) % RES_MICRO) / RES_NANO))));
-    const nanoY = Math.max(0, Math.min(24, Math.floor((((deltaLat % RES_MACRO) % RES_MICRO) / RES_NANO))));
+    const nanoX = Math.floor((((deltaLng % RES_MACRO) % RES_MICRO) / RES_NANO));
+    const nanoY = Math.floor((((deltaLat % RES_MACRO) % RES_MICRO) / RES_NANO));
     
-    return { macroX, macroY, microX, microY, nanoX, nanoY };
+    return { 
+        macroX: Math.min(macroX, MACROS_X - 1), 
+        macroY: Math.min(macroY, MACROS_Y - 1),
+        microX: Math.min(microX, 23), 
+        microY: Math.min(microY, 23),
+        nanoX: Math.min(nanoX, 24), 
+        nanoY: Math.min(nanoY, 24)
+    };
 }
 
-// 2. Convertir número a base30 (alfabeto sin ambigüedad)
+// 2. Convertir número a base30
 function toBase30(num, digits) {
     const { ALPHABET } = GRID_CONFIG;
     let result = '';
@@ -189,67 +196,43 @@ function toBase30(num, digits) {
     return result;
 }
 
-// 3. Generar PanamaCode desde coordenada
+// 3. Generar PanamaCode (8 caracteres, SIN +)
 function generarPanamaCode(lat, lng) {
     const indices = coordenadaAIndices(lat, lng);
+    if (!indices) return null;
     
-    // Macro code (2 caracteres): posición en grid nacional
+    // Macro code (2 caracteres)
     const macroNum = indices.macroX * 100 + indices.macroY;
-    const macroCode = toBase30(macroNum, 2);
+    const macroCode = toBase30(macroNum, 2); // "8F"
     
-    // Micro code (4 caracteres): posición dentro del macro
+    // Micro code (4 caracteres)
     const microNum = indices.microX * 100 + indices.microY;
-    const microCode = toBase30(microNum, 4);
+    const microCode = toBase30(microNum, 4); // "9G8F"
     
-    // Nano code (2 caracteres): posición dentro del micro
+    // Nano code (2 caracteres)
     const nanoNum = indices.nanoX * 100 + indices.nanoY;
-    const nanoCode = toBase30(nanoNum, 2);
+    const nanoCode = toBase30(nanoNum, 2); // "6X"
     
-    // PanamaCode: 8FVC9G8F+6X
-    return `${macroCode}${microCode}+${nanoCode}`;
+    // PanamaCode completo: 8F9G8F6X (8 caracteres, SIN +)
+    return macroCode + microCode + nanoCode;
 }
 
-// 4. Obtener últimos 6 dígitos para código postal
+// 4. Obtener últimos 6 dígitos (los 6 últimos del PanamaCode)
 function obtenerUltimos6Digitos(panamaCode) {
-    // De "8FVC9G8F+6X" extraer "9G8F6X"
-    // Saltar primeros 2 caracteres (macro) y quitar el "+"
-    return panamaCode.substring(2, 8);
+    if (!panamaCode || panamaCode.length < 6) return "ERROR";
+    return panamaCode.slice(-6); // Últimos 6 caracteres
 }
 
-// 5. Generar código postal completo con VM_LEVEL
+// 5. Generar código postal completo
 function generarCodigoPostal(lat, lng, vmLevel) {
     const panamaCode = generarPanamaCode(lat, lng);
+    if (!panamaCode) return null;
+    
     const ultimos6 = obtenerUltimos6Digitos(panamaCode);
     
     return {
         panamaCode: panamaCode,
-        codigoPostal: `${vmLevel || 'SINVM'}-${ultimos6}`
-    };
-}
-
-// 6. Convertir código postal a coordenada (búsqueda inversa)
-function codigoPostalACoordenada(codigoPostal) {
-    // Formato: E8399-9G8F6X
-    const partes = codigoPostal.split('-');
-    if (partes.length !== 2) return null;
-    
-    const vmLevel = partes[0];
-    const ultimos6 = partes[1];
-    
-    if (ultimos6.length !== 6) return null;
-    
-    // Reconstruir PanamaCode parcial (necesitamos macro+micro completo)
-    // Esto es simplificado - para búsqueda precisa necesitaríamos base de datos
-    const microCode = ultimos6.substring(0, 4); // 9G8F
-    const nanoCode = ultimos6.substring(4, 6);   // 6X
-    
-    // Para demo: usar coordenada aproximada del centro de Panamá
-    return {
-        lat: 8.5,
-        lng: -80.0,
-        vmLevel: vmLevel,
-        microCode: microCode,
-        nanoCode: nanoCode
+        codigoPostal: `${vmLevel || 'SINVM'}-${ultimos6}` // E8399-9G8F6X
     };
 }
 
@@ -271,32 +254,49 @@ function obtenerVMLEVEL(latlng) {
     return null;
 }
 
-// Restaurar labels ocultos
-function restoreHiddenLabels() {
-    hiddenLabels.forEach(layer => {
-        if (layer && typeof layer.setOpacity === 'function') {
-            layer.setOpacity(1);
+// Verificar si está en área definida
+function estaEnAreaDefinida(latlng) {
+    if (!rawZonas) return false;
+    
+    const punto = [latlng.lng, latlng.lat];
+    const zonasEnPunto = leafletPip.pointInLayer(punto, L.geoJSON(rawZonas));
+    return zonasEnPunto.length > 0;
+}
+
+// Limpiar labels correctamente
+function limpiarLabels() {
+    activeLabels.forEach(layer => {
+        if (layer && layer.remove) {
+            layer.remove();
         }
     });
-    hiddenLabels = [];
+    activeLabels = [];
+    labelLayer.clearLayers();
 }
 
 // ==============================================
-// DIBUJAR GRID FÍSICO 0.1°
+// DIBUJAR GRID FÍSICO 0.1° - CORREGIDO
 // ==============================================
 
 function dibujarGridFisico() {
-    gridLayer.clearLayers();
+    limpiarLabels(); // Limpiar antes de dibujar nuevos
+    
     const z = mymap.getZoom();
-    
-    if (z < 10) return; // Solo mostrar en zoom alto
-    
-    const { ORIGIN_LAT, ORIGIN_LNG, RES_MACRO, RES_MICRO, RES_NANO } = GRID_CONFIG;
     const bounds = mymap.getBounds();
     
+    // Solo mostrar en zooms apropiados
+    if (z < 10) {
+        gridLayer.clearLayers();
+        return;
+    }
+    
+    gridLayer.clearLayers();
+    
+    const { ORIGIN_LAT, ORIGIN_LNG, RES_MACRO, RES_MICRO, RES_NANO, MACROS_X, MACROS_Y } = GRID_CONFIG;
+    
     // Dibujar macros visibles
-    for (let mx = 0; mx < GRID_CONFIG.MACROS_X; mx++) {
-        for (let my = 0; my < GRID_CONFIG.MACROS_Y; my++) {
+    for (let mx = 0; mx < MACROS_X; mx++) {
+        for (let my = 0; my < MACROS_Y; my++) {
             const lat1 = ORIGIN_LAT - (my * RES_MACRO);
             const lng1 = ORIGIN_LNG + (mx * RES_MACRO);
             const lat2 = lat1 - RES_MACRO;
@@ -306,107 +306,98 @@ function dibujarGridFisico() {
             
             if (!bounds.intersects(macroBounds)) continue;
             
-            // Dibujar borde macro
-            L.rectangle([[lat1, lng1], [lat2, lng2]], {
-                color: '#1a73e8',
-                weight: z >= 14 ? 2 : 1,
-                fillOpacity: 0,
-                className: 'grid-macro'
-            }).addTo(gridLayer);
-            
-            // Etiqueta macro
-            if (z >= 10 && z < 14 && labelsEnabled) {
-                const centro = [(lat1 + lat2) / 2, (lng1 + lng2) / 2];
-                const macroNum = mx * 100 + my;
-                const macroCode = toBase30(macroNum, 2);
+            // Dibujar borde macro (solo en zoom 10-13)
+            if (z >= 10 && z < 14) {
+                L.rectangle([[lat1, lng1], [lat2, lng2]], {
+                    color: '#1a73e8',
+                    weight: 2,
+                    fillOpacity: 0,
+                    className: 'grid-macro'
+                }).addTo(gridLayer);
                 
-                L.marker(centro, {
-                    icon: L.divIcon({
-                        className: 'watermark-label-fixed',
-                        html: macroCode,
-                        iconSize: [40, 20]
-                    })
-                }).addTo(labelLayer);
+                // Etiqueta macro (4 caracteres: macro + micro resumido)
+                if (labelsEnabled) {
+                    const centro = [(lat1 + lat2) / 2, (lng1 + lng2) / 2];
+                    const macroNum = mx * 100 + my;
+                    const macroCode = toBase30(macroNum, 2);
+                    
+                    const label = L.marker(centro, {
+                        icon: L.divIcon({
+                            className: 'watermark-label-fixed',
+                            html: macroCode,
+                            iconSize: [40, 20]
+                        })
+                    }).addTo(labelLayer);
+                    activeLabels.push(label);
+                }
             }
             
-            // Dibujar micros si zoom alto
-            if (z >= 14) {
-                for (let ux = 0; ux < 24; ux++) {
-                    for (let uy = 0; uy < 24; uy++) {
+            // Dibujar micros si zoom 14-16
+            if (z >= 14 && z < 17) {
+                for (let ux = 0; ux < 24; ux += 3) { // Cada 3 micros para no saturar
+                    for (let uy = 0; uy < 24; uy += 3) {
                         const mlat1 = lat1 - (uy * RES_MICRO);
                         const mlng1 = lng1 + (ux * RES_MICRO);
-                        const mlat2 = mlat1 - RES_MICRO;
-                        const mlng2 = mlng1 + RES_MICRO;
+                        const mlat2 = mlat1 - (RES_MICRO * 3);
+                        const mlng2 = mlng1 + (RES_MICRO * 3);
                         
                         const microBounds = L.latLngBounds([mlat1, mlng1], [mlat2, mlng2]);
                         if (!bounds.intersects(microBounds)) continue;
                         
-                        // Guardar en cache para clics
-                        const cacheKey = `m${mx}-${my}-${ux}-${uy}`;
-                        microWatermarkCache.set(cacheKey, {
-                            bounds: [[mlat1, mlng1], [mlat2, mlng2]],
-                            center: [(mlat1 + mlat2) / 2, (mlng1 + mlng2) / 2],
-                            indices: { mx, my, ux, uy }
-                        });
-                        
                         // Dibujar borde micro
-                        if (z >= 14 && z < 17) {
-                            L.rectangle([[mlat1, mlng1], [mlat2, mlng2]], {
-                                color: '#3498db',
-                                weight: 0.5,
-                                fillOpacity: 0,
-                                dashArray: '5,5',
-                                className: 'grid-micro'
-                            }).addTo(gridLayer);
-                            
-                            // Etiqueta micro
-                            if (labelsEnabled && ux % 6 === 0 && uy % 6 === 0) {
-                                const microNum = ux * 100 + uy;
-                                const microCode = toBase30(microNum, 4);
-                                
-                                L.marker([(mlat1 + mlat2) / 2, (mlng1 + mlng2) / 2], {
-                                    icon: L.divIcon({
-                                        className: 'micro-label-fixed',
-                                        html: microCode.substring(2, 4), // Mostrar solo 2 chars
-                                        iconSize: [30, 15]
-                                    })
-                                }).addTo(labelLayer);
-                            }
-                        }
+                        L.rectangle([[mlat1, mlng1], [mlat2, mlng2]], {
+                            color: '#3498db',
+                            weight: 1,
+                            fillOpacity: 0,
+                            dashArray: '5,5',
+                            className: 'grid-micro'
+                        }).addTo(gridLayer);
                         
-                        // Dibujar nanos si zoom muy alto
-                        if (z >= 17) {
-                            for (let nx = 0; nx < 25; nx++) {
-                                for (let ny = 0; ny < 25; ny++) {
-                                    const nlat1 = mlat1 - (ny * RES_NANO);
-                                    const nlng1 = mlng1 + (nx * RES_NANO);
-                                    const nlat2 = nlat1 - RES_NANO;
-                                    const nlng2 = nlng1 + RES_NANO;
+                        // Etiqueta micro (4 caracteres completos)
+                        if (labelsEnabled && ux % 6 === 0 && uy % 6 === 0) {
+                            const microNum = ux * 100 + uy;
+                            const microCode = toBase30(microNum, 4);
+                            
+                            const label = L.marker([(mlat1 + mlat2) / 2, (mlng1 + mlng2) / 2], {
+                                icon: L.divIcon({
+                                    className: 'micro-label-fixed',
+                                    html: microCode,
+                                    iconSize: [50, 15]
+                                })
+                            }).addTo(labelLayer);
+                            activeLabels.push(label);
+                        }
+                    }
+                }
+            }
+            
+            // Dibujar nanos si zoom >= 17 (solo algunos)
+            if (z >= 17) {
+                for (let ux = 0; ux < 24; ux += 6) {
+                    for (let uy = 0; uy < 24; uy += 6) {
+                        const baseLat = lat1 - (uy * RES_MICRO);
+                        const baseLng = lng1 + (ux * RES_MICRO);
+                        
+                        for (let nx = 0; nx < 25; nx += 5) {
+                            for (let ny = 0; ny < 25; ny += 5) {
+                                const nlat = baseLat - (ny * RES_NANO);
+                                const nlng = baseLng + (nx * RES_NANO);
+                                
+                                if (!bounds.contains([nlat, nlng])) continue;
+                                
+                                // Etiqueta nano (solo algunas)
+                                if (labelsEnabled && nx % 10 === 0 && ny % 10 === 0) {
+                                    const nanoNum = nx * 100 + ny;
+                                    const nanoCode = toBase30(nanoNum, 2);
                                     
-                                    const nanoCenter = [(nlat1 + nlat2) / 2, (nlng1 + nlng2) / 2];
-                                    if (!bounds.contains(nanoCenter)) continue;
-                                    
-                                    // Guardar en cache
-                                    const nanoKey = `m${mx}-${my}-${ux}-${uy}-${nx}-${ny}`;
-                                    nanoWatermarkCache.set(nanoKey, {
-                                        bounds: [[nlat1, nlng1], [nlat2, nlng2]],
-                                        center: nanoCenter,
-                                        indices: { mx, my, ux, uy, nx, ny }
-                                    });
-                                    
-                                    // Etiqueta nano (solo algunas)
-                                    if (labelsEnabled && nx % 5 === 0 && ny % 5 === 0) {
-                                        const nanoNum = nx * 100 + ny;
-                                        const nanoCode = toBase30(nanoNum, 2);
-                                        
-                                        L.marker(nanoCenter, {
-                                            icon: L.divIcon({
-                                                className: 'nano-label-fixed',
-                                                html: nanoCode,
-                                                iconSize: [25, 10]
-                                            })
-                                        }).addTo(labelLayer);
-                                    }
+                                    const label = L.marker([nlat, nlng], {
+                                        icon: L.divIcon({
+                                            className: 'nano-label-fixed',
+                                            html: nanoCode,
+                                            iconSize: [30, 10]
+                                        })
+                                    }).addTo(labelLayer);
+                                    activeLabels.push(label);
                                 }
                             }
                         }
@@ -473,7 +464,7 @@ $.getJSON("estafetasp.geojson", d => {
 });
 
 // ==============================================
-// EVENTO CLIC PRINCIPAL
+// EVENTO CLIC PRINCIPAL - CORREGIDO
 // ==============================================
 
 mymap.on("click", function (e) {
@@ -481,8 +472,6 @@ mymap.on("click", function (e) {
     
     // Limpiar selección anterior
     selectionLayer.clearLayers();
-    restoreHiddenLabels();
-    hiddenLabels = [];
     
     // PRIMERO: Verificar si se hizo clic en una estafeta
     const estafetaClic = verificarClicEnEstafetas(e.latlng);
@@ -505,56 +494,65 @@ mymap.on("click", function (e) {
         return;
     }
     
-    // CUARTO: Generar código postal (nuevo sistema 0.1°)
+    // CUARTO: Verificar si está en área definida
+    if (!estaEnAreaDefinida(e.latlng)) {
+        mostrarPopupAreaNoDefinida(e.latlng);
+        return;
+    }
+    
+    // QUINTO: Generar código postal
     const vmLevel = obtenerVMLEVEL(e.latlng) || 'SINVM';
     const codigos = generarCodigoPostal(e.latlng.lat, e.latlng.lng, vmLevel);
     
+    if (!codigos) {
+        mostrarPopupAreaNoDefinida(e.latlng);
+        return;
+    }
+    
     // Resaltar celda nano
     const indices = coordenadaAIndices(e.latlng.lat, e.latlng.lng);
-    const { ORIGIN_LAT, ORIGIN_LNG, RES_MICRO, RES_NANO } = GRID_CONFIG;
-    
-    const lat1 = ORIGIN_LAT - (indices.macroY * GRID_CONFIG.RES_MACRO) - (indices.microY * RES_MICRO) - (indices.nanoY * RES_NANO);
-    const lng1 = ORIGIN_LNG + (indices.macroX * GRID_CONFIG.RES_MACRO) + (indices.microX * RES_MICRO) + (indices.nanoX * RES_NANO);
-    const lat2 = lat1 - RES_NANO;
-    const lng2 = lng1 + RES_NANO;
-    
-    L.rectangle([[lat1, lng1], [lat2, lng2]], {
-        color: '#2980b9',
-        weight: 3,
-        fillColor: '#2980b9',
-        fillOpacity: 0.5,
-        className: 'highlighted-polygon'
-    }).addTo(selectionLayer);
+    if (indices) {
+        const { ORIGIN_LAT, ORIGIN_LNG, RES_MICRO, RES_NANO } = GRID_CONFIG;
+        
+        const lat1 = ORIGIN_LAT - (indices.macroY * GRID_CONFIG.RES_MACRO) - (indices.microY * RES_MICRO) - (indices.nanoY * RES_NANO);
+        const lng1 = ORIGIN_LNG + (indices.macroX * GRID_CONFIG.RES_MACRO) + (indices.microX * RES_MICRO) + (indices.nanoX * RES_NANO);
+        const lat2 = lat1 - RES_NANO;
+        const lng2 = lng1 + RES_NANO;
+        
+        L.rectangle([[lat1, lng1], [lat2, lng2]], {
+            color: '#2980b9',
+            weight: 3,
+            fillColor: '#2980b9',
+            fillOpacity: 0.5,
+            className: 'highlighted-polygon'
+        }).addTo(selectionLayer);
+    }
     
     // Mostrar popup con código postal
     const popupOffset = [0, -60];
-    const popupLatLng = L.latLng(e.latlng.lat + 0.0004, e.latlng.lng);
+    const popupLatLng = L.latLng(e.latlng.lat + 0.00015, e.latlng.lng);
     
     const popup = L.popup({offset: popupOffset, className: 'nano-popup'})
         .setLatLng(popupLatLng)
         .setContent(`
-            <div style="text-align:center; padding: 15px; max-width: 350px;">
-                <div style="font-size: 16px; color: #1976d2; margin-bottom: 10px; font-weight: bold;">
+            <div style="text-align:center; padding: 10px; max-width: 280px;">
+                <div style="font-size: 14px; color: #1976d2; margin-bottom: 8px; font-weight: bold;">
                     📍 CÓDIGO POSTAL
                 </div>
                 
                 <div class="codigo-completo">
-                    <strong>PanamaCode:</strong> ${codigos.panamaCode}
+                    <strong>PanamaCode:</strong><br>${codigos.panamaCode}
                 </div>
                 
-                <div style="font-size: 11px; color: #666; margin-bottom: 15px; text-align: center; font-style: italic;">
-                    CODIGO POSTAL: (marcado en un globo para que se vea mejor)
-                </div>
-                
-                <div class="codigo-final">
+                <div class="codigo-final" style="margin: 8px 0;">
                     ${codigos.codigoPostal}
                 </div>
                 
-                <div style="font-size: 12px; color: #495057; margin: 15px 0; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+                <div style="font-size: 11px; color: #495057; margin: 8px 0; padding: 6px; background: #f8f9fa; border-radius: 4px;">
                     GPS: ${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}
                 </div>
                 
-                <div style="display: flex; gap: 10px; justify-content: center; margin-top: 15px;">
+                <div style="display: flex; gap: 8px; justify-content: center; margin-top: 10px;">
                     <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${e.latlng.lat},${e.latlng.lng}')">📍 MAPS</button>
                     <button class="btn-ws" onclick="window.open('https://wa.me/?text=${encodeURIComponent(`📍 Código Postal: ${codigos.codigoPostal}\nPanamaCode: ${codigos.panamaCode}\nGPS: ${e.latlng.lat.toFixed(6)},${e.latlng.lng.toFixed(6)}`)}')">💬 WS</button>
                 </div>
@@ -564,12 +562,11 @@ mymap.on("click", function (e) {
     
     popup.on('remove', function() {
         selectionLayer.clearLayers();
-        restoreHiddenLabels();
     });
 });
 
 // ==============================================
-// FUNCIONES DE DETECCIÓN (mantener existentes)
+// FUNCIONES DE DETECCIÓN
 // ==============================================
 
 function verificarClicEnZonas(latlng) {
@@ -674,8 +671,31 @@ function distanciaPuntoASegmento(p, a, b) {
 }
 
 // ==============================================
-// POPUPS (mantener existentes)
+// POPUPS - CORREGIDOS
 // ==============================================
+
+function mostrarPopupAreaNoDefinida(latlng) {
+    const popupOffset = [0, -60];
+    const popupLatLng = L.latLng(latlng.lat + 0.00015, latlng.lng);
+    
+    L.popup({offset: popupOffset, className: 'warning-popup'})
+        .setLatLng(popupLatLng)
+        .setContent(`
+            <div style="text-align:center; padding: 10px; max-width: 250px;">
+                <div style="font-size: 14px; color: #e74c3c; margin-bottom: 5px; font-weight: bold;">
+                    ⚠️ ÁREA NO DEFINIDA
+                </div>
+                <div style="font-size: 11px; color: #7f8c8d; margin-bottom: 10px;">
+                    Esta ubicación se encuentra fuera de las zonas postales definidas
+                </div>
+                <div style="display: flex; gap: 8px; justify-content: center;">
+                    <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${latlng.lat},${latlng.lng}')">📍 MAPS</button>
+                    <button class="btn-ws" onclick="window.open('https://wa.me/?text=${encodeURIComponent(`📍 Ubicación fuera del sistema postal\nGPS: ${latlng.lat.toFixed(6)},${latlng.lng.toFixed(6)}`)}')">💬 WS</button>
+                </div>
+            </div>
+        `)
+        .openOn(mymap);
+}
 
 function mostrarPopupZona(latlng, zona) {
     const p = zona.properties || {};
@@ -686,11 +706,11 @@ function mostrarPopupZona(latlng, zona) {
     const popup = L.popup({className: 'zona-popup'})
         .setLatLng(latlng)
         .setContent(`
-            <div style="text-align:center; padding: 10px; max-width: 280px;">
-                <div style="font-size: 16px; color: #6c757d; margin-bottom: 8px; font-weight: bold;">
+            <div style="text-align:center; padding: 10px; max-width: 250px;">
+                <div style="font-size: 14px; color: #6c757d; margin-bottom: 8px; font-weight: bold;">
                     🗺️ ${nombre}
                 </div>
-                <div style="font-size: 12px; color: #495057; margin-bottom: 12px; text-align: left; line-height: 1.4;">
+                <div style="font-size: 11px; color: #495057; margin-bottom: 10px; text-align: left; line-height: 1.4;">
                     <strong>Nivel VM:</strong> ${nivelVM}<br>
                     <strong>ID:</strong> ${fid}
                 </div>
@@ -725,16 +745,16 @@ function mostrarPopupEstafeta(latlng, estafeta) {
     const popup = L.popup({className: 'estafeta-popup'})
         .setLatLng(latlng)
         .setContent(`
-            <div style="text-align:center; padding: 10px; max-width: 280px;">
-                <div style="font-size: 16px; color: #28a745; margin-bottom: 8px; font-weight: bold;">
+            <div style="text-align:center; padding: 10px; max-width: 250px;">
+                <div style="font-size: 14px; color: #28a745; margin-bottom: 8px; font-weight: bold;">
                     📮 ${nombre}
                 </div>
-                <div style="font-size: 12px; color: #155724; margin-bottom: 12px; text-align: left; line-height: 1.4;">
+                <div style="font-size: 11px; color: #155724; margin-bottom: 10px; text-align: left; line-height: 1.4;">
                     <strong>Código:</strong> ${codigo}<br>
                     <strong>Ruta:</strong> ${ruta}<br>
                     <strong>Nivel VM:</strong> ${nivel}
                 </div>
-                <div style="display: flex; gap: 10px; justify-content: center;">
+                <div style="display: flex; gap: 8px; justify-content: center;">
                     <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${latlng.lat},${latlng.lng}')">📍 MAPS</button>
                     <button class="btn-ws" onclick="window.open('https://wa.me/?text=${encodeURIComponent(`📍 Estafeta: ${nombre}\nCódigo: ${codigo}\nGPS: ${latlng.lat.toFixed(6)},${latlng.lng.toFixed(6)}`)}')">💬 WS</button>
                 </div>
@@ -764,15 +784,15 @@ function mostrarPopupRuta(latlng, ruta) {
     const popup = L.popup({className: 'ruta-popup'})
         .setLatLng(latlng)
         .setContent(`
-            <div style="text-align:center; padding: 10px; max-width: 280px;">
-                <div style="font-size: 16px; color: #dc3545; margin-bottom: 8px; font-weight: bold;">
+            <div style="text-align:center; padding: 10px; max-width: 250px;">
+                <div style="font-size: 14px; color: #dc3545; margin-bottom: 8px; font-weight: bold;">
                     🚚 Ruta: ${rutaNombre}
                 </div>
-                <div style="font-size: 12px; color: #721c24; margin-bottom: 12px; text-align: left; line-height: 1.4;">
+                <div style="font-size: 11px; color: #721c24; margin-bottom: 10px; text-align: left; line-height: 1.4;">
                     <strong>Tramo:</strong> ${tramo}<br>
                     <strong>Coordenadas:</strong> ${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}
                 </div>
-                <div style="display: flex; gap: 10px; justify-content: center;">
+                <div style="display: flex; gap: 8px; justify-content: center;">
                     <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${latlng.lat},${latlng.lng}')">📍 MAPS</button>
                     <button class="btn-ws" onclick="window.open('https://wa.me/?text=${encodeURIComponent(`📍 Ruta: ${rutaNombre}\nTramo: ${tramo}\nGPS: ${latlng.lat.toFixed(6)},${latlng.lng.toFixed(6)}`)}')">💬 WS</button>
                 </div>
@@ -795,7 +815,7 @@ function mostrarPopupRuta(latlng, ruta) {
 }
 
 // ==============================================
-// BUSCADOR
+// BUSCADOR - CORREGIDO
 // ==============================================
 
 document.getElementById('search-btn').addEventListener('click', () => {
@@ -805,43 +825,41 @@ document.getElementById('search-btn').addEventListener('click', () => {
     
     // Si es código postal (E8399-9G8F6X)
     if (input.includes('-') && input.split('-')[1].length === 6) {
-        const coord = codigoPostalACoordenada(input);
+        const vmLevel = input.split('-')[0];
+        const ultimos6 = input.split('-')[1];
         
-        if (coord) {
-            mymap.setView([coord.lat, coord.lng], 18);
-            
-            selectionLayer.clearLayers();
-            L.circleMarker([coord.lat, coord.lng], {
-                radius: 10,
-                color: '#1976d2',
-                fillColor: '#1976d2',
-                fillOpacity: 0.8
-            }).addTo(selectionLayer);
-            
-            // Generar código para mostrar
-            const vmLevel = input.split('-')[0];
-            const codigos = generarCodigoPostal(coord.lat, coord.lng, vmLevel);
-            
-            L.popup()
-                .setLatLng([coord.lat, coord.lng])
-                .setContent(`
-                    <div style="text-align:center; padding: 10px;">
-                        <div style="font-size: 14px; color: #1976d2; margin-bottom: 5px; font-weight: bold;">
-                            📍 ${input}
-                        </div>
-                        <div style="font-size: 11px; color: #666;">
-                            ${codigos.panamaCode}<br>
-                            ${coord.lat.toFixed(6)}, ${coord.lng.toFixed(6)}
-                        </div>
+        // Para demo: centrar en Panamá y mostrar mensaje
+        mymap.setView([8.5, -80.0], 12);
+        
+        selectionLayer.clearLayers();
+        
+        L.popup()
+            .setLatLng([8.5, -80.0])
+            .setContent(`
+                <div style="text-align:center; padding: 10px;">
+                    <div style="font-size: 14px; color: #1976d2; margin-bottom: 5px; font-weight: bold;">
+                        🔍 Búsqueda: ${input}
                     </div>
-                `)
-                .openOn(mymap);
-        } else {
-            alert("Código postal no encontrado: " + input);
+                    <div style="font-size: 11px; color: #666;">
+                        <em>Búsqueda por código postal activada</em><br>
+                        <strong>VM_LEVEL:</strong> ${vmLevel}<br>
+                        <strong>Código:</strong> ${ultimos6}
+                    </div>
+                </div>
+            `)
+            .openOn(mymap);
+            
+    } else if (input.includes(',') && !isNaN(parseFloat(input.split(',')[0]))) {
+        // Si son coordenadas
+        const coords = input.split(',');
+        const lat = parseFloat(coords[0].trim());
+        const lng = parseFloat(coords[1].trim());
+        
+        if (!isNaN(lat) && !isNaN(lng)) {
+            mymap.setView([lat, lng], 16);
         }
     } else {
-        // Búsqueda por nombre o coordenadas
-        alert("Formato no reconocido. Usa: E8399-9G8F6X");
+        alert("Formato no reconocido. Usa:\n• Código postal: E8399-9G8F6X\n• Coordenadas: 8.123456, -80.123456");
     }
 });
 
@@ -887,7 +905,6 @@ $('#toggle-wm').click(function() {
 mymap.on('moveend zoomend', dibujarGridFisico);
 mymap.on('zoomstart movestart', function() {
     selectionLayer.clearLayers();
-    restoreHiddenLabels();
 });
 
 // Ubicación del usuario
@@ -924,9 +941,11 @@ setTimeout(() => {
     dibujarGridFisico();
 }, 1000);
 
-console.log("✅ Sistema Postal 0.1° cargado correctamente");
-console.log("Configuración:", GRID_CONFIG);
-console.log("Total macros:", TOTAL_MACROS);
+console.log("✅ Sistema Postal 0.1° - VERSIÓN CORREGIDA");
+console.log("• Grid: 0.1° macro (11×11 km)");
+console.log("• Precisión nano: 18.5×18.5 m");
+console.log("• Formato: E8399-9G8F6X (6 dígitos finales)");
+console.log("• Total macros: 1,620");
 </script>
 </body>
 </html>
