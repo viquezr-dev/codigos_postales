@@ -276,7 +276,31 @@ function obtenerUltimos6Digitos(codigoCompleto) {
     const codigoSinGuiones = codigoCompleto.replace(/-/g, '');
     return codigoSinGuiones.slice(-6);
 }
-
+// Función para generar código postal ÚNICO (sin colisiones) - OPCIÓN 3
+function generarCodigoPostalUnico(panamaCode, vmLevel) {
+    if (!vmLevel || vmLevel === 'SINVM') {
+        vmLevel = 'XXXXX'; // Valor por defecto
+    }
+    
+    // Combinar PanamaCode + VM_LEVEL para crear un hash único
+    const codigoCompleto = panamaCode.replace(/-/g, '') + vmLevel;
+    
+    // Hash determinista pero único para esta combinación
+    let hash = 0;
+    for (let i = 0; i < codigoCompleto.length; i++) {
+        hash = ((hash << 5) - hash) + codigoCompleto.charCodeAt(i);
+        hash = hash & hash; // Convertir a 32-bit
+    }
+    
+    // Valor absoluto y convertir a base36 (0-9, A-Z)
+    hash = Math.abs(hash);
+    const base36 = hash.toString(36).toUpperCase();
+    
+    // Tomar últimos 6 caracteres del hash
+    const hash6 = base36.padStart(6, '0').slice(-6);
+    
+    return `${vmLevel}-${hash6}`; // Ej: "E8399-8F2C9B"
+}
 // ==============================================
 // FUNCIONES DE VERIFICACIÓN DE COLISIONES
 // ==============================================
@@ -1646,6 +1670,7 @@ setTimeout(() => {
 </script>
 </body>
 </html>
+
 
 
 
