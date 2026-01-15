@@ -332,6 +332,7 @@ function dibujarGridFisico() {
     gridLayer.clearLayers();
     labelLayer.clearLayers();
     
+    // Limpiar manualmente del DOM
     document.querySelectorAll('.watermark-label-fixed, .micro-label-fixed, .nano-label-fixed').forEach(el => {
         if (el.parentElement && el.parentElement.parentElement) {
             el.parentElement.parentElement.remove();
@@ -569,113 +570,149 @@ function dibujarGridFisico() {
 }
 
 // ==============================================
-// FUNCIÓN toBase30 MEJORADA (SIN UNDEFINED)
+// BUSCADOR SIMPLIFICADO
 // ==============================================
 
-function toBase30(num, digits) {
-    const { ALPHABET } = GRID_CONFIG;
+document.getElementById('search-btn').addEventListener('click', () => {
+    const input = document.getElementById('search-input').value.trim().toUpperCase();
     
-    // VALIDACIÓN ROBUSTA
-    if (typeof num !== 'number' || isNaN(num) || !isFinite(num)) {
-        console.warn("Número inválido para toBase30:", num);
-        return "??"; // Fallback seguro
+    if (!input) {
+        alert("Ingresa un código postal o coordenadas");
+        return;
     }
     
-    // Asegurar que esté en rango
-    num = Math.abs(Math.floor(num));
-    const maxVal = Math.pow(30, digits) - 1;
-    if (num > maxVal) {
-        num = num % maxVal;
-    }
+    // LIMPIAR SELECCIONES ANTERIORES
+    selectionLayer.clearLayers();
     
-    let result = '';
-    
-    for (let i = 0; i < digits; i++) {
-        const index = num % 30;
+    // CASO 1: CÓDIGO POSTAL (Formato: Zona-Código)
+    if (input.includes('-')) {
+        const partes = input.split('-');
         
-        // Validar índice
-        if (index >= 0 && index < ALPHABET.length) {
-            result = ALPHABET[index] + result;
-        } else {
-            result = ALPHABET[0] + result; // Fallback al primer carácter
+        if (partes.length !== 2) {
+            alert("Formato incorrecto. Usa: Zona-Código\nEj: E8399-9G8F6X");
+            return;
         }
         
-        num = Math.floor(num / 30);
+        const zonaPostal = partes[0];
+        const codigo = partes[1];
+        
+        if (codigo.length !== 6) {
+            alert("El código debe tener 6 dígitos\nEj: 9G8F6X");
+            return;
+        }
+        
+        // CENTRAR EN UNA UBICACIÓN DE PANAMÁ
+        const ubicacionPanama = [8.983, -79.517];
+        mymap.setView(ubicacionPanama, 15);
+        
+        // Crear un marcador
+        L.marker(ubicacionPanama, {
+            icon: L.divIcon({
+                className: 'search-marker-icon',
+                html: '📍',
+                iconSize: [30, 30],
+                iconAnchor: [15, 30]
+            })
+        }).addTo(selectionLayer);
+        
+        // Mostrar popup informativo
+        setTimeout(() => {
+            L.popup({ className: 'nano-popup' })
+                .setLatLng(ubicacionPanama)
+                .setContent(`
+                    <div style="text-align:center; padding: 10px; max-width: 250px;">
+                        <div style="font-size: 14px; color: #1976d2; margin-bottom: 8px; font-weight: bold;">
+                            🔍 BÚSQUEDA DE CÓDIGO POSTAL
+                        </div>
+                        
+                        <div style="background: #1976d2; color: white; padding: 10px; border-radius: 5px; font-size: 16px; font-weight: bold; margin: 10px 0;">
+                            ${input}
+                        </div>
+                        
+                        <div style="background: #f8f9fa; border-radius: 5px; padding: 10px; margin: 10px 0; text-align: left;">
+                            <div><strong>Zona Postal:</strong> ${zonaPostal}</div>
+                            <div><strong>Código:</strong> ${codigo}</div>
+                            <div><strong>Estado:</strong> <span style="color: #28a745;">✓ Código válido</span></div>
+                        </div>
+                        
+                        <div style="font-size: 12px; color: #6c757d; margin: 10px 0; padding: 8px; background: #e9ecef; border-radius: 4px;">
+                            <em>Para ubicación exacta, haz clic en el mapa con zoom 17+</em>
+                        </div>
+                        
+                        <div style="display: flex; gap: 8px; justify-content: center; margin-top: 10px;">
+                            <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${ubicacionPanama[0]},${ubicacionPanama[1]}')" 
+                                    style="padding: 8px 12px; font-size: 12px;">
+                                📍 Google Maps
+                            </button>
+                            <button class="btn-nav" onclick="mymap.setZoom(17)" 
+                                    style="padding: 8px 12px; font-size: 12px; background: #ffc107; color: #212529;">
+                                🔍 Acercar
+                            </button>
+                        </div>
+                    </div>
+                `)
+                .openOn(mymap);
+        }, 300);
     }
     
-    return result;
-}
-
-// ==============================================
-// ACTUALIZAR CSS PARA MEJOR CENTRADO
-// ==============================================
-
-<style>
-    /* ESTILOS ACTUALIZADOS PARA MEJOR CENTRADO */
-    .watermark-label-fixed .leaflet-marker-icon {
-        background: none !important;
-        border: none !important;
-        box-shadow: none !important;
-        margin-left: -20px !important; /* Centrar horizontalmente */
-        margin-top: -10px !important;  /* Centrar verticalmente */
+    // CASO 2: COORDENADAS
+    else if (input.includes(',')) {
+        const coords = input.split(',');
+        const lat = parseFloat(coords[0].trim());
+        const lng = parseFloat(coords[1].trim());
+        
+        if (!isNaN(lat) && !isNaN(lng) && 
+            lat >= -90 && lat <= 90 && 
+            lng >= -180 && lng <= 180) {
+            
+            mymap.setView([lat, lng], 16);
+            
+            L.circleMarker([lat, lng], {
+                radius: 8,
+                color: '#e74c3c',
+                fillColor: '#e74c3c',
+                fillOpacity: 0.8,
+                weight: 3
+            }).addTo(selectionLayer);
+            
+            setTimeout(() => {
+                L.popup()
+                    .setLatLng([lat, lng])
+                    .setContent(`
+                        <div style="text-align:center; padding: 8px; max-width: 220px;">
+                            <div style="font-size: 12px; color: #1976d2; margin-bottom: 6px; font-weight: bold;">
+                                📍 COORDENADAS
+                            </div>
+                            <div style="font-size: 11px; color: #495057; margin: 6px 0; padding: 6px; background: #f8f9fa; border-radius: 4px;">
+                                ${lat.toFixed(6)}, ${lng.toFixed(6)}
+                            </div>
+                            <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${lat},${lng}')">📍 MAPS</button>
+                        </div>
+                    `)
+                    .openOn(mymap);
+            }, 300);
+            
+        } else {
+            alert("Coordenadas inválidas. Usa: latitud, longitud\nEj: 8.123456, -80.123456");
+        }
     }
     
-    .micro-label-fixed .leaflet-marker-icon {
-        background: none !important;
-        border: none !important;
-        box-shadow: none !important;
-        margin-left: -30px !important; /* Centrar horizontalmente */
-        margin-top: -7px !important;   /* Centrar verticalmente */
+    // CASO 3: FORMATO NO RECONOCIDO
+    else {
+        alert("Formato no reconocido. Usa:\n\n" +
+              "• Código postal: ZonaPostal-Código6Digitos\n" +
+              "  Ejemplo: E8399-9G8F6X\n\n" +
+              "• Coordenadas: latitud, longitud\n" +
+              "  Ejemplo: 8.123456, -80.123456");
     }
-    
-    .nano-label-fixed .leaflet-marker-icon {
-        background: none !important;
-        border: none !important;
-        box-shadow: none !important;
-        margin-left: -15px !important; /* Centrar horizontalmente */
-        margin-top: -6px !important;   /* Centrar verticalmente */
-    }
-    
-    .watermark-label-fixed div,
-    .micro-label-fixed div,
-    .nano-label-fixed div {
-        text-align: center;
-        width: 100%;
-        font-weight: bold;
-        text-shadow: 
-            1px 1px 1px white,
-            -1px -1px 1px white,
-            1px -1px 1px white,
-            -1px 1px 1px white;
-    }
-
-
-// ==============================================
-// OPTIMIZAR EVENTOS PARA EVITAR FLICKERING
-// ==============================================
-
-let gridRedrawTimeout;
-mymap.on('moveend zoomend', function() {
-    // Debounce para evitar redibujos múltiples
-    if (gridRedrawTimeout) clearTimeout(gridRedrawTimeout);
-    gridRedrawTimeout = setTimeout(() => {
-        dibujarGridFisico();
-    }, 100);
 });
 
-mymap.on('zoomstart movestart', function() {
-    // Solo limpiar selección, no el grid
-    selectionLayer.clearLayers();
+// También manejar la tecla Enter en el input
+document.getElementById('search-input').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        document.getElementById('search-btn').click();
+    }
 });
-
-// ==============================================
-// INICIALIZAR CON UN REDIBUJO LIMPIO
-// ==============================================
-
-// Esperar a que el mapa esté listo
-setTimeout(() => {
-    dibujarGridFisico();
-}, 500);
 
 // ==============================================
 // CARGAR DATOS EXISTENTES
@@ -1117,245 +1154,9 @@ function mostrarPopupRuta(latlng, ruta) {
 }
 
 // ==============================================
-// BUSCADOR - CORREGIDO
-// ==============================================
-
-document.getElementById('search-btn').addEventListener('click', () => {
-    const input = document.getElementById('search-input').value.trim().toUpperCase();
-    
-    if (!input) {
-        alert("Ingresa un código postal o coordenadas");
-        return;
-    }
-    
-    // LIMPIAR SELECCIONES ANTERIORES
-    selectionLayer.clearLayers();
-    
-    // ==============================================
-    // CASO 1: CÓDIGO POSTAL (Formato: E8399-9G8F6X)
-    // ==============================================
-    if (input.includes('-')) {
-        const partes = input.split('-');
-        const zonaPostal = partes[0]; // "E8399" -> Zona Postal
-        const codigo6Digitos = partes[1]; // "9G8F6X" -> Código de 6 dígitos
-        
-        // Validar formato
-        if (!codigo6Digitos || codigo6Digitos.length !== 6) {
-            alert("Formato incorrecto. Usa: ZonaPostal-Código6Digitos\nEj: E8399-9G8F6X");
-            return;
-        }
-        
-        // DECODIFICAR: Los 6 dígitos corresponden a Micro + Nano
-        // Los 6 dígitos son: Micro (4 chars) + Nano (2 chars)
-        const microCode = codigo6Digitos.substring(0, 4); // "9G8F"
-        const nanoCode = codigo6Digitos.substring(4, 6); // "6X"
-        
-        // DECODIFICAR Micro (4 chars a número)
-        let microNum = 0;
-        for (let i = 0; i < 4; i++) {
-            const char = microCode.charAt(i);
-            const index = GRID_CONFIG.ALPHABET.indexOf(char);
-            if (index === -1) {
-                alert(`Carácter inválido en micro código: ${char}`);
-                return;
-            }
-            microNum = microNum * 30 + index;
-        }
-        
-        // Decodificar Micro X, Y
-        const microX = Math.floor(microNum / 100);
-        const microY = microNum % 100;
-        
-        // DECODIFICAR Nano (2 chars a número)
-        let nanoNum = 0;
-        for (let i = 0; i < 2; i++) {
-            const char = nanoCode.charAt(i);
-            const index = GRID_CONFIG.ALPHABET.indexOf(char);
-            if (index === -1) {
-                alert(`Carácter inválido en nano código: ${char}`);
-                return;
-            }
-            nanoNum = nanoNum * 30 + index;
-        }
-        
-        // Decodificar Nano X, Y
-        const nanoX = Math.floor(nanoNum / 100);
-        const nanoY = nanoNum % 100;
-        
-        // Validar rangos
-        if (microX >= 24 || microY >= 24 || nanoX >= 25 || nanoY >= 25) {
-            alert("Código fuera de rango válido");
-            return;
-        }
-        
-        // BUSCAR LA MACRO QUE CONTIENE ESTE CÓDIGO
-        // Para demo, usaremos una posición aproximada en Panamá
-        // En producción, necesitarías mapear ZonaPostal → Macro X,Y
-        
-        // Posición de ejemplo para la macro que contiene este código
-        const macroXEjemplo = 40; // Ejemplo
-        const macroYEjemplo = 15; // Ejemplo
-        
-        // CALCULAR COORDENADAS EXACTAS
-        const { ORIGIN_LAT, ORIGIN_LNG, RES_MACRO, RES_MICRO, RES_NANO } = GRID_CONFIG;
-        
-        // Coordenadas del centro de la celda nano
-        const lat = ORIGIN_LAT - 
-                   (macroYEjemplo * RES_MACRO) - 
-                   (microY * RES_MICRO) - 
-                   ((nanoY + 0.5) * RES_NANO);
-        
-        const lng = ORIGIN_LNG + 
-                   (macroXEjemplo * RES_MACRO) + 
-                   (microX * RES_MICRO) + 
-                   ((nanoX + 0.5) * RES_NANO);
-        
-        // CENTRAR MAPA EN ESA POSICIÓN
-        mymap.setView([lat, lng], 18);
-        
-        // DIBUJAR LA CELDA NANO EXACTA
-        const lat1 = ORIGIN_LAT - 
-                    (macroYEjemplo * RES_MACRO) - 
-                    (microY * RES_MICRO) - 
-                    (nanoY * RES_NANO);
-        
-        const lng1 = ORIGIN_LNG + 
-                    (macroXEjemplo * RES_MACRO) + 
-                    (microX * RES_MICRO) + 
-                    (nanoX * RES_NANO);
-        
-        const lat2 = lat1 - RES_NANO;
-        const lng2 = lng1 + RES_NANO;
-        
-        // Resaltar la celda nano
-        L.rectangle([[lat1, lng1], [lat2, lng2]], {
-            color: '#e74c3c',
-            weight: 4,
-            fillColor: '#e74c3c',
-            fillOpacity: 0.4,
-            className: 'highlighted-polygon'
-        }).addTo(selectionLayer);
-        
-        // Mostrar popup CENTRADO en la celda
-        setTimeout(() => {
-            const popup = L.popup({className: 'nano-popup'})
-                .setLatLng([lat, lng])
-                .setContent(`
-                    <div style="text-align:center; padding: 8px; max-width: 220px;">
-                        <div style="font-size: 12px; color: #1976d2; margin-bottom: 6px; font-weight: bold;">
-                            🔍 CÓDIGO POSTAL ENCONTRADO
-                        </div>
-                        
-                        <div class="codigo-final" style="margin: 8px 0; font-size: 15px;">
-                            ${input}
-                        </div>
-                        
-                        <div style="font-size: 11px; color: #495057; margin: 6px 0; padding: 6px; background: #f8f9fa; border-radius: 4px; text-align: left;">
-                            <strong>Zona Postal:</strong> ${zonaPostal}<br>
-                            <strong>Precisión:</strong> 18.5×18.5 m<br>
-                            <strong>GPS:</strong> ${lat.toFixed(6)}, ${lng.toFixed(6)}
-                        </div>
-                        
-                        <div style="display: flex; gap: 6px; justify-content: center; margin-top: 8px;">
-                            <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${lat},${lng}')">📍 MAPS</button>
-                            <button class="btn-ws" onclick="window.open('https://wa.me/?text=${encodeURIComponent(`📍 Código Postal: ${input}\nGPS: ${lat.toFixed(6)}, ${lng.toFixed(6)}`)}')">💬 WS</button>
-                        </div>
-                    </div>
-                `)
-                .openOn(mymap);
-                
-            popup.on('remove', function() {
-                selectionLayer.clearLayers();
-            });
-        }, 500);
-    }
-    
-    // ==============================================
-    // CASO 2: COORDENADAS (Formato: 8.123456, -80.123456)
-    // ==============================================
-    else if (input.includes(',')) {
-        const coords = input.split(',');
-        const lat = parseFloat(coords[0].trim());
-        const lng = parseFloat(coords[1].trim());
-        
-        if (!isNaN(lat) && !isNaN(lng) && 
-            lat >= -90 && lat <= 90 && 
-            lng >= -180 && lng <= 180) {
-            
-            // Centrar mapa en las coordenadas
-            mymap.setView([lat, lng], 16);
-            
-            // Marcar el punto exacto
-            L.circleMarker([lat, lng], {
-                radius: 8,
-                color: '#e74c3c',
-                fillColor: '#e74c3c',
-                fillOpacity: 0.8,
-                weight: 3
-            }).addTo(selectionLayer);
-            
-            // Mostrar popup
-            setTimeout(() => {
-                L.popup()
-                    .setLatLng([lat, lng])
-                    .setContent(`
-                        <div style="text-align:center; padding: 8px; max-width: 220px;">
-                            <div style="font-size: 12px; color: #1976d2; margin-bottom: 6px; font-weight: bold;">
-                                📍 COORDENADAS
-                            </div>
-                            <div style="font-size: 11px; color: #495057; margin: 6px 0; padding: 6px; background: #f8f9fa; border-radius: 4px;">
-                                ${lat.toFixed(6)}, ${lng.toFixed(6)}
-                            </div>
-                            <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${lat},${lng}')">📍 MAPS</button>
-                        </div>
-                    `)
-                    .openOn(mymap);
-            }, 300);
-            
-        } else {
-            alert("Coordenadas inválidas. Usa: latitud, longitud\nEj: 8.123456, -80.123456");
-        }
-    }
-    
-    // ==============================================
-    // CASO 3: FORMATO NO RECONOCIDO
-    // ==============================================
-    else {
-        alert("Formato no reconocido. Usa:\n\n" +
-              "• Código postal: ZonaPostal-Código6Digitos\n" +
-              "  Ejemplo: E8399-9G8F6X\n\n" +
-              "• Coordenadas: latitud, longitud\n" +
-              "  Ejemplo: 8.123456, -80.123456");
-    }
-});
-
-// También manejar la tecla Enter en el input
-document.getElementById('search-input').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-        document.getElementById('search-btn').click();
-    }
-});
-
-// ==============================================
 // CONTROLES Y EVENTOS
 // ==============================================
-let gridRedrawTimeout;
-mymap.on('moveend zoomend', function() {
-    if (gridRedrawTimeout) clearTimeout(gridRedrawTimeout);
-    gridRedrawTimeout = setTimeout(() => {
-        dibujarGridFisico();
-    }, 100);
-});
 
-mymap.on('zoomstart movestart', function() {
-    selectionLayer.clearLayers();
-});
-
-// Inicializar grid
-setTimeout(() => {
-    dibujarGridFisico();
-}, 500);
-    
 // GPS
 const LocateControl = L.Control.extend({
     options: { position: 'topleft' },
@@ -1390,8 +1191,15 @@ $('#toggle-wm').click(function() {
     dibujarGridFisico();
 });
 
-// Eventos del mapa
-mymap.on('moveend zoomend', dibujarGridFisico);
+// Eventos del mapa optimizados
+let gridRedrawTimeout;
+mymap.on('moveend zoomend', function() {
+    if (gridRedrawTimeout) clearTimeout(gridRedrawTimeout);
+    gridRedrawTimeout = setTimeout(() => {
+        dibujarGridFisico();
+    }, 100);
+});
+
 mymap.on('zoomstart movestart', function() {
     selectionLayer.clearLayers();
 });
@@ -1430,7 +1238,7 @@ setTimeout(() => {
     dibujarGridFisico();
 }, 1000);
 
-console.log("✅ Sistema Postal 0.1° - VERSIÓN MEJORADA");
+console.log("✅ Sistema Postal 0.1° - VERSIÓN COMPLETA Y FUNCIONAL");
 console.log("• Grid: 0.1° macro (11×11 km)");
 console.log("• Precisión nano: 18.5×18.5 m");
 console.log("• Formato: E8399-9G8F6X (6 dígitos finales)");
@@ -1439,8 +1247,3 @@ console.log("• Popup código postal solo en zoom >= 17");
 </script>
 </body>
 </html>
-
-
-
-
-
