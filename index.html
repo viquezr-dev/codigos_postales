@@ -573,434 +573,492 @@ function dibujarGridFisico() {
 }
 
 // ==============================================
-// BUSCADOR CON DEPURACIÓN INTEGRADA - CORREGIDO
+// BUSCADOR SIMPLIFICADO - PANAMACODE Y CÓDIGO POSTAL
 // ==============================================
 
 document.getElementById('search-btn').addEventListener('click', () => {
     const input = document.getElementById('search-input').value.trim().toUpperCase();
     
     if (!input) {
-        alert("Ingresa un código postal");
+        alert("Ingresa un PanamaCode (8 caracteres) o código postal");
         return;
     }
     
-    // DEPURACIÓN: Mostrar lo que se está buscando
     console.log("🔍 BUSCANDO:", input);
-    
-    // LIMPIAR SELECCIÓN ANTERIOR
     selectionLayer.clearLayers();
     
-    // FORMATO: VM_LEVEL-Código6Digitos (ej: K4299-222KQ2)
+    // CASO 1: PANAMACODE DE 8 CARACTERES
+    if (input.length === 8 && !input.includes('-') && !input.includes(',')) {
+        buscarPorPanamaCode(input);
+        return;
+    }
+    
+    // CASO 2: CÓDIGO POSTAL CON GUION
     if (input.includes('-')) {
-        const partes = input.split('-');
-        const vmLevel = partes[0]; // Ej: "A6238"
-        const codigo6Digitos = partes[1]; // Ej: "235S5M"
-        
-        console.log("📋 PARTES ANALIZADAS:", { 
-            vmLevel: vmLevel, 
-            codigo6Digitos: codigo6Digitos,
-            longitud: codigo6Digitos ? codigo6Digitos.length : 0 
-        });
-        
-        if (!codigo6Digitos || codigo6Digitos.length !== 6) {
-            alert(`El código debe tener 6 dígitos\nRecibido: "${codigo6Digitos}" (${codigo6Digitos ? codigo6Digitos.length : 0} chars)`);
+        buscarPorCodigoPostal(input);
+        return;
+    }
+    
+    // CASO 3: COORDENADAS
+    if (input.includes(',')) {
+        buscarPorCoordenadas(input);
+        return;
+    }
+    
+    alert("Formato no reconocido. Usa:\n" +
+          "• PanamaCode: 8 caracteres (ej: 2B3C4D5E)\n" +
+          "• Código postal: Zona-Código6Digitos\n" +
+          "• Coordenadas: lat, lng");
+});
+
+// ==============================================
+// 1. BUSCAR POR PANAMACODE (8 CARACTERES)
+// ==============================================
+
+function buscarPorPanamaCode(panamaCode) {
+    console.log("📍 BUSCANDO POR PANAMACODE:", panamaCode);
+    
+    // Validar formato
+    if (panamaCode.length !== 8) {
+        alert("El PanamaCode debe tener 8 caracteres exactos");
+        return;
+    }
+    
+    const ALFABETO = "23456789BCDFGHJKLMNPQRSTVWXYZ";
+    for (let char of panamaCode) {
+        if (!ALFABETO.includes(char)) {
+            alert(`Carácter inválido: "${char}".\nSolo: 2-9 y consonantes (sin A,E,I,O,U,0,1)`);
             return;
-        }
-        
-        // 1. BUSCAR LA ZONA POR VM_LEVEL
-        if (!rawZonas || !rawZonas.features) {
-            alert("Las zonas no están cargadas aún. Espera unos segundos.");
-            return;
-        }
-        
-        console.log("🔍 Buscando zona con VM_LEVEL:", vmLevel);
-        console.log("📊 Total de zonas cargadas:", rawZonas.features.length);
-        
-        // Mostrar primeras 5 zonas para referencia
-        const zonasEjemplo = rawZonas.features
-            .filter(f => f.properties && f.properties.VM_LEVEL)
-            .slice(0, 5)
-            .map(f => `${f.properties.VM_LEVEL} (${f.properties.PROV_NOMB || 'Sin nombre'})`);
-        
-        console.log("📌 Primeras 5 zonas disponibles:", zonasEjemplo);
-        
-        const zonaFeature = rawZonas.features.find(f => {
-            const propVM = f.properties && f.properties.VM_LEVEL;
-            return propVM && propVM.toUpperCase() === vmLevel;
-        });
-        
-        if (!zonaFeature) {
-            alert(`❌ Zona postal "${vmLevel}" no encontrada\n\nVerifica que la zona existe usando la tabla de referencia.`);
-            
-            // Mostrar zonas similares para ayudar
-            const zonasSimilares = rawZonas.features
-                .filter(f => f.properties && f.properties.VM_LEVEL)
-                .filter(f => f.properties.VM_LEVEL.includes(vmLevel.substring(0, 3)))
-                .slice(0, 5)
-                .map(f => f.properties.VM_LEVEL);
-            
-            if (zonasSimilares.length > 0) {
-                console.log("🔍 Zonas similares encontradas:", zonasSimilares);
-            }
-            
-            return;
-        }
-        
-        console.log("✅ Zona encontrada:", {
-            VM_LEVEL: zonaFeature.properties.VM_LEVEL,
-            PROVINCIA: zonaFeature.properties.PROV_NOMB,
-            AREA: zonaFeature.properties.AREA
-        });
-        
-        // ==============================================
-        // DECODIFICACIÓN MEJORADA
-        // ==============================================
-        
-        const microCode = codigo6Digitos.substring(0, 4); // Ej: "235S"
-        const nanoCode = codigo6Digitos.substring(4, 6);  // Ej: "5M"
-        
-        console.log("🔤 Códigos separados:", { 
-            microCode: microCode, 
-            nanoCode: nanoCode 
-        });
-        
-        // ALFABETO DEL SISTEMA (¡VERIFICA QUE ESTÉ BIEN!)
-        const ALFABETO = "23456789BCDFGHJKLMNPQRSTVWXYZ";
-        console.log("🔡 Alfabeto usado (30 caracteres, sin vocales):");
-        console.log("   Índices:", ALFABETO.split('').map((c, i) => `${c}=${i}`).join(' '));
-        
-        // FUNCIÓN DE DECODIFICACIÓN ROBUSTA
-        function decodificarBase30(codigo) {
-            console.log(`📊 Decodificando "${codigo}":`);
-            let resultado = 0;
-            
-            for (let i = 0; i < codigo.length; i++) {
-                const char = codigo.charAt(i);
-                const indice = ALFABETO.indexOf(char);
-                
-                if (indice === -1) {
-                    console.error(`❌ ERROR: Carácter '${char}' no encontrado en el alfabeto!`);
-                    console.error(`   Alfabeto: ${ALFABETO}`);
-                    return null;
-                }
-                
-                console.log(`   ${i}: '${char}' → índice ${indice}`);
-                resultado = resultado * 30 + indice;
-            }
-            
-            console.log(`   🔢 Número resultante: ${resultado}`);
-            return resultado;
-        }
-        
-        // DECODIFICAR MICRO (4 caracteres)
-        console.log("--- DECODIFICANDO MICRO (4 chars) ---");
-        const microNum = decodificarBase30(microCode);
-        
-        if (microNum === null || microNum === undefined) {
-            alert(`Error decodificando micro código: ${microCode}`);
-            return;
-        }
-        
-        // IMPORTANTE: Los micros van de 0 a 23
-        const microX = Math.floor(microNum / 100);
-        const microY = microNum % 100;
-        
-        console.log(`📍 Micro posición calculada:`, {
-            número: microNum,
-            X: microX,
-            Y: microY,
-            válido: (microX >= 0 && microX < 24 && microY >= 0 && microY < 24)
-        });
-        
-        if (microX >= 24 || microY >= 24 || microX < 0 || microY < 0) {
-            alert(`❌ Posición micro fuera de rango (0-23): X=${microX}, Y=${microY}`);
-            return;
-        }
-        
-        // DECODIFICAR NANO (2 caracteres)
-        console.log("--- DECODIFICANDO NANO (2 chars) ---");
-        const nanoNum = decodificarBase30(nanoCode);
-        
-        if (nanoNum === null || nanoNum === undefined) {
-            alert(`Error decodificando nano código: ${nanoCode}`);
-            return;
-        }
-        
-        // IMPORTANTE: Los nanos van de 0 a 24
-        const nanoX = Math.floor(nanoNum / 100);
-        const nanoY = nanoNum % 100;
-        
-        console.log(`📍 Nano posición calculada:`, {
-            número: nanoNum,
-            X: nanoX,
-            Y: nanoY,
-            válido: (nanoX >= 0 && nanoX < 25 && nanoY >= 0 && nanoY < 25)
-        });
-        
-        if (nanoX >= 25 || nanoY >= 25 || nanoX < 0 || nanoY < 0) {
-            alert(`❌ Posición nano fuera de rango (0-24): X=${nanoX}, Y=${nanoY}`);
-            return;
-        }
-        
-        console.log("✅ DECODIFICACIÓN COMPLETADA:", {
-            micro: [microX, microY],
-            nano: [nanoX, nanoY]
-        });
-        
-        // ==============================================
-        // CALCULAR POSICIÓN GEOGRÁFICA
-        // ==============================================
-        
-        const zonaGeoJSON = L.geoJSON(zonaFeature);
-        const bounds = zonaGeoJSON.getBounds();
-        
-        console.log("🗺️ Límites de la zona:", {
-            norte: bounds.getNorth().toFixed(6),
-            sur: bounds.getSouth().toFixed(6),
-            este: bounds.getEast().toFixed(6),
-            oeste: bounds.getWest().toFixed(6),
-            ancho: (bounds.getEast() - bounds.getWest()).toFixed(6),
-            alto: (bounds.getNorth() - bounds.getSouth()).toFixed(6)
-        });
-        
-        const zonaWidth = bounds.getEast() - bounds.getWest();
-        const zonaHeight = bounds.getNorth() - bounds.getSouth();
-        
-        // Cada zona se divide en 24x24 micros
-        const microWidth = zonaWidth / 24;
-        const microHeight = zonaHeight / 24;
-        
-        // Cada micro se divide en 25x25 nanos
-        const nanoWidth = microWidth / 25;
-        const nanoHeight = microHeight / 25;
-        
-        console.log("📏 Dimensiones calculadas:", {
-            microWidth: microWidth.toFixed(8),
-            microHeight: microHeight.toFixed(8),
-            nanoWidth: nanoWidth.toFixed(8),
-            nanoHeight: nanoHeight.toFixed(8)
-        });
-        
-        // Calcular posición del CENTRO de la celda nano
-        const lngCentro = bounds.getWest() + 
-                         (microX * microWidth) + 
-                         (nanoX * nanoWidth) + 
-                         (nanoWidth / 2);
-        
-        const latCentro = bounds.getNorth() - 
-                         (microY * microHeight) - 
-                         (nanoY * nanoHeight) - 
-                         (nanoHeight / 2);
-        
-        console.log("🌍 POSICIÓN FINAL CALCULADA:", {
-            lat: latCentro.toFixed(6),
-            lng: lngCentro.toFixed(6),
-            coordenadas: `${latCentro.toFixed(6)}, ${lngCentro.toFixed(6)}`
-        });
-        
-        // ==============================================
-        // VISUALIZACIÓN EN EL MAPA
-        // ==============================================
-        
-        // 1. Centrar mapa en la posición
-        mymap.setView([latCentro, lngCentro], 19);
-        
-        // 2. Resaltar la zona completa (transparente, solo borde)
-        L.geoJSON(zonaFeature, {
-            style: {
-                color: '#ff9800',
-                weight: 3,
-                fillColor: '#ff9800',
-                fillOpacity: 0.15,
-                className: 'highlighted-polygon'
-            }
-        }).addTo(selectionLayer);
-        
-        // 3. Calcular límites exactos de la celda nano
-        const lat1 = bounds.getNorth() - (microY * microHeight) - (nanoY * nanoHeight);
-        const lng1 = bounds.getWest() + (microX * microWidth) + (nanoX * nanoWidth);
-        const lat2 = lat1 - nanoHeight;
-        const lng2 = lng1 + nanoWidth;
-        
-        console.log("🔲 Límites celda nano:", {
-            esquinaNO: [lat1.toFixed(6), lng1.toFixed(6)],
-            esquinaSE: [lat2.toFixed(6), lng2.toFixed(6)]
-        });
-        
-        // 4. Dibujar celda nano resaltada
-        L.rectangle([[lat1, lng1], [lat2, lng2]], {
-            color: '#e74c3c',
-            weight: 4,
-            fillColor: '#e74c3c',
-            fillOpacity: 0.6,
-            className: 'highlighted-polygon'
-        }).addTo(selectionLayer);
-        
-        // 5. Agregar texto dentro de la casilla
-        L.marker([latCentro, lngCentro], {
-            icon: L.divIcon({
-                className: 'nano-label-inside',
-                html: `<div>${nanoCode}</div>`,
-                iconSize: [40, 20],
-                iconAnchor: [20, 10]
-            }),
-            zIndexOffset: 1000
-        }).addTo(selectionLayer);
-        
-        // 6. Mostrar popup informativo
-        setTimeout(() => {
-            L.popup({ className: 'nano-popup' })
-                .setLatLng([latCentro, lngCentro])
-                .setContent(`
-                    <div style="text-align:center; padding: 8px; max-width: 220px;">
-                        <div style="font-size: 11px; color: #1976d2; margin-bottom: 5px; font-weight: bold;">
-                            🔍 CÓDIGO POSTAL ENCONTRADO
-                        </div>
-                        
-                        <div class="codigo-globo" style="margin: 8px 0; font-size: 15px; letter-spacing: 1px;">
-                            ${input}
-                        </div>
-                        
-                        <div style="font-size: 10px; color: #495057; margin: 6px 0; padding: 6px; background: #f8f9fa; border-radius: 4px; text-align: left;">
-                            <strong>Zona:</strong> ${vmLevel}<br>
-                            <strong>Provincia:</strong> ${zonaFeature.properties.PROV_NOMB || 'N/A'}<br>
-                            <strong>Micro posición:</strong> ${microX},${microY}<br>
-                            <strong>Nano posición:</strong> ${nanoX},${nanoY}
-                        </div>
-                        
-                        <div style="font-size: 9px; color: #495057; margin: 4px 0; padding: 4px; background: #fff; border-radius: 3px; font-family: monospace; border: 1px solid #dee2e6;">
-                            📍 ${latCentro.toFixed(6)}, ${lngCentro.toFixed(6)}
-                        </div>
-                        
-                        <div style="display: flex; gap: 5px; justify-content: center; margin-top: 10px;">
-                            <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${latCentro},${lngCentro}')">📍 MAPS</button>
-                            <button class="btn-ws" onclick="window.open('https://wa.me/?text=${encodeURIComponent(`📍 Código Postal: ${input}\\n📍 ${zonaFeature.properties.PROV_NOMB || ''}\\n🌐 GPS: ${latCentro.toFixed(6)}, ${lngCentro.toFixed(6)}`)}')">💬 WS</button>
-                        </div>
-                        
-                        <div style="margin-top: 8px; font-size: 8px; color: #6c757d;">
-                            Click en el mapa para cerrar
-                        </div>
-                    </div>
-                `)
-                .openOn(mymap);
-        }, 500);
-        
-        console.log("✅ BÚSQUEDA COMPLETADA CON ÉXITO");
-        
-    } 
-    // CASO: COORDENADAS (igual que antes)
-    else if (input.includes(',')) {
-        const coords = input.split(',');
-        const lat = parseFloat(coords[0].trim());
-        const lng = parseFloat(coords[1].trim());
-        
-        if (!isNaN(lat) && !isNaN(lng)) {
-            mymap.setView([lat, lng], 16);
-            
-            L.circleMarker([lat, lng], {
-                radius: 6,
-                color: '#e74c3c',
-                fillColor: '#e74c3c',
-                fillOpacity: 0.8,
-                weight: 2
-            }).addTo(selectionLayer);
-            
-            // Generar código postal desde coordenadas
-            const vmLevel = obtenerVMLEVEL({lat: lat, lng: lng}) || 'SINVM';
-            const codigos = generarCodigoPostal(lat, lng, vmLevel);
-            
-            setTimeout(() => {
-                let contenido = `
-                    <div style="text-align:center; padding: 8px; max-width: 180px;">
-                        <div style="font-size: 11px; color: #1976d2; margin-bottom: 5px; font-weight: bold;">
-                            📍 COORDENADAS
-                        </div>
-                        <div style="font-size: 9px; color: #495057; margin: 4px 0; padding: 4px; background: #f8f9fa; border-radius: 3px; font-family: monospace;">
-                            ${lat.toFixed(6)}, ${lng.toFixed(6)}
-                        </div>`;
-                
-                if (codigos) {
-                    contenido += `
-                        <div style="font-size: 10px; color: #28a745; margin: 4px 0; padding: 4px; background: #d4edda; border-radius: 3px;">
-                            <strong>Código Postal:</strong><br>${codigos.codigoPostal}
-                        </div>`;
-                }
-                
-                contenido += `
-                        <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${lat},${lng}')" style="padding: 5px 10px; font-size: 10px;">
-                            📍 MAPS
-                        </button>
-                    </div>`;
-                
-                L.popup()
-                    .setLatLng([lat, lng])
-                    .setContent(contenido)
-                    .openOn(mymap);
-            }, 300);
-        } else {
-            alert("Coordenadas inválidas");
         }
     }
     
-    // CASO: SOLO VM_LEVEL (sin código)
-    else if (rawZonas) {
-        const zonaFeature = rawZonas.features.find(f => 
-            f.properties && 
-            f.properties.VM_LEVEL && 
-            f.properties.VM_LEVEL.toUpperCase() === input
-        );
-        
-        if (zonaFeature) {
-            const zonaGeoJSON = L.geoJSON(zonaFeature);
-            mymap.fitBounds(zonaGeoJSON.getBounds());
-            
-            selectionLayer.clearLayers();
-            L.geoJSON(zonaFeature, {
-                style: {
-                    color: '#ff9800',
-                    weight: 3,
-                    fillColor: '#ff9800',
-                    fillOpacity: 0.3,
-                    className: 'highlighted-polygon'
-                }
-            }).addTo(selectionLayer);
-            
-            const bounds = zonaGeoJSON.getBounds();
-            const centro = bounds.getCenter();
-            
-            setTimeout(() => {
-                L.popup()
-                    .setLatLng(centro)
-                    .setContent(`
-                        <div style="text-align:center; padding: 8px; max-width: 200px;">
-                            <div style="font-size: 11px; color: #1976d2; margin-bottom: 5px; font-weight: bold;">
-                                🗺️ ZONA POSTAL
-                            </div>
-                            <div style="font-size: 10px; color: #495057; margin: 4px 0; padding: 4px; background: #f8f9fa; border-radius: 3px;">
-                                <strong>VM_LEVEL:</strong> ${input}<br>
-                                <strong>Provincia:</strong> ${zonaFeature.properties.PROV_NOMB || 'N/A'}<br>
-                                <strong>Área:</strong> ${(zonaFeature.properties.AREA / 1000000).toFixed(2)} km²
-                            </div>
-                            <button class="btn-nav" onclick="mymap.setZoom(17)" style="padding: 5px 10px; font-size: 10px;">
-                                🔍 Acercar
-                            </button>
-                        </div>
-                    `)
-                    .openOn(mymap);
-            }, 300);
-        } else {
-            alert("Formato no reconocido. Usa:\n\n" +
-                  "• Código postal completo: VM_LEVEL-Código6Digitos\n" +
-                  "  Ejemplo: K4299-222KQ2\n\n" +
-                  "• Solo VM_LEVEL (zona)\n" +
-                  "  Ejemplo: K4299\n\n" +
-                  "• Coordenadas: latitud, longitud\n" +
-                  "  Ejemplo: 8.123456, -80.123456");
-        }
+    // Decodificar PanamaCode a coordenadas
+    const resultado = decodificarPanamaCode(panamaCode);
+    
+    if (!resultado) {
+        alert("No se pudo decodificar el PanamaCode");
+        return;
     }
-});
+    
+    const { lat, lng, macroX, macroY, microX, microY, nanoX, nanoY } = resultado;
+    
+    console.log("🌍 COORDENADAS DECODIFICADAS:", { lat, lng });
+    console.log("📊 POSICIÓN:", { macro: [macroX, macroY], micro: [microX, microY], nano: [nanoX, nanoY] });
+    
+    // Centrar mapa
+    mymap.setView([lat, lng], 19);
+    
+    // Resaltar celda
+    const { ORIGIN_LAT, ORIGIN_LNG, RES_MACRO, RES_MICRO, RES_NANO } = GRID_CONFIG;
+    
+    const lat1 = ORIGIN_LAT - (macroY * RES_MACRO) - (microY * RES_MICRO) - (nanoY * RES_NANO);
+    const lng1 = ORIGIN_LNG + (macroX * RES_MACRO) + (microX * RES_MICRO) + (nanoX * RES_NANO);
+    const lat2 = lat1 - RES_NANO;
+    const lng2 = lng1 + RES_NANO;
+    
+    L.rectangle([[lat1, lng1], [lat2, lng2]], {
+        color: '#e74c3c',
+        weight: 4,
+        fillColor: '#e74c3c',
+        fillOpacity: 0.6,
+        className: 'highlighted-polygon'
+    }).addTo(selectionLayer);
+    
+    // Texto dentro de la casilla
+    const centroLat = (lat1 + lat2) / 2;
+    const centroLng = (lng1 + lng2) / 2;
+    
+    L.marker([centroLat, centroLng], {
+        icon: L.divIcon({
+            className: 'nano-label-inside',
+            html: `<div>${panamaCode.slice(-2)}</div>`,
+            iconSize: [40, 20],
+            iconAnchor: [20, 10]
+        }),
+        zIndexOffset: 1000
+    }).addTo(selectionLayer);
+    
+    // Obtener VM_LEVEL si existe
+    const vmLevel = obtenerVMLEVEL({lat: lat, lng: lng}) || 'SINVM';
+    const ultimos6 = panamaCode.slice(2); // Últimos 6 caracteres
+    const codigoPostal = `${vmLevel}-${ultimos6}`;
+    
+    // Mostrar popup
+    setTimeout(() => {
+        L.popup({ className: 'nano-popup' })
+            .setLatLng([lat, lng])
+            .setContent(`
+                <div style="text-align:center; padding: 10px; max-width: 250px;">
+                    <div style="font-size: 12px; color: #1976d2; margin-bottom: 8px; font-weight: bold;">
+                        🔍 PANAMACODE ENCONTRADO
+                    </div>
+                    
+                    <div class="codigo-globo" style="margin: 10px 0; font-size: 16px; letter-spacing: 1px;">
+                        ${panamaCode}
+                    </div>
+                    
+                    <div style="font-size: 11px; color: #28a745; margin: 8px 0; padding: 8px; background: #d4edda; border-radius: 5px;">
+                        <strong>📍 Código Postal:</strong><br>
+                        ${codigoPostal}
+                    </div>
+                    
+                    <div style="font-size: 10px; color: #495057; margin: 6px 0; padding: 6px; background: #f8f9fa; border-radius: 4px; font-family: monospace;">
+                        GPS: ${lat.toFixed(6)}, ${lng.toFixed(6)}
+                    </div>
+                    
+                    <div style="font-size: 10px; color: #6c757d; margin: 6px 0; padding: 6px; background: #e9ecef; border-radius: 4px;">
+                        <strong>Desglose:</strong><br>
+                        Macro: ${panamaCode.substring(0, 2)}<br>
+                        Micro: ${panamaCode.substring(2, 6)}<br>
+                        Nano: ${panamaCode.substring(6, 8)}
+                    </div>
+                    
+                    <div style="display: flex; gap: 8px; justify-content: center; margin-top: 12px; flex-wrap: wrap;">
+                        <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${lat},${lng}')">
+                            📍 MAPS
+                        </button>
+                        <button class="btn-ws" onclick="window.open('https://wa.me/?text=${encodeURIComponent(`📍 PanamaCode: ${panamaCode}\\n📍 Código Postal: ${codigoPostal}\\n🌐 GPS: ${lat.toFixed(6)}, ${lng.toFixed(6)}`)}')">
+                            💬 WS
+                        </button>
+                        <button class="btn-nav" onclick="copiarTexto('${panamaCode}')" style="background: #6c757d;">
+                            📋 Copiar
+                        </button>
+                    </div>
+                </div>
+            `)
+            .openOn(mymap);
+    }, 500);
+}
 
-// También manejar la tecla Enter en el input
+// ==============================================
+// 2. BUSCAR POR CÓDIGO POSTAL (Zona-Código6Digitos)
+// ==============================================
+
+function buscarPorCodigoPostal(input) {
+    console.log("📮 BUSCANDO POR CÓDIGO POSTAL:", input);
+    
+    const partes = input.split('-');
+    if (partes.length !== 2) {
+        alert("Formato inválido. Usa: Zona-Código6Digitos");
+        return;
+    }
+    
+    const vmLevel = partes[0];
+    const codigo6Digitos = partes[1];
+    
+    if (!codigo6Digitos || codigo6Digitos.length !== 6) {
+        alert("El código debe tener 6 dígitos exactos");
+        return;
+    }
+    
+    // Buscar zona
+    if (!rawZonas || !rawZonas.features) {
+        alert("Las zonas no están cargadas");
+        return;
+    }
+    
+    const zonaFeature = rawZonas.features.find(f => 
+        f.properties && f.properties.VM_LEVEL && 
+        f.properties.VM_LEVEL.toUpperCase() === vmLevel
+    );
+    
+    if (!zonaFeature) {
+        alert(`Zona "${vmLevel}" no encontrada`);
+        return;
+    }
+    
+    // Decodificar código
+    const microCode = codigo6Digitos.substring(0, 4);
+    const nanoCode = codigo6Digitos.substring(4, 6);
+    
+    const ALFABETO = "23456789BCDFGHJKLMNPQRSTVWXYZ";
+    
+    // Decodificar micro
+    let microNum = 0;
+    for (let i = 0; i < 4; i++) {
+        const indice = ALFABETO.indexOf(microCode.charAt(i));
+        if (indice === -1) {
+            alert(`Carácter inválido en micro: ${microCode.charAt(i)}`);
+            return;
+        }
+        microNum = microNum * 30 + indice;
+    }
+    
+    const microX = Math.floor(microNum / 100);
+    const microY = microNum % 100;
+    
+    // Decodificar nano
+    let nanoNum = 0;
+    for (let i = 0; i < 2; i++) {
+        const indice = ALFABETO.indexOf(nanoCode.charAt(i));
+        if (indice === -1) {
+            alert(`Carácter inválido en nano: ${nanoCode.charAt(i)}`);
+            return;
+        }
+        nanoNum = nanoNum * 30 + indice;
+    }
+    
+    const nanoX = Math.floor(nanoNum / 100);
+    const nanoY = nanoNum % 100;
+    
+    // Validar rangos
+    if (microX >= 24 || microY >= 24 || nanoX >= 25 || nanoY >= 25) {
+        alert("Código fuera de rango válido");
+        return;
+    }
+    
+    // Calcular posición dentro de la zona
+    const zonaGeoJSON = L.geoJSON(zonaFeature);
+    const bounds = zonaGeoJSON.getBounds();
+    
+    const zonaWidth = bounds.getEast() - bounds.getWest();
+    const zonaHeight = bounds.getNorth() - bounds.getSouth();
+    
+    const microWidth = zonaWidth / 24;
+    const microHeight = zonaHeight / 24;
+    const nanoWidth = microWidth / 25;
+    const nanoHeight = microHeight / 25;
+    
+    // Posición centro de la celda nano
+    const lngCentro = bounds.getWest() + 
+                     (microX * microWidth) + 
+                     (nanoX * nanoWidth) + 
+                     (nanoWidth / 2);
+    
+    const latCentro = bounds.getNorth() - 
+                     (microY * microHeight) - 
+                     (nanoY * nanoHeight) - 
+                     (nanoHeight / 2);
+    
+    // Centrar mapa
+    mymap.setView([latCentro, lngCentro], 19);
+    
+    // Resaltar zona
+    L.geoJSON(zonaFeature, {
+        style: {
+            color: '#ff9800',
+            weight: 3,
+            fillColor: '#ff9800',
+            fillOpacity: 0.2,
+            className: 'highlighted-polygon'
+        }
+    }).addTo(selectionLayer);
+    
+    // Resaltar celda nano
+    const lat1 = bounds.getNorth() - (microY * microHeight) - (nanoY * nanoHeight);
+    const lng1 = bounds.getWest() + (microX * microWidth) + (nanoX * nanoWidth);
+    const lat2 = lat1 - nanoHeight;
+    const lng2 = lng1 + nanoWidth;
+    
+    L.rectangle([[lat1, lng1], [lat2, lng2]], {
+        color: '#e74c3c',
+        weight: 4,
+        fillColor: '#e74c3c',
+        fillOpacity: 0.6,
+        className: 'highlighted-polygon'
+    }).addTo(selectionLayer);
+    
+    // Texto dentro
+    L.marker([latCentro, lngCentro], {
+        icon: L.divIcon({
+            className: 'nano-label-inside',
+            html: `<div>${nanoCode}</div>`,
+            iconSize: [40, 20],
+            iconAnchor: [20, 10]
+        }),
+        zIndexOffset: 1000
+    }).addTo(selectionLayer);
+    
+    // Mostrar popup
+    setTimeout(() => {
+        L.popup({ className: 'nano-popup' })
+            .setLatLng([latCentro, lngCentro])
+            .setContent(`
+                <div style="text-align:center; padding: 10px; max-width: 250px;">
+                    <div style="font-size: 12px; color: #1976d2; margin-bottom: 8px; font-weight: bold;">
+                        🔍 CÓDIGO POSTAL ENCONTRADO
+                    </div>
+                    
+                    <div class="codigo-globo" style="margin: 10px 0; font-size: 16px; letter-spacing: 1px;">
+                        ${input}
+                    </div>
+                    
+                    <div style="font-size: 10px; color: #495057; margin: 8px 0; padding: 8px; background: #f8f9fa; border-radius: 5px; text-align: left;">
+                        <strong>Zona:</strong> ${vmLevel}<br>
+                        <strong>Provincia:</strong> ${zonaFeature.properties.PROV_NOMB || 'N/A'}<br>
+                        <strong>Posición:</strong> Micro(${microX},${microY}) Nano(${nanoX},${nanoY})
+                    </div>
+                    
+                    <div style="font-size: 10px; color: #495057; margin: 6px 0; padding: 6px; background: #f8f9fa; border-radius: 4px; font-family: monospace;">
+                        GPS: ${latCentro.toFixed(6)}, ${lngCentro.toFixed(6)}
+                    </div>
+                    
+                    <div style="display: flex; gap: 8px; justify-content: center; margin-top: 12px; flex-wrap: wrap;">
+                        <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${latCentro},${lngCentro}')">
+                            📍 MAPS
+                        </button>
+                        <button class="btn-ws" onclick="window.open('https://wa.me/?text=${encodeURIComponent(`📍 Código Postal: ${input}\\n📍 ${zonaFeature.properties.PROV_NOMB || ''}\\n🌐 GPS: ${latCentro.toFixed(6)}, ${lngCentro.toFixed(6)}`)}')">
+                            💬 WS
+                        </button>
+                    </div>
+                </div>
+            `)
+            .openOn(mymap);
+    }, 500);
+}
+
+// ==============================================
+// 3. BUSCAR POR COORDENADAS
+// ==============================================
+
+function buscarPorCoordenadas(input) {
+    console.log("📍 BUSCANDO POR COORDENADAS:", input);
+    
+    const coords = input.split(',');
+    if (coords.length !== 2) {
+        alert("Formato inválido. Usa: latitud, longitud");
+        return;
+    }
+    
+    const lat = parseFloat(coords[0].trim());
+    const lng = parseFloat(coords[1].trim());
+    
+    if (isNaN(lat) || isNaN(lng)) {
+        alert("Coordenadas inválidas");
+        return;
+    }
+    
+    // Centrar mapa
+    mymap.setView([lat, lng], 16);
+    
+    // Marcar posición
+    L.circleMarker([lat, lng], {
+        radius: 8,
+        color: '#e74c3c',
+        fillColor: '#e74c3c',
+        fillOpacity: 0.8,
+        weight: 2
+    }).addTo(selectionLayer);
+    
+    // Generar códigos
+    const vmLevel = obtenerVMLEVEL({lat: lat, lng: lng}) || 'SINVM';
+    const panamaCode = generarPanamaCode(lat, lng);
+    const codigos = generarCodigoPostal(lat, lng, vmLevel);
+    
+    // Mostrar popup
+    setTimeout(() => {
+        let contenido = `
+            <div style="text-align:center; padding: 10px; max-width: 250px;">
+                <div style="font-size: 12px; color: #1976d2; margin-bottom: 8px; font-weight: bold;">
+                    📍 COORDENADAS
+                </div>
+                <div style="font-size: 10px; color: #495057; margin: 8px 0; padding: 8px; background: #f8f9fa; border-radius: 5px; font-family: monospace;">
+                    ${lat.toFixed(6)}, ${lng.toFixed(6)}
+                </div>`;
+        
+        if (panamaCode) {
+            contenido += `
+                <div style="font-size: 11px; color: #e74c3c; margin: 8px 0; padding: 8px; background: #fde8e8; border-radius: 5px; font-weight: bold;">
+                    🔑 PanamaCode:<br>${panamaCode}
+                </div>`;
+        }
+        
+        if (codigos) {
+            contenido += `
+                <div style="font-size: 11px; color: #28a745; margin: 8px 0; padding: 8px; background: #d4edda; border-radius: 5px;">
+                    <strong>📍 Código Postal:</strong><br>${codigos.codigoPostal}
+                </div>`;
+        }
+        
+        contenido += `
+                <div style="display: flex; gap: 8px; justify-content: center; margin-top: 12px;">
+                    <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${lat},${lng}')">
+                        📍 MAPS
+                    </button>
+                    <button class="btn-ws" onclick="window.open('https://wa.me/?text=${encodeURIComponent(`📍 GPS: ${lat.toFixed(6)}, ${lng.toFixed(6)}\\n📍 PanamaCode: ${panamaCode || 'N/A'}\\n📍 Código Postal: ${codigos ? codigos.codigoPostal : 'N/A'}`)}')">
+                        💬 WS
+                    </button>
+                </div>
+            </div>`;
+        
+        L.popup({ className: 'search-popup' })
+            .setLatLng([lat, lng])
+            .setContent(contenido)
+            .openOn(mymap);
+    }, 300);
+}
+
+// ==============================================
+// FUNCIONES AUXILIARES
+// ==============================================
+
+function decodificarPanamaCode(panamaCode) {
+    const ALFABETO = "23456789BCDFGHJKLMNPQRSTVWXYZ";
+    const { ORIGIN_LAT, ORIGIN_LNG, RES_MACRO, RES_MICRO, RES_NANO } = GRID_CONFIG;
+    
+    // Separar componentes
+    const macroCode = panamaCode.substring(0, 2);
+    const microCode = panamaCode.substring(2, 6);
+    const nanoCode = panamaCode.substring(6, 8);
+    
+    // Decodificar macro
+    let macroNum = 0;
+    for (let i = 0; i < 2; i++) {
+        const index = ALFABETO.indexOf(macroCode.charAt(i));
+        if (index === -1) return null;
+        macroNum = macroNum * 30 + index;
+    }
+    const macroX = Math.floor(macroNum / 100);
+    const macroY = macroNum % 100;
+    
+    // Decodificar micro
+    let microNum = 0;
+    for (let i = 0; i < 4; i++) {
+        const index = ALFABETO.indexOf(microCode.charAt(i));
+        if (index === -1) return null;
+        microNum = microNum * 30 + index;
+    }
+    const microX = Math.floor(microNum / 100);
+    const microY = microNum % 100;
+    
+    // Decodificar nano
+    let nanoNum = 0;
+    for (let i = 0; i < 2; i++) {
+        const index = ALFABETO.indexOf(nanoCode.charAt(i));
+        if (index === -1) return null;
+        nanoNum = nanoNum * 30 + index;
+    }
+    const nanoX = Math.floor(nanoNum / 100);
+    const nanoY = nanoNum % 100;
+    
+    // Calcular coordenadas del CENTRO de la celda nano
+    const lat = ORIGIN_LAT - 
+                (macroY * RES_MACRO) - 
+                (microY * RES_MICRO) - 
+                (nanoY * RES_NANO) - 
+                (RES_NANO / 2);
+    
+    const lng = ORIGIN_LNG + 
+                (macroX * RES_MACRO) + 
+                (microX * RES_MICRO) + 
+                (nanoX * RES_NANO) + 
+                (RES_NANO / 2);
+    
+    return { lat, lng, macroX, macroY, microX, microY, nanoX, nanoY };
+}
+
+function copiarTexto(texto) {
+    navigator.clipboard.writeText(texto).then(() => {
+        alert(`Copiado: ${texto}`);
+    }).catch(err => {
+        console.error('Error al copiar:', err);
+    });
+}
+
+// ==============================================
+// MANEJAR TECLA ENTER
+// ==============================================
+
 document.getElementById('search-input').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
         document.getElementById('search-btn').click();
@@ -1540,6 +1598,7 @@ function decodificarConVerificacion(codigo, nombre) {
 </script>
 </body>
 </html>
+
 
 
 
