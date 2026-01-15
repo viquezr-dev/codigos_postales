@@ -573,7 +573,7 @@ function dibujarGridFisico() {
 }
 
 // ==============================================
-// BUSCADOR CON DECODIFICACIÓN REAL
+// BUSCADOR USANDO estafetas.geojson (ZONAS REALES)
 // ==============================================
 
 document.getElementById('search-btn').addEventListener('click', () => {
@@ -584,35 +584,60 @@ document.getElementById('search-btn').addEventListener('click', () => {
         return;
     }
     
-    // LIMPIAR SELECCIONES ANTERIORES
+    // LIMPIAR SELECCIÓN ANTERIOR
     selectionLayer.clearLayers();
     
-    // CASO: CÓDIGO POSTAL (Formato: Zona-Código)
+    // FORMATO: VM_LEVEL-Código6Digitos (ej: K4299-222KQ2)
     if (input.includes('-')) {
         const partes = input.split('-');
+        const vmLevel = partes[0]; // "K4299"
+        const codigo6Digitos = partes[1]; // "222KQ2"
         
-        if (partes.length !== 2) {
-            alert("Formato incorrecto. Usa: Zona-Código\nEj: A6299-222KQ2");
-            return;
-        }
-        
-        const zonaPostal = partes[0];
-        const codigo6Digitos = partes[1];
-        
-        if (codigo6Digitos.length !== 6) {
+        if (!codigo6Digitos || codigo6Digitos.length !== 6) {
             alert("El código debe tener 6 dígitos\nEj: 222KQ2");
             return;
         }
         
-        // ==============================================
-        // DECODIFICAR EL CÓDIGO PARA ENCONTRAR POSICIÓN
-        // ==============================================
+        // 1. BUSCAR LA ZONA POR VM_LEVEL
+        if (!rawZonas || !rawZonas.features) {
+            alert("Las zonas no están cargadas aún");
+            return;
+        }
         
-        // Los 6 dígitos son: Micro(4 chars) + Nano(2 chars)
+        const zonaFeature = rawZonas.features.find(f => 
+            f.properties && 
+            f.properties.VM_LEVEL && 
+            f.properties.VM_LEVEL.toUpperCase() === vmLevel
+        );
+        
+        if (!zonaFeature) {
+            alert(`Zona postal "${vmLevel}" no encontrada`);
+            
+            // Mostrar zonas disponibles para ayudar
+            const zonasDisponibles = rawZonas.features
+                .filter(f => f.properties && f.properties.VM_LEVEL)
+                .map(f => f.properties.VM_LEVEL)
+                .slice(0, 10)
+                .join(", ");
+                
+            console.log("Zonas disponibles:", zonasDisponibles);
+            return;
+        }
+        
+        console.log("Zona encontrada:", zonaFeature.properties.VM_LEVEL, zonaFeature.properties.PROV_NOMB);
+        
+        // 2. OBTENER EL BOUNDS (LÍMITES) DE LA ZONA
+        const zonaGeoJSON = L.geoJSON(zonaFeature);
+        const bounds = zonaGeoJSON.getBounds();
+        
+        // Calcular centro aproximado de la zona
+        const centroZona = bounds.getCenter();
+        
+        // 3. DECODIFICAR EL CÓDIGO DE 6 DÍGITOS PARA POSICIÓN RELATIVA
         const microCode = codigo6Digitos.substring(0, 4); // "222K"
-        const nanoCode = codigo6Digitos.substring(4, 6);  // "Q2"
+        const nanoCode = codigo6Digitos.substring(4, 6); // "Q2"
         
-        // DECODIFICAR Micro (base30 a número)
+        // Decodificar micro (base30 a número)
         let microNum = 0;
         for (let i = 0; i < 4; i++) {
             const char = microCode.charAt(i);
@@ -627,7 +652,7 @@ document.getElementById('search-btn').addEventListener('click', () => {
         const microX = Math.floor(microNum / 100);
         const microY = microNum % 100;
         
-        // DECODIFICAR Nano (base30 a número)
+        // Decodificar nano (base30 a número)
         let nanoNum = 0;
         for (let i = 0; i < 2; i++) {
             const char = nanoCode.charAt(i);
@@ -648,71 +673,51 @@ document.getElementById('search-btn').addEventListener('click', () => {
             return;
         }
         
-        console.log(`Decodificado: Micro(${microX},${microY}) Nano(${nanoX},${nanoY})`);
+        // 4. CALCULAR POSICIÓN DENTRO DE LA ZONA
+        // Usar el bounds de la zona como referencia
+        const zonaWidth = bounds.getEast() - bounds.getWest();
+        const zonaHeight = bounds.getNorth() - bounds.getSouth();
         
-        // ==============================================
-        // ENCONTRAR LA MACRO QUE CORRESPONDE A LA ZONA POSTAL
-        // ==============================================
+        // Cada micro es 1/24 del área de la zona
+        const microWidth = zonaWidth / 24;
+        const microHeight = zonaHeight / 24;
         
-        // Para esto necesitamos un mapeo Zona Postal → Macro X,Y
-        // Por ahora, usaremos un cálculo basado en el código de zona
+        // Cada nano es 1/25 de un micro
+        const nanoWidth = microWidth / 25;
+        const nanoHeight = microHeight / 25;
         
-        // EJEMPLO: Si la zona es A6299, podemos extraer números
-        const zonaMatch = zonaPostal.match(/\d+/);
-        let zonaNum = 0;
-        if (zonaMatch) {
-            zonaNum = parseInt(zonaMatch[0]) % 100; // Tomar últimos 2 dígitos
-        }
+        // Calcular posición absoluta dentro de la zona
+        const lngPos = bounds.getWest() + 
+                      (microX * microWidth) + 
+                      (nanoX * nanoWidth) + 
+                      (nanoWidth / 2); // Centro del nano
         
-        // Calcular macro aproximada basada en zona
-        // Esto es TEMPORAL - en producción necesitarías una base de datos
-        const macroX = 40 + (zonaNum % 10); // Ejemplo
-        const macroY = 15 + Math.floor(zonaNum / 10); // Ejemplo
+        const latPos = bounds.getNorth() - 
+                      (microY * microHeight) - 
+                      (nanoY * nanoHeight) - 
+                      (nanoHeight / 2); // Centro del nano
         
-        // Asegurar que esté dentro de los límites
-        const macroXFinal = Math.min(Math.max(macroX, 0), GRID_CONFIG.MACROS_X - 1);
-        const macroYFinal = Math.min(Math.max(macroY, 0), GRID_CONFIG.MACROS_Y - 1);
+        // 5. CENTRAR EN LA POSICIÓN CALCULADA
+        mymap.setView([latPos, lngPos], 19);
         
-        // ==============================================
-        // CALCULAR COORDENADAS EXACTAS
-        // ==============================================
+        // 6. RESALTAR LA ZONA COMPLETA (para referencia)
+        L.geoJSON(zonaFeature, {
+            style: {
+                color: '#ff9800',
+                weight: 3,
+                fillColor: '#ff9800',
+                fillOpacity: 0.2,
+                className: 'highlighted-polygon'
+            }
+        }).addTo(selectionLayer);
         
-        const { ORIGIN_LAT, ORIGIN_LNG, RES_MACRO, RES_MICRO, RES_NANO } = GRID_CONFIG;
+        // 7. RESALTAR LA CELDA NANO ESPECÍFICA
+        const nanoLat1 = bounds.getNorth() - (microY * microHeight) - (nanoY * nanoHeight);
+        const nanoLng1 = bounds.getWest() + (microX * microWidth) + (nanoX * nanoWidth);
+        const nanoLat2 = nanoLat1 - nanoHeight;
+        const nanoLng2 = nanoLng1 + nanoWidth;
         
-        // Coordenadas del CENTRO de la celda nano
-        const latCentro = ORIGIN_LAT - 
-                         (macroYFinal * RES_MACRO) - 
-                         (microY * RES_MICRO) - 
-                         ((nanoY + 0.5) * RES_NANO);
-        
-        const lngCentro = ORIGIN_LNG + 
-                         (macroXFinal * RES_MACRO) + 
-                         (microX * RES_MICRO) + 
-                         ((nanoX + 0.5) * RES_NANO);
-        
-        // Coordenadas de la ESQUINA de la celda nano
-        const latEsquina = ORIGIN_LAT - 
-                          (macroYFinal * RES_MACRO) - 
-                          (microY * RES_MICRO) - 
-                          (nanoY * RES_NANO);
-        
-        const lngEsquina = ORIGIN_LNG + 
-                          (macroXFinal * RES_MACRO) + 
-                          (microX * RES_MICRO) + 
-                          (nanoX * RES_NANO);
-        
-        const lat2 = latEsquina - RES_NANO;
-        const lng2 = lngEsquina + RES_NANO;
-        
-        // ==============================================
-        // CENTRAR Y MOSTRAR EN EL MAPA
-        // ==============================================
-        
-        // Centrar en la posición exacta
-        mymap.setView([latCentro, lngCentro], 19);
-        
-        // Resaltar la celda nano EXACTA
-        const rect = L.rectangle([[latEsquina, lngEsquina], [lat2, lng2]], {
+        L.rectangle([[nanoLat1, nanoLng1], [nanoLat2, nanoLng2]], {
             color: '#e74c3c',
             weight: 4,
             fillColor: '#e74c3c',
@@ -720,8 +725,8 @@ document.getElementById('search-btn').addEventListener('click', () => {
             className: 'highlighted-polygon'
         }).addTo(selectionLayer);
         
-        // Agregar texto dentro de la casilla
-        const textMarker = L.marker([latCentro, lngCentro], {
+        // 8. AGREGAR TEXTO DENTRO DE LA CASILLA
+        L.marker([latPos, lngPos], {
             icon: L.divIcon({
                 className: 'nano-label-inside',
                 html: `<div>${nanoCode}</div>`,
@@ -731,12 +736,12 @@ document.getElementById('search-btn').addEventListener('click', () => {
             zIndexOffset: 1000
         }).addTo(selectionLayer);
         
-        // Mostrar popup informativo
+        // 9. MOSTRAR POPUP INFORMATIVO
         setTimeout(() => {
             L.popup({ className: 'nano-popup' })
-                .setLatLng([latCentro, lngCentro])
+                .setLatLng([latPos, lngPos])
                 .setContent(`
-                    <div style="text-align:center; padding: 8px; max-width: 190px;">
+                    <div style="text-align:center; padding: 8px; max-width: 200px;">
                         <div style="font-size: 11px; color: #1976d2; margin-bottom: 5px; font-weight: bold;">
                             🔍 CÓDIGO POSTAL ENCONTRADO
                         </div>
@@ -745,22 +750,26 @@ document.getElementById('search-btn').addEventListener('click', () => {
                             ${input}
                         </div>
                         
-                        <div style="font-size: 9px; color: #495057; margin: 4px 0; padding: 4px; background: #f8f9fa; border-radius: 3px; font-family: monospace;">
-                            GPS: ${latCentro.toFixed(6)}, ${lngCentro.toFixed(6)}
+                        <div style="font-size: 10px; color: #495057; margin: 4px 0; padding: 4px; background: #f8f9fa; border-radius: 3px; text-align: left;">
+                            <strong>Zona:</strong> ${vmLevel}<br>
+                            <strong>Provincia:</strong> ${zonaFeature.properties.PROV_NOMB || 'N/A'}<br>
+                            <strong>Posición:</strong> Micro(${microX},${microY}) Nano(${nanoX},${nanoY})
                         </div>
                         
-                        <div style="font-size: 9px; color: #1976d2; margin: 4px 0; padding: 3px; background: #e3f2fd; border-radius: 3px;">
-                            Posición: Macro(${macroXFinal},${macroYFinal}) Micro(${microX},${microY}) Nano(${nanoX},${nanoY})
+                        <div style="font-size: 9px; color: #495057; margin: 4px 0; padding: 4px; background: #f8f9fa; border-radius: 3px; font-family: monospace;">
+                            GPS: ${latPos.toFixed(6)}, ${lngPos.toFixed(6)}
                         </div>
                         
                         <div style="display: flex; gap: 5px; justify-content: center; margin-top: 6px;">
-                            <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${latCentro},${lngCentro}')">📍 MAPS</button>
-                            <button class="btn-ws" onclick="window.open('https://wa.me/?text=${encodeURIComponent(`📍 Código Postal: ${input}\nGPS: ${latCentro.toFixed(6)}, ${lngCentro.toFixed(6)}`)}')">💬 WS</button>
+                            <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${latPos},${lngPos}')">📍 MAPS</button>
+                            <button class="btn-ws" onclick="window.open('https://wa.me/?text=${encodeURIComponent(`📍 Código Postal: ${input}\\n📍 ${zonaFeature.properties.PROV_NOMB || ''}\\n🌐 GPS: ${latPos.toFixed(6)}, ${lngPos.toFixed(6)}`)}')">💬 WS</button>
                         </div>
                     </div>
                 `)
                 .openOn(mymap);
         }, 500);
+        
+        return;
     }
     
     // CASO: COORDENADAS
@@ -780,22 +789,36 @@ document.getElementById('search-btn').addEventListener('click', () => {
                 weight: 2
             }).addTo(selectionLayer);
             
+            // Generar código postal desde coordenadas
+            const vmLevel = obtenerVMLEVEL({lat: lat, lng: lng}) || 'SINVM';
+            const codigos = generarCodigoPostal(lat, lng, vmLevel);
+            
             setTimeout(() => {
+                let contenido = `
+                    <div style="text-align:center; padding: 8px; max-width: 180px;">
+                        <div style="font-size: 11px; color: #1976d2; margin-bottom: 5px; font-weight: bold;">
+                            📍 COORDENADAS
+                        </div>
+                        <div style="font-size: 9px; color: #495057; margin: 4px 0; padding: 4px; background: #f8f9fa; border-radius: 3px; font-family: monospace;">
+                            ${lat.toFixed(6)}, ${lng.toFixed(6)}
+                        </div>`;
+                
+                if (codigos) {
+                    contenido += `
+                        <div style="font-size: 10px; color: #28a745; margin: 4px 0; padding: 4px; background: #d4edda; border-radius: 3px;">
+                            <strong>Código Postal:</strong><br>${codigos.codigoPostal}
+                        </div>`;
+                }
+                
+                contenido += `
+                        <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${lat},${lng}')" style="padding: 5px 10px; font-size: 10px;">
+                            📍 MAPS
+                        </button>
+                    </div>`;
+                
                 L.popup()
                     .setLatLng([lat, lng])
-                    .setContent(`
-                        <div style="text-align:center; padding: 8px; max-width: 180px;">
-                            <div style="font-size: 11px; color: #1976d2; margin-bottom: 5px; font-weight: bold;">
-                                📍 COORDENADAS
-                            </div>
-                            <div style="font-size: 9px; color: #495057; margin: 4px 0; padding: 4px; background: #f8f9fa; border-radius: 3px; font-family: monospace;">
-                                ${lat.toFixed(6)}, ${lng.toFixed(6)}
-                            </div>
-                            <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${lat},${lng}')" style="padding: 5px 10px; font-size: 10px;">
-                                📍 MAPS
-                            </button>
-                        </div>
-                    `)
+                    .setContent(contenido)
                     .openOn(mymap);
             }, 300);
         } else {
@@ -803,13 +826,62 @@ document.getElementById('search-btn').addEventListener('click', () => {
         }
     }
     
-    // CASO: FORMATO NO RECONOCIDO
-    else {
-        alert("Formato no reconocido. Usa:\n\n" +
-              "• Código postal: ZonaPostal-Código6Digitos\n" +
-              "  Ejemplo: A6299-222KQ2\n\n" +
-              "• Coordenadas: latitud, longitud\n" +
-              "  Ejemplo: 8.123456, -80.123456");
+    // CASO: SOLO VM_LEVEL (sin código)
+    else if (rawZonas) {
+        // Buscar si es un VM_LEVEL válido
+        const zonaFeature = rawZonas.features.find(f => 
+            f.properties && 
+            f.properties.VM_LEVEL && 
+            f.properties.VM_LEVEL.toUpperCase() === input
+        );
+        
+        if (zonaFeature) {
+            const zonaGeoJSON = L.geoJSON(zonaFeature);
+            mymap.fitBounds(zonaGeoJSON.getBounds());
+            
+            selectionLayer.clearLayers();
+            L.geoJSON(zonaFeature, {
+                style: {
+                    color: '#ff9800',
+                    weight: 3,
+                    fillColor: '#ff9800',
+                    fillOpacity: 0.3,
+                    className: 'highlighted-polygon'
+                }
+            }).addTo(selectionLayer);
+            
+            const bounds = zonaGeoJSON.getBounds();
+            const centro = bounds.getCenter();
+            
+            setTimeout(() => {
+                L.popup()
+                    .setLatLng(centro)
+                    .setContent(`
+                        <div style="text-align:center; padding: 8px; max-width: 200px;">
+                            <div style="font-size: 11px; color: #1976d2; margin-bottom: 5px; font-weight: bold;">
+                                🗺️ ZONA POSTAL
+                            </div>
+                            <div style="font-size: 10px; color: #495057; margin: 4px 0; padding: 4px; background: #f8f9fa; border-radius: 3px;">
+                                <strong>VM_LEVEL:</strong> ${input}<br>
+                                <strong>Provincia:</strong> ${zonaFeature.properties.PROV_NOMB || 'N/A'}<br>
+                                <strong>Área:</strong> ${(zonaFeature.properties.AREA / 1000000).toFixed(2)} km²
+                            </div>
+                            <button class="btn-nav" onclick="mymap.setZoom(17)" style="padding: 5px 10px; font-size: 10px;">
+                                🔍 Acercar
+                            </button>
+                        </div>
+                    `)
+                    .openOn(mymap);
+            }, 300);
+        } else {
+            alert("Formato no reconocido. Usa:\n\n" +
+                  "• Código postal completo: VM_LEVEL-Código6Digitos\n" +
+                  "  Ejemplo: K4299-222KQ2\n\n" +
+                  "• Solo VM_LEVEL (zona)\n" +
+                  "  Ejemplo: K4299\n\n" +
+                  "• Coordenadas: latitud, longitud\n" +
+                  "  Ejemplo: 8.123456, -80.123456");
+        }
     }
 });
 
@@ -1323,4 +1395,5 @@ console.log("✅ Sistema Postal - VERSIÓN MEJORADA");
 </script>
 </body>
 </html>
+
 
