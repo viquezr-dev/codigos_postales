@@ -1,28 +1,36 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <title>SISTEMA POSTAL PANAMÁ - RESTRICCIÓN TERRITORIAL</title>
+    <title>SISTEMA POSTAL PANAMÁ - OSM V11</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <style>
-        body, html, #mapid { width: 100%; height: 100%; margin: 0; padding: 0; background: #f4f4f4; }
+        body, html, #mapid { width: 100%; height: 100%; margin: 0; padding: 0; background: #ddd; }
+        
+        /* Buscador Superior */
         .search-container {
             position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
             z-index: 5000; display: flex; gap: 5px; background: white;
-            padding: 8px; border-radius: 40px; box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            padding: 8px; border-radius: 40px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
             width: 90%; max-width: 450px;
         }
         #search-input { flex: 1; border: none; padding: 8px 15px; outline: none; font-family: monospace; font-size: 16px; text-transform: uppercase; }
-        #search-btn { background: #c0392b; color: white; border: none; padding: 8px 20px; border-radius: 30px; cursor: pointer; font-weight: bold; }
+        #search-btn { background: #e74c3c; color: white; border: none; padding: 8px 20px; border-radius: 30px; cursor: pointer; font-weight: bold; }
         
-        .leaflet-tooltip.watermark-tooltip { background: transparent!important; border: none!important; box-shadow: none!important; color: rgba(0,0,0,0.4); font-weight: bold; font-family: monospace; }
+        /* Estilos de Etiquetas */
+        .leaflet-tooltip.watermark-tooltip { background: transparent!important; border: none!important; box-shadow: none!important; color: rgba(0,0,0,0.5); font-weight: bold; font-family: monospace; text-shadow: 1px 1px 0px white; }
         .label-macro { color: #1a73e8!important; font-size: 15px; }
         .label-micro { color: #e67e22!important; font-size: 11px; }
-        .nano-selection-label { background: transparent!important; border: none!important; color: #000!important; font-weight: 900; font-family: monospace; font-size: 14px; }
-        .codigo-final { background: #1a2a6c; color: white; padding: 10px; border-radius: 6px; font-size: 18px; font-weight: bold; text-align: center; }
+        .nano-selection-label { background: transparent!important; border: none!important; color: #000!important; font-weight: 900; font-family: monospace; font-size: 14px; text-shadow: 1px 1px 0px white; }
+        
+        /* Estilo del Popup con X de cierre */
+        .codigo-final { 
+            background: #1a2a6c; color: white; padding: 12px; border-radius: 6px; 
+            font-size: 18px; font-weight: bold; text-align: center; margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -35,7 +43,6 @@
 <div id="mapid"></div>
 
 <script>
-// --- CONFIGURACIÓN Y LÍMITES ---
 const ORIGIN = { lat: 10.0, lng: -83.0 };
 const PANAMA_LIMITS = { N: 10.0, S: 7.0, W: -83.0, E: -77.0 };
 const PARAMS = {
@@ -44,14 +51,17 @@ const PARAMS = {
     MAX_Y_GLOBAL: 200 
 };
 
+// Mapa con OSM
 const mymap = L.map('mapid', { 
     zoomControl: false, 
     zoomSnap: 0.1,
-    maxBounds: [[6.5, -83.5], [10.5, -76.5]], // Limita el desplazamiento físico del mapa
+    maxBounds: [[6.5, -83.5], [10.5, -76.5]],
     maxBoundsViscosity: 1.0 
 }).setView([8.5, -80.0], 8);
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mymap);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
+}).addTo(mymap);
 
 const layerMacro = L.layerGroup().addTo(mymap);
 const layerMicro = L.layerGroup().addTo(mymap);
@@ -69,7 +79,7 @@ function decode(s) {
     let n = 0;
     for (let i = 0; i < s.length; i++) {
         let charIndex = PARAMS.ALFA.indexOf(s[i].toUpperCase());
-        if (charIndex === -1) throw new Error("Carácter inválido");
+        if (charIndex === -1) throw new Error();
         n = n * 30 + charIndex;
     }
     return n;
@@ -82,27 +92,22 @@ function getSnappedCoords(lat, lng, step) {
 }
 
 function getInfo(lat, lng) {
-    // Restricción de clics fuera de Panamá
     if (lat > PANAMA_LIMITS.N || lat < PANAMA_LIMITS.S || lng < PANAMA_LIMITS.W || lng > PANAMA_LIMITS.E) return null;
-    
     let mx = Math.floor((lng - ORIGIN.lng) / PARAMS.RES_MACRO);
     let my = Math.floor((ORIGIN.lat - lat) / PARAMS.RES_MACRO);
     let macroID = (mx * PARAMS.MAX_Y_GLOBAL) + my;
-
     let microX = Math.floor(((lng - ORIGIN.lng) % PARAMS.RES_MACRO) / PARAMS.RES_MICRO);
     let microY = Math.floor(((ORIGIN.lat - lat) % PARAMS.RES_MACRO) / PARAMS.RES_MICRO);
     let microID = (microX * 24) + microY;
-
     let n_rem_x = ((lng - ORIGIN.lng) % PARAMS.RES_MACRO) % PARAMS.RES_MICRO;
     let n_rem_y = ((ORIGIN.lat - lat) % PARAMS.RES_MACRO) % PARAMS.RES_MICRO;
     let nanoX = Math.floor(n_rem_x / PARAMS.RES_NANO);
     let nanoY = Math.floor(n_rem_y / PARAMS.RES_NANO);
     let nanoID = (nanoX * 25) + nanoY;
-
     return { macro: encode(macroID, 3), micro: encode(microID, 3), nano: encode(nanoID, 2) };
 }
 
-// --- RENDERIZADO ---
+// --- RENDER ---
 function render() {
     layerMacro.clearLayers(); layerMicro.clearLayers(); layerNano.clearLayers();
     const z = mymap.getZoom();
@@ -119,7 +124,7 @@ function drawGridLevel(step, layer, labelClass, weight, color, opacity) {
         if (lo < PANAMA_LIMITS.W) continue;
         for (let la = start.lat; la < b.getNorth() + step && la < PANAMA_LIMITS.N; la += step) {
             if (la < PANAMA_LIMITS.S) continue;
-            if (count++ > 1500) return;
+            if (count++ > 1200) return;
             let data = getInfo(la + step/2, lo + step/2);
             if (!data) continue;
             L.rectangle([[la, lo], [la + step, lo + step]], { color: color, weight: weight, fill: false, opacity: opacity, interactive: false }).addTo(layer);
@@ -134,51 +139,61 @@ function drawGridLevel(step, layer, labelClass, weight, color, opacity) {
     }
 }
 
+// --- SELECCIÓN Y PIN ---
 function seleccionarCuadro(lat, lng, codFull, nanoPart) {
     selectionLayer.clearLayers();
-    const step = (mymap.getZoom() >= 17.5) ? PARAMS.RES_NANO : (mymap.getZoom() >= 14 ? PARAMS.RES_MICRO : PARAMS.RES_MACRO);
+    const step = PARAMS.RES_NANO; // Siempre marcamos nivel Nano en búsqueda
     const snap = getSnappedCoords(lat, lng, step);
-    L.rectangle([[snap.lat, snap.lng], [snap.lat + step, snap.lng + step]], { color: '#f1c40f', weight: 4, fillOpacity: 0.5, fillColor: '#f1c40f' }).addTo(selectionLayer);
+
+    // Cuadro amarillo
+    L.rectangle([[snap.lat, snap.lng], [snap.lat + step, snap.lng + step]], { 
+        color: '#f1c40f', weight: 4, fillOpacity: 0.5, fillColor: '#f1c40f' 
+    }).addTo(selectionLayer);
     
-    if (mymap.getZoom() >= 17.5) {
-        L.marker([snap.lat + step/2, snap.lng + step/2], { icon: L.divIcon({className: 'inv'}) }).bindTooltip(nanoPart, { permanent: true, direction: 'center', className: 'nano-selection-label' }).addTo(selectionLayer);
-    }
+    // Texto Nano dentro
+    L.marker([snap.lat + step/2, snap.lng + step/2], { icon: L.divIcon({className: 'inv'}) })
+     .bindTooltip(nanoPart, { permanent: true, direction: 'center', className: 'nano-selection-label' })
+     .addTo(selectionLayer);
     
-    const redIcon = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+    // Pin Rojo
+    const redIcon = L.icon({ 
+        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+        iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34]
+    });
     L.marker([snap.lat + step/2, snap.lng + step/2], { icon: redIcon }).addTo(selectionLayer);
-    L.popup({ offset: [0, -35], closeButton: false }).setLatLng([snap.lat + step, snap.lng + step/2]).setContent(`<div class="codigo-final">${codFull}</div>`).openOn(mymap);
+
+    // Popup con botón de cerrar (X) habilitado por defecto
+    L.popup({ offset: [0, -35], closeButton: true }) // closeButton: true pone la X
+     .setLatLng([snap.lat + step, snap.lng + step/2])
+     .setContent(`<div class="codigo-final">${codFull}</div>`)
+     .openOn(mymap);
 }
 
-// --- MOTOR DE BÚSQUEDA RESTRINGIDA ---
+// --- BÚSQUEDA ---
 document.getElementById('search-btn').addEventListener('click', () => {
     const input = document.getElementById('search-input').value.toUpperCase().replace(/\s/g, '');
     const parts = input.split('-');
-    if (parts.length !== 3) { alert("Use el formato: XXX-XXX-XX"); return; }
+    if (parts.length !== 3) { alert("Formato: XXX-XXX-XX"); return; }
     
     try {
-        const idMacro = decode(parts[0]);
-        const idMicro = decode(parts[1]);
-        const idNano = decode(parts[2]);
-
-        const mx = Math.floor(idMacro / PARAMS.MAX_Y_GLOBAL);
-        const my = idMacro % PARAMS.MAX_Y_GLOBAL;
-        const mix = Math.floor(idMicro / 24);
-        const miy = idMicro % 24;
-        const nax = Math.floor(idNano / 25);
-        const nay = idNano % 25;
+        const idM = decode(parts[0]), idMi = decode(parts[1]), idN = decode(parts[2]);
+        const mx = Math.floor(idM / PARAMS.MAX_Y_GLOBAL), my = idM % PARAMS.MAX_Y_GLOBAL;
+        const mix = Math.floor(idMi / 24), miy = idMi % 24;
+        const nax = Math.floor(idN / 25), nay = idN % 25;
 
         const tLng = ORIGIN.lng + (mx * PARAMS.RES_MACRO) + (mix * PARAMS.RES_MICRO) + (nax * PARAMS.RES_NANO) + (PARAMS.RES_NANO/2);
         const tLat = ORIGIN.lat - (my * PARAMS.RES_MACRO) - (miy * PARAMS.RES_MICRO) - (nay * PARAMS.RES_NANO) - (PARAMS.RES_NANO/2);
 
-        // VALIDACIÓN TERRITORIAL
         if (tLat > PANAMA_LIMITS.N || tLat < PANAMA_LIMITS.S || tLng < PANAMA_LIMITS.W || tLng > PANAMA_LIMITS.E) {
-            alert("ERROR: El código ingresado está fuera del territorio de Panamá.");
-            return;
+            alert("Fuera de Panamá"); return;
         }
 
+        // Primero volamos, luego marcamos para evitar que el pin se pierda
         mymap.flyTo([tLat, tLng], 18);
-        setTimeout(() => seleccionarCuadro(tLat, tLng, input, parts[2]), 500);
-    } catch(e) { alert("Código no reconocido o formato erróneo."); }
+        mymap.once('moveend', () => {
+            seleccionarCuadro(tLat, tLng, input, parts[2]);
+        });
+    } catch(e) { alert("Código no reconocido"); }
 });
 
 mymap.on('click', (e) => {
