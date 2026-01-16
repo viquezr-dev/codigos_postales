@@ -51,12 +51,14 @@
 <div id="mapid"></div>
 
 <script>
-const ORIGIN = { lat: 10.0, lng: -83.0 };
-const PANAMA_LIMITS = { N: 10.0, S: 7.0, W: -83.0, E: -77.0 };
 const PARAMS = {
-    RES_MACRO: 0.1, RES_MICRO: 0.1 / 24, RES_NANO: (0.1 / 24) / 25,
+    RES_MACRO: 0.1, 
+    RES_MICRO: 0.1 / 24, 
+    RES_NANO: (0.1 / 24) / 25,
     ALFA: "23456789ABCDEFGHJKLMNPQRSTVWXYZ",
-    MAX_Y_MACRO: 30, MAX_Y_MICRO: 24, MAX_Y_NANO: 25
+    MAX_Y_MACRO: 100, 
+    MAX_Y_MICRO: 100, 
+    MAX_Y_NANO: 100
 };
 
 const mymap = L.map('mapid', { zoomControl: false, zoomSnap: 0.1 }).setView([8.5, -80.0], 8);
@@ -89,12 +91,18 @@ function getSnappedCoords(lat, lng, step) {
 }
 
 function getInfo(lat, lng) {
+    if (lat > PANAMA_LIMITS.N || lat < PANAMA_LIMITS.S || lng < PANAMA_LIMITS.W || lng > PANAMA_LIMITS.E) return null;
+    
+    // Calculamos la posición absoluta desde el origen
     let mx = Math.floor((lng - ORIGIN.lng) / PARAMS.RES_MACRO);
     let my = Math.floor((ORIGIN.lat - lat) / PARAMS.RES_MACRO);
+    
+    // El ID Macro ahora tiene un rango de 100 filas antes de saltar a la siguiente columna
+    let macroID = (mx * PARAMS.MAX_Y_MACRO) + my;
+
     let microX = Math.floor(((lng - ORIGIN.lng) % PARAMS.RES_MACRO) / PARAMS.RES_MICRO);
     let microY = Math.floor(((ORIGIN.lat - lat) % PARAMS.RES_MACRO) / PARAMS.RES_MICRO);
-    let nanoX = Math.floor((((lng - ORIGIN.lng) % PARAMS.RES_MACRO) % PARAMS.RES_MICRO) / PARAMS.RES_NANO);
-    let nanoY = Math.floor((((ORIGIN.lat - lat) % PARAMS.RES_MACRO) % PARAMS.RES_MICRO) / PARAMS.RES_NANO);
+    let microID = (microX * PARAMS.MAX_Y_MICRO) + microY;
     return { 
         macro: encode((mx * PARAMS.MAX_Y_MACRO) + my, 2), 
         micro: encode((microX * PARAMS.MAX_Y_MICRO) + microY, 3), 
@@ -204,3 +212,4 @@ render();
 <style>.inv { background: none; border: none; }</style>
 </body>
 </html>
+
