@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>SISTEMA POSTAL DE PANAMÁ - GRID DINÁMICO</title>
+    <title>SISTEMA POSTAL DE PANAMÁ - CORE V2</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
@@ -9,1083 +9,238 @@
         body, html, #mapid { width: 100%; height: 100%; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
         .map-title { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 4000; text-align: center; pointer-events: none; width: 90%; }
         .map-title h1 { margin: 0; font-size: 18px; color: #2c3e50; text-shadow: 0 0 5px white; font-weight: bold; }
-        .search-container { position: absolute; top: 15px; right: 10px; z-index: 5000; display: flex; background: white; padding: 5px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); width: 250px; }
+        .search-container { position: absolute; top: 15px; right: 10px; z-index: 5000; display: flex; background: white; padding: 5px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); width: 280px; }
         input#search-input { flex: 1; border: none; padding: 8px; outline: none; }
-        button#search-btn { background: #2c3e50; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; }
-        .leaflet-top.leaflet-right { top: 80px !important; }
-        .toggle-watermark { position: absolute; bottom: 30px; left: 10px; z-index: 5000; background: white; padding: 10px; border-radius: 5px; cursor: pointer; font-size: 11px; border: 1px solid #1a73e8; font-weight: bold; }
-        .watermark-label-fixed { background: none!important; border:none!important; color: #1a73e8!important; text-align: center; pointer-events: none!important; text-shadow: 1px 1px 1px white; }
-        .micro-label-fixed { background: none!important; border:none!important; color: #3498db!important; text-align: center; pointer-events: none!important; text-shadow: 1px 1px 1px white; font-size: 9px; }
-        .nano-label-fixed { background: none!important; border:none!important; color: #2980b9!important; text-align: center; pointer-events: none!important; text-shadow: 1px 1px 1px white; font-size: 8px; }
-        .nano-selection-label { background: none!important; border: none!important; text-align: center; pointer-events: none!important; }
-        .micro-selection-label { background: none!important; border: none!important; text-align: center; pointer-events: none!important; }
-        .btn-nav, .btn-ws { display: inline-block; padding: 8px 12px; color: white!important; text-decoration: none!important; border-radius: 5px; font-weight: bold; font-size: 11px; margin: 2px; border:none; cursor: pointer; }
+        button#search-btn { background: #1a73e8; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; margin-left: 5px; }
+        
+        /* Estilos de etiquetas y Popups */
+        .watermark-label-fixed { background: none!important; border:none!important; color: #1a73e8!important; text-align: center; pointer-events: none!important; text-shadow: 1px 1px 2px white; font-size: 14px; }
+        .micro-label-fixed { background: none!important; border:none!important; color: #3498db!important; text-align: center; pointer-events: none!important; text-shadow: 1px 1px 2px white; font-size: 11px; }
+        
+        .nano-popup .leaflet-popup-content-wrapper { background: #e3f2fd; border: 2px solid #1976d2; border-radius: 8px; width: 220px; }
+        .codigo-final { background: #1976d2; color: white; padding: 8px; border-radius: 5px; font-size: 16px; font-weight: bold; text-align: center; margin: 5px 0; letter-spacing: 1px; }
+        
+        .btn-nav, .btn-ws { display: inline-block; padding: 8px 10px; color: white!important; text-decoration: none!important; border-radius: 5px; font-weight: bold; font-size: 11px; margin: 2px; border:none; cursor: pointer; }
         .btn-nav { background-color: #3498db; }
         .btn-ws { background-color: #25D366; }
-        .locate-button { width: 30px; height: 30px; line-height: 30px; text-align: center; display: block; text-decoration: none; color: black; background: white; font-size: 18px; cursor: pointer; }
-        .user-location-icon { text-align: center; font-size: 20px; }
-        .highlighted-polygon { animation: pulse 2s infinite; }
-        @keyframes pulse {
-            0% { fill-opacity: 0.3; }
-            50% { fill-opacity: 0.7; }
-            100% { fill-opacity: 0.3; }
-        }
-        
-        /* Base selector */
-        .base-selector {
-            position: absolute;
-            top: 15px;
-            left: 10px;
-            z-index: 5000;
-            background: white;
-            padding: 8px 12px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            font-size: 12px;
-        }
-        
-        .base-option {
-            padding: 6px 12px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: all 0.2s;
-            border: 2px solid #ddd;
-        }
-        
-        .base-option:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 3px 5px rgba(0,0,0,0.1);
-        }
-        
-        .base-option.selected {
-            border-color: #1a73e8;
-            background: #1a73e8;
-            color: white;
-        }
-        
-        .code-info {
-            position: absolute;
-            bottom: 10px;
-            right: 10px;
-            z-index: 5000;
-            background: rgba(255,255,255,0.9);
-            padding: 10px;
-            border-radius: 8px;
-            font-size: 11px;
-            max-width: 250px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-        }
-        
-        .region-selector {
-            position: absolute;
-            top: 60px;
-            left: 10px;
-            z-index: 5000;
-            background: white;
-            padding: 8px 12px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            font-size: 12px;
-            max-width: 200px;
-        }
-        
-        .region-selector select {
-            width: 100%;
-            padding: 5px;
-            margin-top: 5px;
-            border-radius: 4px;
-            border: 1px solid #ddd;
-        }
-        
-        .grid-controls {
-            position: absolute;
-            bottom: 60px;
-            left: 10px;
-            z-index: 5000;
-            background: white;
-            padding: 10px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            font-size: 11px;
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-        
-        .macro-grid { 
-            stroke: #1a73e8; 
-            stroke-width: 1.5; 
-            stroke-opacity: 0.4; 
-            fill: none;
-            pointer-events: none;
-        }
-        
-        .micro-grid { 
-            stroke: #3498db; 
-            stroke-width: 1; 
-            stroke-opacity: 0.3; 
-            stroke-dasharray: 2,2;
-            fill: none;
-            pointer-events: none;
-        }
-        
-        .nano-grid { 
-            stroke: #2980b9; 
-            stroke-width: 0.5; 
-            stroke-opacity: 0.2; 
-            stroke-dasharray: 1,3;
-            fill: none;
-            pointer-events: none;
-        }
-    
     </style>
 </head>
 <body>
 
-<div class="map-title"><h1>SISTEMA POSTAL DE PANAMÁ - GRID DINÁMICO BASE <span id="current-base">30</span></h1></div>
-
-<!-- Selector de Base -->
-<div class="base-selector">
-    <span>Base:</span>
-    <div class="base-option selected" onclick="setBase(30)">30</div>
-    <div class="base-option" onclick="setBase(36)">36</div>
-</div>
-
-<!-- Selector de Región -->
-<div class="region-selector">
-    <span>Región:</span>
-    <select id="region-select" onchange="changeRegion()">
-        <option value="full">Toda Panamá</option>
-        <option value="panama_metro">Panamá Metro</option>
-        <option value="panama_este">Panamá Este</option>
-        <option value="panama_oeste">Panamá Oeste</option>
-        <option value="colon">Colón</option>
-        <option value="chiriqui">Chiriquí</option>
-        <option value="veraguas">Veraguas</option>
-        <option value="darien">Darién</option>
-        <option value="guna_yala">Guna Yala</option>
-        <option value="ngobe_bugle">Ngäbe-Buglé</option>
-        <option value="custom">Personalizado</option>
-    </select>
-</div>
-
+<div class="map-title"><h1>SISTEMA POSTAL DE PANAMÁ</h1></div>
 <div class="search-container">
-    <input type="text" id="search-input" placeholder="Ej: PA-8MQFRT9J o Región-Código">
-    <button id="search-btn">IR</button>
+    <input type="text" id="search-input" placeholder="Ej: B4-H6K-2W">
+    <button id="search-btn">BUSCAR</button>
 </div>
-
-<div class="grid-controls">
-    <label>
-        <input type="checkbox" id="show-macro-grid" checked> Macro
-    </label>
-    <label>
-        <input type="checkbox" id="show-micro-grid" checked> Micro
-    </label>
-    <label>
-        <input type="checkbox" id="show-nano-grid"> Nano
-    </label>
-</div>
-
-<div id="toggle-wm" class="toggle-watermark">TEXTO: ON</div>
-
-<!-- Información del código -->
-<div class="code-info">
-    <strong>Sistema Base <span id="info-base">30</span></strong><br>
-    <span id="code-stats">Área: Panamá Completa</span><br>
-    <span id="resolution-info">Resolución: ~100m</span>
-</div>
-
 <div id="mapid"></div>
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
 
 <script>
-// ============================================================================
-// CONFIGURACIÓN GLOBAL
-// ============================================================================
-
-let CURRENT_BASE = 30; // 30 o 36
-
-// Área de Panamá (coordenadas límite)
-const PANAMA_BOUNDS = {
-    north: 9.65,  // 9°39'N
-    south: 7.20,  // 7°12'N
-    west: -83.05, // 83°3'W
-    east: -77.15  // 77°9'W
+// ==============================================
+// CONFIGURACIÓN MATEMÁTICA (SIN COLISIONES)
+// ==============================================
+const GRID_CONFIG = {
+    ORIGIN_LAT: 10.0,  // Norte de Panamá
+    ORIGIN_LNG: -83.5, // Oeste de Panamá
+    RES_MACRO: 0.1,    // ~11km
+    RES_MICRO: 0.1 / 24,  // ~460m
+    RES_NANO: (0.1 / 24) / 25, // ~18m (Precisión final)
+    ALPHABET: "23456789BCDFGHJKLMNPQRSTVWXYZ", // Base 30
+    // Límites para evitar colisiones en el índice lineal
+    MACROS_X: 70, 
+    MACROS_Y: 40
 };
-
-// Regiones de Panamá
-const REGIONS = {
-    full: {
-        name: "Toda Panamá",
-        bounds: PANAMA_BOUNDS,
-        macroGrid: 10 // 10x10 celdas macro
-    },
-    panama_metro: {
-        name: "Panamá Metro",
-        bounds: { north: 9.10, south: 8.85, west: -79.60, east: -79.30 },
-        macroGrid: 8 // 8x8 celdas macro
-    },
-    panama_este: {
-        name: "Panamá Este",
-        bounds: { north: 9.20, south: 8.60, west: -79.20, east: -78.80 },
-        macroGrid: 6
-    },
-    panama_oeste: {
-        name: "Panamá Oeste",
-        bounds: { north: 9.00, south: 8.40, west: -80.20, east: -79.60 },
-        macroGrid: 6
-    },
-    colon: {
-        name: "Colón",
-        bounds: { north: 9.65, south: 9.00, west: -80.00, east: -79.30 },
-        macroGrid: 6
-    },
-    chiriqui: {
-        name: "Chiriquí",
-        bounds: { north: 8.90, south: 8.00, west: -82.90, east: -81.50 },
-        macroGrid: 8
-    },
-    veraguas: {
-        name: "Veraguas",
-        bounds: { north: 8.50, south: 7.50, west: -81.50, east: -80.50 },
-        macroGrid: 6
-    },
-    darien: {
-        name: "Darién",
-        bounds: { north: 8.50, south: 7.20, west: -78.50, east: -77.15 },
-        macroGrid: 8
-    },
-    guna_yala: {
-        name: "Guna Yala",
-        bounds: { north: 9.65, south: 8.50, west: -79.00, east: -77.15 },
-        macroGrid: 5
-    },
-    ngobe_bugle: {
-        name: "Ngäbe-Buglé",
-        bounds: { north: 8.80, south: 7.80, west: -82.00, east: -80.50 },
-        macroGrid: 7
-    },
-    custom: {
-        name: "Personalizado",
-        bounds: null,
-        macroGrid: 8
-    }
-};
-
-// Alfabetos para cada base
-const ALPHABETS = {
-    30: "0123456789BCDFGHJKLMNPQRSTVWXYZ", // Base 30 (sin vocales, sin ambigüedades)
-    36: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ" // Base 36 completa
-};
-
-// Configuración específica por base
-const BASE_CONFIG = {
-    30: {
-        macroDivisions: 20,   // 20x20 celdas micro por macro
-        nanoDivisions: 15,    // 15x15 celdas nano por micro
-        precision: "~25m",    // Precisión aproximada
-        characters: 30
-    },
-    36: {
-        macroDivisions: 24,   // 24x24 celdas micro por macro
-        nanoDivisions: 25,    // 25x25 celdas nano por micro
-        precision: "~15m",    // Mayor precisión
-        characters: 36
-    }
-};
-
-// ============================================================================
-// VARIABLES GLOBALES
-// ============================================================================
-
-let currentRegion = REGIONS.full;
-let currentBounds = PANAMA_BOUNDS;
-let currentMacroGrid = [];
 
 const mymap = L.map('mapid').setView([8.50, -80.0], 8);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mymap);
 
-// Capas
 const gridLayer = L.layerGroup().addTo(mymap);
 const labelLayer = L.layerGroup().addTo(mymap);
 const selectionLayer = L.layerGroup().addTo(mymap);
-const userLocationLayer = L.layerGroup().addTo(mymap);
 
-let labelsEnabled = true;
-let microWatermarkCache = new Map();
-let nanoWatermarkCache = new Map();
-let hiddenLabels = [];
+// ==============================================
+// LÓGICA DE CODIFICACIÓN (BASE 30)
+// ==============================================
 
-// ============================================================================
-// FUNCIONES DE CODIFICACIÓN CON BASE 30/36
-// ============================================================================
-
-// Obtener alfabeto actual
-function getAlphabet() {
-    return ALPHABETS[CURRENT_BASE];
-}
-
-// Obtener configuración actual
-function getConfig() {
-    return BASE_CONFIG[CURRENT_BASE];
-}
-
-// Función hash para generar códigos desordenados
-function hashPosition(ix, iy, salt = 0) {
-    let hash = (ix * 15485863) ^ (iy * 2860486313) ^ (salt * 5915587277);
-    hash = (hash * 2654435761) >>> 0;
-    return Math.abs(hash % 1000000);
-}
-
-// Generar código macro (identificador de región + coordenada)
-function generateMacroCode(region, macroIx, macroIy) {
-    const config = getConfig();
-    const alphabet = getAlphabet();
-    
-    // Código de región (primeras 2 letras)
-    const regionCode = region.name.substring(0, 2).toUpperCase();
-    
-    // Código de posición dentro de la región
-    const posCode = `${alphabet[macroIx % alphabet.length]}${alphabet[macroIy % alphabet.length]}`;
-    
-    return `${regionCode}-${posCode}`;
-}
-
-// Generar código micro
-function generateMicroCode(macroIx, macroIy, microIx, microIy) {
-    const config = getConfig();
-    const alphabet = getAlphabet();
-    
-    // Base 30: Formato compacto (2 caracteres)
-    if (CURRENT_BASE === 30) {
-        const firstChar = alphabet[microIx % 30];
-        const secondChar = alphabet[microIy % 30];
-        return `${firstChar}${secondChar}`;
+function toBase30(num, digits) {
+    let result = "";
+    let n = Math.floor(num);
+    for (let i = 0; i < digits; i++) {
+        result = GRID_CONFIG.ALPHABET[n % 30] + result;
+        n = Math.floor(n / 30);
     }
-    // Base 36: Formato de 3 caracteres
-    else {
-        const firstChar = alphabet[microIx % 36];
-        const secondChar = alphabet[microIy % 36];
-        const checkDigit = alphabet[(macroIx + macroIy + microIx + microIy) % 36];
-        return `${firstChar}${secondChar}${checkDigit}`;
-    }
+    return result;
 }
 
-// Generar código nano
-function generateNanoCode(macroIx, macroIy, microIx, microIy, nanoIx, nanoIy) {
-    const config = getConfig();
-    const alphabet = getAlphabet();
-    const salt = (macroIx * 1000) + (macroIy * 100) + (microIx * 10) + microIy;
-    const hash = hashPosition(nanoIx, nanoIy, salt);
-    
-    // Base 30: 2 caracteres
-    if (CURRENT_BASE === 30) {
-        const char1 = alphabet[Math.floor(hash / 1000) % 30];
-        const char2 = alphabet[hash % 30];
-        return `${char1}${char2}`;
+function fromBase30(code) {
+    let result = 0;
+    for (let i = 0; i < code.length; i++) {
+        let char = code[i];
+        let val = GRID_CONFIG.ALPHABET.indexOf(char);
+        result = result * 30 + val;
     }
-    // Base 36: 3 caracteres
-    else {
-        const char1 = alphabet[Math.floor(hash / 1296) % 36]; // 36^2 = 1296
-        const char2 = alphabet[Math.floor(hash / 36) % 36];
-        const char3 = alphabet[hash % 36];
-        return `${char1}${char2}${char3}`;
-    }
+    return result;
 }
 
-// ============================================================================
-// GENERACIÓN DEL GRID DINÁMICO
-// ============================================================================
+// Genera el código basado en coordenadas
+function encodePos(lat, lng) {
+    const { ORIGIN_LAT, ORIGIN_LNG, RES_MACRO, RES_MICRO, RES_NANO, MACROS_Y } = GRID_CONFIG;
 
-// Calcular límites de la celda macro
-function getMacroCellBounds(macroIx, macroIy, region) {
-    const latRange = region.bounds.north - region.bounds.south;
-    const lngRange = region.bounds.east - region.bounds.west;
-    
-    const cellHeight = latRange / region.macroGrid;
-    const cellWidth = lngRange / region.macroGrid;
-    
-    const south = region.bounds.south + (macroIy * cellHeight);
-    const north = south + cellHeight;
-    const west = region.bounds.west + (macroIx * cellWidth);
-    const east = west + cellWidth;
-    
+    // 1. Índices Macro
+    let mx = Math.floor((lng - ORIGIN_LNG) / RES_MACRO);
+    let my = Math.floor((ORIGIN_LAT - lat) / RES_MACRO);
+    // ID lineal único para Macro para evitar colisión X/Y
+    let macroID = (mx * MACROS_Y) + my; 
+    let macroCode = toBase30(macroID, 2);
+
+    // 2. Índices Micro (dentro de la Macro)
+    let microX = Math.floor(((lng - ORIGIN_LNG) % RES_MACRO) / RES_MICRO);
+    let microY = Math.floor(((ORIGIN_LAT - lat) % RES_MACRO) / RES_MICRO);
+    let microID = (microX * 24) + microY;
+    let microCode = toBase30(microID, 3);
+
+    // 3. Índices Nano (dentro de la Micro)
+    let nanoX = Math.floor((((lng - ORIGIN_LNG) % RES_MACRO) % RES_MICRO) / RES_NANO);
+    let nanoY = Math.floor((((ORIGIN_LAT - lat) % RES_MACRO) % RES_MICRO) / RES_NANO);
+    let nanoID = (nanoX * 25) + nanoY;
+    let nanoCode = toBase30(nanoID, 2);
+
     return {
-        north: north,
-        south: south,
-        west: west,
-        east: east,
-        center: [(north + south) / 2, (east + west) / 2]
+        full: `${macroCode}-${microCode}-${nanoCode}`,
+        parts: { macroCode, microCode, nanoCode },
+        indices: { mx, my, microX, microY, nanoX, nanoY }
     };
 }
 
-// Generar el grid completo
-function generateGrid() {
-    // Limpiar capas
+// Decodifica el código para obtener el centro del cuadro
+function decodePos(fullCode) {
+    const parts = fullCode.replace(/\s/g, '').split('-');
+    if (parts.length !== 3) return null;
+
+    const { ORIGIN_LAT, ORIGIN_LNG, RES_MACRO, RES_MICRO, RES_NANO, MACROS_Y } = GRID_CONFIG;
+
+    // Decodificar Macro
+    let macroID = fromBase30(parts[0]);
+    let mx = Math.floor(macroID / MACROS_Y);
+    let my = macroID % MACROS_Y;
+
+    // Decodificar Micro
+    let microID = fromBase30(parts[1]);
+    let microX = Math.floor(microID / 24);
+    let microY = microID % 24;
+
+    // Decodificar Nano
+    let nanoID = fromBase30(parts[2]);
+    let nanoX = Math.floor(nanoID / 25);
+    let nanoY = nanoID % 25;
+
+    // Calcular coordenadas (centro del cuadro nano)
+    let lng = ORIGIN_LNG + (mx * RES_MACRO) + (microX * RES_MICRO) + (nanoX * RES_NANO) + (RES_NANO/2);
+    let lat = ORIGIN_LAT - (my * RES_MACRO) - (microY * RES_MICRO) - (nanoY * RES_NANO) - (RES_NANO/2);
+
+    return [lat, lng];
+}
+
+// ==============================================
+// DIBUJO DINÁMICO DE GRILLA
+// ==============================================
+
+function updateGrid() {
+    const z = mymap.getZoom();
     gridLayer.clearLayers();
     labelLayer.clearLayers();
-    microWatermarkCache.clear();
-    nanoWatermarkCache.clear();
-    hiddenLabels = [];
-    
-    const region = currentRegion;
-    const config = getConfig();
-    const z = mymap.getZoom();
+
+    if (z < 10) return;
+
     const bounds = mymap.getBounds();
-    
-    // Actualizar información
-    updateCodeInfo();
-    
-    // Generar celdas macro
-    currentMacroGrid = [];
-    for (let macroIx = 0; macroIx < region.macroGrid; macroIx++) {
-        currentMacroGrid[macroIx] = [];
-        for (let macroIy = 0; macroIy < region.macroGrid; macroIy++) {
-            const macroBounds = getMacroCellBounds(macroIx, macroIy, region);
-            currentMacroGrid[macroIx][macroIy] = macroBounds;
-            
-            // Verificar si está visible
-            const macroVisible = bounds.intersects([
-                [macroBounds.south, macroBounds.west],
-                [macroBounds.north, macroBounds.east]
-            ]);
-            
-            if (!macroVisible) continue;
-            
-            // Dibujar borde macro si está habilitado
-            if (document.getElementById('show-macro-grid').checked) {
-                const macroPolygon = L.rectangle([
-                    [macroBounds.south, macroBounds.west],
-                    [macroBounds.north, macroBounds.east]
-                ], {
-                    color: '#1a73e8',
-                    weight: 1.5,
-                    opacity: 0.4,
-                    fill: false,
-                    className: 'macro-grid'
+    const { ORIGIN_LAT, ORIGIN_LNG, RES_MACRO, RES_MICRO } = GRID_CONFIG;
+
+    // Dibujar Macros (Zoom 10-13)
+    if (z >= 10 && z < 14) {
+        for (let x = bounds.getWest(); x <= bounds.getEast(); x += RES_MACRO) {
+            for (let y = bounds.getSouth(); y <= bounds.getNorth(); y += RES_MACRO) {
+                let snapX = Math.floor((x - ORIGIN_LNG) / RES_MACRO) * RES_MACRO + ORIGIN_LNG;
+                let snapY = Math.floor((ORIGIN_LAT - y) / RES_MACRO) * RES_MACRO;
+                let lat1 = ORIGIN_LAT - snapY;
+                let lng1 = snapX;
+                
+                L.rectangle([[lat1, lng1], [lat1 - RES_MACRO, lng1 + RES_MACRO]], {
+                    color: '#1a73e8', weight: 1, fill: false
                 }).addTo(gridLayer);
-            }
-            
-            // Label macro (solo en zoom bajo)
-            if (z <= 12 && labelsEnabled) {
-                const macroCode = generateMacroCode(region, macroIx, macroIy);
-                L.marker(macroBounds.center, {
-                    icon: L.divIcon({
-                        className: 'watermark-label-fixed',
-                        html: macroCode,
-                        iconSize: [60, 20]
-                    })
+
+                let code = encodePos(lat1 - RES_MACRO/2, lng1 + RES_MACRO/2).parts.macroCode;
+                L.marker([lat1 - RES_MACRO/2, lng1 + RES_MACRO/2], {
+                    icon: L.divIcon({ className: 'watermark-label-fixed', html: code })
                 }).addTo(labelLayer);
             }
-            
-            // Generar grid micro dentro de esta celda macro
-            generateMicroGrid(macroIx, macroIy, macroBounds, z, bounds);
         }
     }
-}
 
-// Generar grid micro dentro de una celda macro
-function generateMicroGrid(macroIx, macroIy, macroBounds, zoom, viewBounds) {
-    const config = getConfig();
-    const microSize = config.macroDivisions;
-    const microHeight = (macroBounds.north - macroBounds.south) / microSize;
-    const microWidth = (macroBounds.east - macroBounds.west) / microSize;
-    
-    for (let microIx = 0; microIx < microSize; microIx++) {
-        for (let microIy = 0; microIy < microSize; microIy++) {
-            const microSouth = macroBounds.south + (microIy * microHeight);
-            const microNorth = microSouth + microHeight;
-            const microWest = macroBounds.west + (microIx * microWidth);
-            const microEast = microWest + microWidth;
-            const microCenter = [(microNorth + microSouth) / 2, (microEast + microWest) / 2];
-            
-            // Verificar si está visible
-            const microVisible = viewBounds.contains(microCenter);
-            if (!microVisible) continue;
-            
-            // Guardar en cache
-            const cacheKey = `${macroIx}-${macroIy}-${microIx}-${microIy}`;
-            const microCode = generateMicroCode(macroIx, macroIy, microIx, microIy);
-            
-            microWatermarkCache.set(cacheKey, {
-                center: microCenter,
-                code: microCode,
-                bounds: [
-                    [microSouth, microWest],
-                    [microSouth, microEast],
-                    [microNorth, microEast],
-                    [microNorth, microWest]
-                ],
-                indices: { macroIx, macroIy, microIx, microIy }
-            });
-            
-            // Dibujar borde micro si está habilitado y zoom suficiente
-            if (document.getElementById('show-micro-grid').checked && zoom >= 14) {
-                L.rectangle([
-                    [microSouth, microWest],
-                    [microNorth, microEast]
-                ], {
-                    color: '#3498db',
-                    weight: 1,
-                    opacity: 0.3,
-                    dashArray: '2,2',
-                    fill: false,
-                    className: 'micro-grid'
+    // Dibujar Micros (Zoom 15+)
+    if (z >= 15) {
+        let step = RES_MICRO;
+        for (let x = bounds.getWest(); x <= bounds.getEast(); x += step) {
+            for (let y = bounds.getSouth(); y <= bounds.getNorth(); y += step) {
+                let lat = y; let lng = x;
+                let codeInfo = encodePos(lat, lng);
+                
+                L.rectangle([[lat, lng], [lat + step, lng + step]], {
+                    color: '#3498db', weight: 0.5, fill: false, opacity: 0.5
                 }).addTo(gridLayer);
-            }
-            
-            // Label micro (zoom 14-17)
-            if (zoom >= 14 && zoom < 17 && labelsEnabled) {
-                L.marker(microCenter, {
-                    icon: L.divIcon({
-                        className: 'micro-label-fixed',
-                        html: microCode,
-                        iconSize: [45, 15]
-                    })
-                }).addTo(labelLayer);
-            }
-            
-            // Generar grid nano si zoom alto
-            if (zoom >= 17) {
-                generateNanoGrid(macroIx, macroIy, microIx, microIy, 
-                    microSouth, microNorth, microWest, microEast, zoom, viewBounds);
             }
         }
     }
 }
 
-// Generar grid nano dentro de una celda micro
-function generateNanoGrid(macroIx, macroIy, microIx, microIy, 
-                         south, north, west, east, zoom, viewBounds) {
-    const config = getConfig();
-    const nanoSize = config.nanoDivisions;
-    const nanoHeight = (north - south) / nanoSize;
-    const nanoWidth = (east - west) / nanoSize;
-    
-    // Solo generar algunos nano para no saturar
-    const step = Math.max(1, Math.floor(nanoSize / 5));
-    
-    for (let nanoIx = 0; nanoIx < nanoSize; nanoIx += step) {
-        for (let nanoIy = 0; nanoIy < nanoSize; nanoIy += step) {
-            const nanoSouth = south + (nanoIy * nanoHeight);
-            const nanoNorth = nanoSouth + nanoHeight;
-            const nanoWest = west + (nanoIx * nanoWidth);
-            const nanoEast = nanoWest + nanoWidth;
-            const nanoCenter = [(nanoNorth + nanoSouth) / 2, (nanoEast + nanoWest) / 2];
-            
-            // Verificar si está visible
-            const nanoVisible = viewBounds.contains(nanoCenter);
-            if (!nanoVisible) continue;
-            
-            // Guardar en cache
-            const cacheKey = `${macroIx}-${macroIy}-${microIx}-${microIy}-${nanoIx}-${nanoIy}`;
-            const nanoCode = generateNanoCode(macroIx, macroIy, microIx, microIy, nanoIx, nanoIy);
-            
-            nanoWatermarkCache.set(cacheKey, {
-                center: nanoCenter,
-                code: nanoCode,
-                bounds: [
-                    [nanoSouth, nanoWest],
-                    [nanoSouth, nanoEast],
-                    [nanoNorth, nanoEast],
-                    [nanoNorth, nanoWest]
-                ],
-                indices: { macroIx, macroIy, microIx, microIy, nanoIx, nanoIy }
-            });
-            
-            // Dibujar borde nano si está habilitado
-            if (document.getElementById('show-nano-grid').checked && nanoIx % step === 0 && nanoIy % step === 0) {
-                L.rectangle([
-                    [nanoSouth, nanoWest],
-                    [nanoNorth, nanoEast]
-                ], {
-                    color: '#2980b9',
-                    weight: 0.5,
-                    opacity: 0.2,
-                    dashArray: '1,3',
-                    fill: false,
-                    className: 'nano-grid'
-                }).addTo(gridLayer);
-            }
-            
-            // Label nano (zoom alto, pocos labels)
-            if (zoom >= 18 && labelsEnabled && nanoIx % (step*2) === 0 && nanoIy % (step*2) === 0) {
-                L.marker(nanoCenter, {
-                    icon: L.divIcon({
-                        className: 'nano-label-fixed',
-                        html: nanoCode,
-                        iconSize: [35, 10]
-                    })
-                }).addTo(labelLayer);
-            }
-        }
-    }
-}
+// ==============================================
+// EVENTOS
+// ==============================================
 
-// ============================================================================
-// EVENTO CLIC EN MAPA
-// ============================================================================
-
-mymap.on("click", function (e) {
+mymap.on('click', function(e) {
     selectionLayer.clearLayers();
-    restoreHiddenLabels();
-    hiddenLabels = [];
+    let codeInfo = encodePos(e.latlng.lat, e.latlng.lng);
     
-    const lat = e.latlng.lat;
-    const lng = e.latlng.lng;
-    
-    // Verificar si está dentro de Panamá
-    if (lat < PANAMA_BOUNDS.south || lat > PANAMA_BOUNDS.north || 
-        lng < PANAMA_BOUNDS.west || lng > PANAMA_BOUNDS.east) {
-        showWarningPopup(e, "Fuera de Panamá");
-        return;
-    }
-    
-    // Encontrar en qué región está
-    const region = findRegionForPoint(lat, lng);
-    if (!region) {
-        showWarningPopup(e, "Área no definida");
-        return;
-    }
-    
-    // Calcular índices
-    const indices = calculateIndicesFromPoint(lat, lng, region);
-    if (!indices) return;
-    
-    const { macroIx, macroIy, microIx, microIy, nanoIx, nanoIy } = indices;
-    
-    // Generar códigos
-    const macroCode = generateMacroCode(region, macroIx, macroIy);
-    const microCode = generateMicroCode(macroIx, macroIy, microIx, microIy);
-    const nanoCode = generateNanoCode(macroIx, macroIy, microIx, microIy, nanoIx, nanoIy);
-    
-    let finalCode, titulo;
-    const z = mymap.getZoom();
-    
-    if (z < 14) {
-        titulo = "REGIONAL";
-        finalCode = macroCode;
-        highlightMacroCell(macroIx, macroIy, region);
-    } else if (z >= 14 && z < 17) {
-        titulo = "ÁREA POSTAL";
-        finalCode = `${macroCode}-${microCode}`;
-        highlightMicroCell(macroIx, macroIy, microIx, microIy, region);
+    // Resaltar cuadro Nano
+    const { RES_NANO } = GRID_CONFIG;
+    // Ajustar al inicio del cuadro para el dibujo
+    let snapLat = ORIGIN_LAT - Math.floor((ORIGIN_LAT - e.latlng.lat) / RES_NANO) * RES_NANO;
+    let snapLng = ORIGIN_LNG + Math.floor((e.latlng.lng - ORIGIN_LNG) / RES_NANO) * RES_NANO;
+
+    L.rectangle([[snapLat, snapLng], [snapLat - RES_NANO, snapLng + RES_NANO]], {
+        color: 'red', weight: 2, fillColor: 'red', fillOpacity: 0.2
+    }).addTo(selectionLayer);
+
+    L.popup({ className: 'nano-popup' })
+        .setLatLng(e.latlng)
+        .setContent(`
+            <div style="text-align:center">
+                <small>CÓDIGO POSTAL</small>
+                <div class="codigo-final">${codeInfo.full}</div>
+                <div style="font-size:10px; margin-bottom:10px;">
+                    GPS: ${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}
+                </div>
+                <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${e.latlng.lat},${e.latlng.lng}')">GOOGLE MAPS</button>
+                <button class="btn-ws" onclick="window.open('https://wa.me/?text=Mi+ubicación+postal:+${codeInfo.full}')">WHATSAPP</button>
+            </div>
+        `).openOn(mymap);
+});
+
+$('#search-btn').click(function() {
+    let query = $('#search-input').val().toUpperCase();
+    let coords = decodePos(query);
+    if (coords) {
+        mymap.setView(coords, 18);
+        L.marker(coords).addTo(selectionLayer).bindPopup("Ubicación encontrada: " + query).openPopup();
     } else {
-        titulo = "CÓDIGO POSTAL";
-        finalCode = `${macroCode}-${microCode}-${nanoCode}`;
-        highlightNanoCell(macroIx, macroIy, microIx, microIy, nanoIx, nanoIy, region);
-    }
-    
-    // Mostrar popup
-    showCodePopup(e, titulo, finalCode, lat, lng);
-});
-
-// Encontrar región para un punto
-function findRegionForPoint(lat, lng) {
-    for (const [key, region] of Object.entries(REGIONS)) {
-        if (key === 'full' || key === 'custom') continue;
-        
-        if (lat >= region.bounds.south && lat <= region.bounds.north &&
-            lng >= region.bounds.west && lng <= region.bounds.east) {
-            return region;
-        }
-    }
-    return REGIONS.full; // Por defecto, toda Panamá
-}
-
-// Calcular índices desde un punto
-function calculateIndicesFromPoint(lat, lng, region) {
-    const config = getConfig();
-    
-    // Macro índices
-    const latRange = region.bounds.north - region.bounds.south;
-    const lngRange = region.bounds.east - region.bounds.west;
-    
-    const macroIx = Math.floor(((lng - region.bounds.west) / lngRange) * region.macroGrid);
-    const macroIy = Math.floor(((lat - region.bounds.south) / latRange) * region.macroGrid);
-    
-    // Asegurar dentro de límites
-    if (macroIx < 0 || macroIx >= region.macroGrid || 
-        macroIy < 0 || macroIy >= region.macroGrid) {
-        return null;
-    }
-    
-    const macroBounds = getMacroCellBounds(macroIx, macroIy, region);
-    
-    // Micro índices
-    const microLatRange = macroBounds.north - macroBounds.south;
-    const microLngRange = macroBounds.east - macroBounds.west;
-    const microSize = config.macroDivisions;
-    
-    const microIx = Math.floor(((lng - macroBounds.west) / microLngRange) * microSize);
-    const microIy = Math.floor(((lat - macroBounds.south) / microLatRange) * microSize);
-    
-    // Nano índices
-    const microSouth = macroBounds.south + (microIy * (microLatRange / microSize));
-    const microWest = macroBounds.west + (microIx * (microLngRange / microSize));
-    const nanoSize = config.nanoDivisions;
-    
-    const nanoIx = Math.floor(((lng - microWest) / (microLngRange / microSize)) * nanoSize);
-    const nanoIy = Math.floor(((lat - microSouth) / (microLatRange / microSize)) * nanoSize);
-    
-    return {
-        macroIx: Math.max(0, Math.min(region.macroGrid-1, macroIx)),
-        macroIy: Math.max(0, Math.min(region.macroGrid-1, macroIy)),
-        microIx: Math.max(0, Math.min(microSize-1, microIx)),
-        microIy: Math.max(0, Math.min(microSize-1, microIy)),
-        nanoIx: Math.max(0, Math.min(nanoSize-1, nanoIx)),
-        nanoIy: Math.max(0, Math.min(nanoSize-1, nanoIy))
-    };
-}
-
-// ============================================================================
-// FUNCIONES DE VISUALIZACIÓN
-// ============================================================================
-
-function highlightMacroCell(macroIx, macroIy, region) {
-    const bounds = getMacroCellBounds(macroIx, macroIy, region);
-    
-    L.rectangle([
-        [bounds.south, bounds.west],
-        [bounds.north, bounds.east]
-    ], {
-        color: '#1a73e8',
-        weight: 3,
-        fillColor: '#1a73e8',
-        fillOpacity: 0.3,
-        className: 'highlighted-polygon'
-    }).addTo(selectionLayer);
-    
-    const macroCode = generateMacroCode(region, macroIx, macroIy);
-    L.marker(bounds.center, {
-        icon: L.divIcon({
-            className: 'watermark-label-fixed',
-            html: `<div style="background: white; padding: 2px 5px; border: 2px solid #1a73e8; border-radius: 3px; font-weight: bold;">${macroCode}</div>`,
-            iconSize: [60, 20]
-        })
-    }).addTo(selectionLayer);
-}
-
-function highlightMicroCell(macroIx, macroIy, microIx, microIy, region) {
-    const macroBounds = getMacroCellBounds(macroIx, macroIy, region);
-    const config = getConfig();
-    
-    const microHeight = (macroBounds.north - macroBounds.south) / config.macroDivisions;
-    const microWidth = (macroBounds.east - macroBounds.west) / config.macroDivisions;
-    
-    const microSouth = macroBounds.south + (microIy * microHeight);
-    const microNorth = microSouth + microHeight;
-    const microWest = macroBounds.west + (microIx * microWidth);
-    const microEast = microWest + microWidth;
-    const microCenter = [(microNorth + microSouth) / 2, (microEast + microWest) / 2];
-    
-    L.rectangle([
-        [microSouth, microWest],
-        [microNorth, microEast]
-    ], {
-        color: '#3498db',
-        weight: 3,
-        fillColor: '#3498db',
-        fillOpacity: 0.5,
-        className: 'highlighted-polygon'
-    }).addTo(selectionLayer);
-    
-    const microCode = generateMicroCode(macroIx, macroIy, microIx, microIy);
-    L.marker(microCenter, {
-        icon: L.divIcon({
-            className: 'micro-selection-label',
-            html: `<div style="background: white; padding: 2px 5px; border: 2px solid #3498db; border-radius: 3px; font-weight: bold;">${microCode}</div>`,
-            iconSize: [50, 22]
-        })
-    }).addTo(selectionLayer);
-}
-
-function highlightNanoCell(macroIx, macroIy, microIx, microIy, nanoIx, nanoIy, region) {
-    const macroBounds = getMacroCellBounds(macroIx, macroIy, region);
-    const config = getConfig();
-    
-    const microHeight = (macroBounds.north - macroBounds.south) / config.macroDivisions;
-    const microWidth = (macroBounds.east - macroBounds.west) / config.macroDivisions;
-    
-    const microSouth = macroBounds.south + (microIy * microHeight);
-    const microWest = macroBounds.west + (microIx * microWidth);
-    
-    const nanoHeight = microHeight / config.nanoDivisions;
-    const nanoWidth = microWidth / config.nanoDivisions;
-    
-    const nanoSouth = microSouth + (nanoIy * nanoHeight);
-    const nanoNorth = nanoSouth + nanoHeight;
-    const nanoWest = microWest + (nanoIx * nanoWidth);
-    const nanoEast = nanoWest + nanoWidth;
-    const nanoCenter = [(nanoNorth + nanoSouth) / 2, (nanoEast + nanoWest) / 2];
-    
-    L.rectangle([
-        [nanoSouth, nanoWest],
-        [nanoNorth, nanoEast]
-    ], {
-        color: '#2980b9',
-        weight: 3,
-        fillColor: '#2980b9',
-        fillOpacity: 0.5,
-        className: 'highlighted-polygon'
-    }).addTo(selectionLayer);
-    
-    const nanoCode = generateNanoCode(macroIx, macroIy, microIx, microIy, nanoIx, nanoIy);
-    L.marker(nanoCenter, {
-        icon: L.divIcon({
-            className: 'nano-selection-label',
-            html: `<div style="background: white; padding: 2px 5px; border: 2px solid #2980b9; border-radius: 3px; font-weight: bold;">${nanoCode}</div>`,
-            iconSize: [45, 22]
-        })
-    }).addTo(selectionLayer);
-}
-
-function showWarningPopup(e, message) {
-    L.popup()
-        .setLatLng([e.latlng.lat + 0.0004, e.latlng.lng])
-        .setContent(`
-            <div style="text-align:center; padding: 10px;">
-                <div style="color: #e74c3c; font-weight: bold;">⚠️ ${message}</div>
-                <small style="color: #666;">Coordenadas: ${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}</small><br>
-                <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${e.latlng.lat},${e.latlng.lng}')">📍 MAPS</button>
-            </div>
-        `)
-        .openOn(mymap);
-}
-
-function showCodePopup(e, titulo, codigo, lat, lng) {
-    const ws = encodeURIComponent(`📍 Mi ubicación: ${codigo}\nGPS: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
-    
-    const popup = L.popup({ offset: [0, -60] })
-        .setLatLng([lat + 0.0004, lng])
-        .setContent(`
-            <div style="text-align:center;">
-                <small>${titulo}</small><br>
-                <b>${codigo}</b><br>
-                <small style="color:#666;">Base: ${CURRENT_BASE}</small><br>
-                <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${lat},${lng}')">📍 MAPS</button>
-                <button class="btn-ws" onclick="window.open('https://wa.me/?text=${ws}')">💬 WS</button>
-            </div>
-        `)
-        .openOn(mymap);
-    
-    popup.on('remove', function() {
-        selectionLayer.clearLayers();
-        restoreHiddenLabels();
-    });
-}
-
-// ============================================================================
-// FUNCIONES AUXILIARES
-// ============================================================================
-
-function restoreHiddenLabels() {
-    hiddenLabels.forEach(layer => {
-        if (layer && typeof layer.setOpacity === 'function') {
-            layer.setOpacity(1);
-        }
-    });
-    hiddenLabels = [];
-}
-
-function setBase(base) {
-    if (CURRENT_BASE !== base) {
-        CURRENT_BASE = base;
-        
-        // Actualizar UI
-        document.getElementById('current-base').textContent = base;
-        document.getElementById('info-base').textContent = base;
-        
-        // Actualizar selector visual
-        document.querySelectorAll('.base-option').forEach(el => {
-            el.classList.remove('selected');
-            if (parseInt(el.textContent) === base) {
-                el.classList.add('selected');
-            }
-        });
-        
-        // Regenerar grid
-        generateGrid();
-    }
-}
-
-function changeRegion() {
-    const regionKey = document.getElementById('region-select').value;
-    currentRegion = REGIONS[regionKey];
-    
-    // Si es personalizado, usar vista actual
-    if (regionKey === 'custom') {
-        const bounds = mymap.getBounds();
-        currentRegion.bounds = {
-            north: bounds.getNorth(),
-            south: bounds.getSouth(),
-            west: bounds.getWest(),
-            east: bounds.getEast()
-        };
-    }
-    
-    // Centrar en la región
-    mymap.fitBounds([
-        [currentRegion.bounds.south, currentRegion.bounds.west],
-        [currentRegion.bounds.north, currentRegion.bounds.east]
-    ], { padding: [50, 50] });
-    
-    // Regenerar grid
-    generateGrid();
-}
-
-function updateCodeInfo() {
-    const config = getConfig();
-    const totalMacroCells = currentRegion.macroGrid * currentRegion.macroGrid;
-    const totalMicroCells = totalMacroCells * config.macroDivisions * config.macroDivisions;
-    const totalNanoCells = totalMicroCells * config.nanoDivisions * config.nanoDivisions;
-    
-    // Calcular resolución aproximada
-    const area = (currentRegion.bounds.north - currentRegion.bounds.south) * 
-                (currentRegion.bounds.east - currentRegion.bounds.west);
-    const microArea = area / totalMicroCells;
-    const resolution = Math.sqrt(microArea * 10000); // Convertir a metros aproximados
-    
-    document.getElementById('code-stats').innerHTML = 
-        `<strong>${currentRegion.name}</strong><br>Macro: ${totalMacroCells} celdas`;
-    document.getElementById('resolution-info').textContent = 
-        `Resolución micro: ~${Math.round(resolution)}m`;
-}
-
-// ============================================================================
-// BUSCADOR
-// ============================================================================
-
-document.getElementById('search-btn').addEventListener('click', () => {
-    const code = document.getElementById('search-input').value.trim().toUpperCase();
-    if (!code) return;
-    
-    // Formato esperado: REGION-CÓDIGO o solo código
-    const parts = code.split('-');
-    
-    if (parts.length >= 2) {
-        // Buscar por región-código
-        const regionCode = parts[0];
-        const coordCode = parts[1];
-        
-        // Encontrar región
-        let targetRegion = null;
-        for (const [key, region] of Object.entries(REGIONS)) {
-            if (region.name.substring(0, 2).toUpperCase() === regionCode) {
-                targetRegion = region;
-                break;
-            }
-        }
-        
-        if (!targetRegion) {
-            alert(`Región no encontrada: ${regionCode}`);
-            return;
-        }
-        
-        // Decodificar coordenadas
-        const alphabet = getAlphabet();
-        if (coordCode.length >= 2) {
-            const macroIx = alphabet.indexOf(coordCode[0]);
-            const macroIy = alphabet.indexOf(coordCode[1]);
-            
-            if (macroIx !== -1 && macroIy !== -1 && 
-                macroIx < targetRegion.macroGrid && macroIy < targetRegion.macroGrid) {
-                
-                const macroBounds = getMacroCellBounds(macroIx, macroIy, targetRegion);
-                mymap.setView(macroBounds.center, 14);
-                
-                selectionLayer.clearLayers();
-                restoreHiddenLabels();
-                highlightMacroCell(macroIx, macroIy, targetRegion);
-                return;
-            }
-        }
-    }
-    
-    alert("Formato de código no reconocido. Use: REGIÓN-CÓDIGO (ej: PA-8M)");
-});
-
-// ============================================================================
-// EVENTOS Y CONTROLES
-// ============================================================================
-
-// GPS
-const LocateControl = L.Control.extend({
-    options: { position: 'topleft' },
-    onAdd: function() {
-        const c = L.DomUtil.create('div', 'leaflet-bar');
-        const b = L.DomUtil.create('a', 'locate-button', c);
-        b.innerHTML = '🎯';
-        b.title = "Ubicar mi posición";
-        L.DomEvent.on(b, 'click', e => { 
-            L.DomEvent.stopPropagation(e); 
-            mymap.locate({setView:true, maxZoom:18}); 
-        });
-        return c;
+        alert("Código no válido. Formato: XX-XXX-XX");
     }
 });
-mymap.addControl(new LocateControl());
 
-// Control de capas
-L.control.layers(null, {
-    "Grid": gridLayer,
-    "Labels": labelLayer,
-    "Selección": selectionLayer,
-    "Mi ubicación": userLocationLayer
-}, {collapsed: false}).addTo(mymap);
+mymap.on('moveend', updateGrid);
+updateGrid();
 
-// Toggle labels
-$('#toggle-wm').click(function() {
-    labelsEnabled = !labelsEnabled;
-    $(this).text(labelsEnabled ? "TEXTO: ON" : "TEXTO: OFF");
-    generateGrid();
-});
-
-// Eventos de controles de grid
-document.getElementById('show-macro-grid').addEventListener('change', generateGrid);
-document.getElementById('show-micro-grid').addEventListener('change', generateGrid);
-document.getElementById('show-nano-grid').addEventListener('change', generateGrid);
-
-// Eventos del mapa
-mymap.on('moveend zoomend', generateGrid);
-mymap.on('locationfound', function(e) {
-    userLocationLayer.clearLayers();
-    
-    L.marker(e.latlng, {
-        icon: L.divIcon({
-            className: 'user-location-icon',
-            html: '📍',
-            iconSize: [30, 30]
-        }),
-        zIndexOffset: 1000
-    }).addTo(userLocationLayer);
-    
-    L.circle(e.latlng, {
-        radius: e.accuracy / 2,
-        color: '#3498db',
-        fillColor: '#3498db',
-        fillOpacity: 0.1,
-        weight: 1
-    }).addTo(userLocationLayer);
-});
-
-mymap.on('locationerror', function(e) {
-    console.error("Error de ubicación:", e.message);
-});
-
-mymap.on('zoomstart movestart', function() {
-    selectionLayer.clearLayers();
-    restoreHiddenLabels();
-});
-
-// Inicializar
-generateGrid();
 </script>
 </body>
 </html>
