@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <title>SISTEMA POSTAL - ALINEACIÓN TOTAL</title>
+    <title>SISTEMA POSTAL - WATERMARKS CENTRADOS</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -9,16 +9,24 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
     <style>
-        /* Corrección de renderizado de mapa base */
         .leaflet-tile-container img { outline: 1px solid transparent; }
-        
         body, html, #mapid { width: 100%; height: 100%; margin: 0; padding: 0; background: #e0e0e0; }
         
         .map-header { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 4000; text-align: center; pointer-events: none; }
         .map-header h1 { margin: 0; font-size: 16px; color: #1a2a6c; font-family: sans-serif; background: white; padding: 10px 25px; border-radius: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
         
-        /* Estilos de Watermarks */
-        .watermark-label { background: none!important; border:none!important; text-align: center; pointer-events: none!important; font-weight: bold; font-family: monospace; }
+        /* Ajuste de etiquetas para centrado perfecto */
+        .watermark-label { 
+            background: none!important; 
+            border:none!important; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none!important; 
+            font-weight: bold; 
+            font-family: monospace;
+            text-shadow: 0 0 3px white;
+        }
         .label-macro { color: #1a73e8; font-size: 16px; opacity: 0.6; }
         .label-micro { color: #e67e22; font-size: 11px; opacity: 0.7; }
         .label-nano { color: #2c3e50; font-size: 9px; opacity: 0.5; }
@@ -32,8 +40,7 @@
 <div id="mapid"></div>
 
 <script>
-// --- CONFIGURACIÓN MAESTRA ---
-const ORIGIN = { lat: 10.0, lng: -83.0 }; // Punto de anclaje Noroeste
+const ORIGIN = { lat: 10.0, lng: -83.0 };
 const PANAMA_LIMITS = { N: 10.0, S: 7.0, W: -83.0, E: -77.0 };
 const PARAMS = {
     RES_MACRO: 0.1,
@@ -43,18 +50,13 @@ const PARAMS = {
     MAX_Y_MACRO: 30, MAX_Y_MICRO: 24, MAX_Y_NANO: 25
 };
 
-const mymap = L.map('mapid', { 
-    zoomControl: false,
-    zoomSnap: 0.1
-}).setView([8.5, -80.0], 8);
-
+const mymap = L.map('mapid', { zoomControl: false, zoomSnap: 0.1 }).setView([8.5, -80.0], 8);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(mymap);
 
 const gridLayer = L.layerGroup().addTo(mymap);
 const labelLayer = L.layerGroup().addTo(mymap);
 const selectionLayer = L.layerGroup().addTo(mymap);
 
-// --- UTILIDADES ---
 function encode(num, len) {
     let s = "";
     let n = Math.abs(Math.floor(num));
@@ -62,7 +64,6 @@ function encode(num, len) {
     return s;
 }
 
-// Función unificada de alineación (Snap to Grid)
 function getSnappedCoords(lat, lng, step) {
     const snapLng = Math.floor((lng - ORIGIN.lng) / step) * step + ORIGIN.lng;
     const snapLat = ORIGIN.lat - Math.ceil((ORIGIN.lat - lat) / step) * step;
@@ -71,27 +72,19 @@ function getSnappedCoords(lat, lng, step) {
 
 function getInfo(lat, lng) {
     if (lat > PANAMA_LIMITS.N || lat < PANAMA_LIMITS.S || lng < PANAMA_LIMITS.W || lng > PANAMA_LIMITS.E) return null;
-    
     let mx = Math.floor((lng - ORIGIN.lng) / PARAMS.RES_MACRO);
     let my = Math.floor((ORIGIN.lat - lat) / PARAMS.RES_MACRO);
-    let macroID = (mx * PARAMS.MAX_Y_MACRO) + my;
-
     let microX = Math.floor(((lng - ORIGIN.lng) % PARAMS.RES_MACRO) / PARAMS.RES_MICRO);
     let microY = Math.floor(((ORIGIN.lat - lat) % PARAMS.RES_MACRO) / PARAMS.RES_MICRO);
-    let microID = (microX * PARAMS.MAX_Y_MICRO) + microY;
-
     let nanoX = Math.floor((((lng - ORIGIN.lng) % PARAMS.RES_MACRO) % PARAMS.RES_MICRO) / PARAMS.RES_NANO);
     let nanoY = Math.floor((((ORIGIN.lat - lat) % PARAMS.RES_MACRO) % PARAMS.RES_MICRO) / PARAMS.RES_NANO);
-    let nanoID = (nanoX * PARAMS.MAX_Y_NANO) + nanoY;
-
     return { 
-        macro: encode(macroID, 2), 
-        micro: encode(microID, 3), 
-        nano: encode(nanoID, 2) 
+        macro: encode((mx * PARAMS.MAX_Y_MACRO) + my, 2), 
+        micro: encode((microX * PARAMS.MAX_Y_MICRO) + microY, 3), 
+        nano: encode((nanoX * PARAMS.MAX_Y_NANO) + nanoY, 2) 
     };
 }
 
-// --- RENDERIZADO ---
 function render() {
     gridLayer.clearLayers();
     labelLayer.clearLayers();
@@ -105,42 +98,46 @@ function render() {
     else if (z >= 14) { step = PARAMS.RES_MICRO; labelClass = "label-micro"; }
     else { step = PARAMS.RES_MACRO; labelClass = "label-macro"; }
 
-    // Usar la función de snap para iniciar el dibujo exactamente alineado
-    let start = getSnappedCoords(b.getSouth(), b.getWest(), step);
+    // MEJORA: Buffer expandido para que las etiquetas no desaparezcan en los bordes
+    const buffer = step * 2;
+    let start = getSnappedCoords(b.getSouth() - buffer, b.getWest() - buffer, step);
 
     let count = 0;
-    for (let lo = start.lng; lo < b.getEast() && lo < PANAMA_LIMITS.E; lo += step) {
-        for (let la = start.lat; la < b.getNorth() && la < PANAMA_LIMITS.N; la += step) {
-            if (count++ > 500) break;
+    for (let lo = start.lng; lo < b.getEast() + buffer && lo < PANAMA_LIMITS.E; lo += step) {
+        for (let la = start.lat; la < b.getNorth() + buffer && la < PANAMA_LIMITS.N; la += step) {
+            if (count++ > 700) break;
 
             let data = getInfo(la + step/2, lo + step/2);
             if (!data) continue;
 
             L.rectangle([[la, lo], [la + step, lo + step]], {
-                color: '#1a73e8', weight: 0.5, fill: false, opacity: 0.2
+                color: '#1a73e8', weight: 0.5, fill: false, opacity: 0.15
             }).addTo(gridLayer);
 
             let txt = (z >= 17) ? data.nano : (z >= 14 ? data.micro : data.macro);
+            
+            // Centrado corregido usando DivIcon con tamaño definido
             L.marker([la + step/2, lo + step/2], {
-                icon: L.divIcon({ className: `watermark-label ${labelClass}`, html: txt, iconSize: [40,20] })
+                icon: L.divIcon({ 
+                    className: `watermark-label ${labelClass}`, 
+                    html: `<span>${txt}</span>`,
+                    iconSize: [60, 20],
+                    iconAnchor: [30, 10] // Esto ancla el centro del icono al centro del cuadro
+                })
             }).addTo(labelLayer);
         }
     }
 }
 
-// --- CLIC CON ALINEACIÓN FORZADA ---
 mymap.on('click', function(e) {
     const z = mymap.getZoom();
     let step, codigoDisplay;
-    
     if (z >= 17) step = PARAMS.RES_NANO;
     else if (z >= 14) step = PARAMS.RES_MICRO;
     else step = PARAMS.RES_MACRO;
 
-    // ALINEACIÓN CRÍTICA: Forzamos que el cuadro amarillo use el mismo SNAP que la grid
     const snap = getSnappedCoords(e.latlng.lat, e.latlng.lng, step);
     const res = getInfo(snap.lat + step/2, snap.lng + step/2);
-    
     if (!res) return;
     selectionLayer.clearLayers();
 
