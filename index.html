@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <title>SISTEMA POSTAL - WATERMARKS CENTRADOS</title>
+    <title>SISTEMA POSTAL - CENTRADO NANO</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -10,28 +10,36 @@
 
     <style>
         .leaflet-tile-container img { outline: 1px solid transparent; }
-        body, html, #mapid { width: 100%; height: 100%; margin: 0; padding: 0; background: #e0e0e0; }
+        body, html, #mapid { width: 100%; height: 100%; margin: 0; padding: 0; background: #f8f8f8; }
         
-        .map-header { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 4000; text-align: center; pointer-events: none; }
-        .map-header h1 { margin: 0; font-size: 16px; color: #1a2a6c; font-family: sans-serif; background: white; padding: 10px 25px; border-radius: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .map-header { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 4000; text-align: center; pointer-events: none; width: 100%; }
+        .map-header h1 { margin: 0; font-size: 14px; color: #1a2a6c; font-family: sans-serif; background: white; padding: 8px 20px; border-radius: 30px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); display: inline-block; }
         
-        /* Ajuste de etiquetas para centrado perfecto */
+        /* CONTENEDOR DE WATERMARK CORREGIDO */
         .watermark-label { 
             background: none!important; 
             border:none!important; 
-            display: flex;
+            display: flex!important;
             align-items: center;
             justify-content: center;
             pointer-events: none!important; 
-            font-weight: bold; 
-            font-family: monospace;
-            text-shadow: 0 0 3px white;
         }
-        .label-macro { color: #1a73e8; font-size: 16px; opacity: 0.6; }
-        .label-micro { color: #e67e22; font-size: 11px; opacity: 0.7; }
-        .label-nano { color: #2c3e50; font-size: 9px; opacity: 0.5; }
 
-        .codigo-progresivo { background: #1a2a6c; color: white; padding: 10px; border-radius: 8px; font-size: 18px; font-weight: bold; font-family: monospace; text-align: center; }
+        /* Texto interno con centrado forzado */
+        .watermark-label span {
+            display: block;
+            width: 100%;
+            text-align: center;
+            font-weight: bold; 
+            font-family: 'Courier New', monospace;
+            white-space: nowrap;
+        }
+
+        .label-macro span { color: #1a73e8; font-size: 16px; opacity: 0.6; }
+        .label-micro span { color: #e67e22; font-size: 11px; opacity: 0.7; }
+        .label-nano span { color: #2c3e50; font-size: 10px; opacity: 0.8; letter-spacing: -0.5px; }
+
+        .codigo-progresivo { background: #1a2a6c; color: white; padding: 12px; border-radius: 8px; font-size: 18px; font-weight: bold; font-family: monospace; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
     </style>
 </head>
 <body>
@@ -50,7 +58,7 @@ const PARAMS = {
     MAX_Y_MACRO: 30, MAX_Y_MICRO: 24, MAX_Y_NANO: 25
 };
 
-const mymap = L.map('mapid', { zoomControl: false, zoomSnap: 0.1 }).setView([8.5, -80.0], 8);
+const mymap = L.map('mapid', { zoomControl: false, zoomSnap: 0.1 }).setView([8.98, -79.51], 18);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(mymap);
 
 const gridLayer = L.layerGroup().addTo(mymap);
@@ -92,37 +100,46 @@ function render() {
     if (z < 10) return;
 
     const b = mymap.getBounds();
-    let step, labelClass;
+    let step, labelClass, iconSize;
     
-    if (z >= 17) { step = PARAMS.RES_NANO; labelClass = "label-nano"; }
-    else if (z >= 14) { step = PARAMS.RES_MICRO; labelClass = "label-micro"; }
-    else { step = PARAMS.RES_MACRO; labelClass = "label-macro"; }
+    if (z >= 17) { 
+        step = PARAMS.RES_NANO; 
+        labelClass = "label-nano"; 
+        iconSize = [30, 15]; // Más pequeño para el nivel Nano
+    } else if (z >= 14) { 
+        step = PARAMS.RES_MICRO; 
+        labelClass = "label-micro"; 
+        iconSize = [60, 20];
+    } else { 
+        step = PARAMS.RES_MACRO; 
+        labelClass = "label-macro"; 
+        iconSize = [80, 30];
+    }
 
-    // MEJORA: Buffer expandido para que las etiquetas no desaparezcan en los bordes
-    const buffer = step * 2;
+    const buffer = step * 1;
     let start = getSnappedCoords(b.getSouth() - buffer, b.getWest() - buffer, step);
 
     let count = 0;
     for (let lo = start.lng; lo < b.getEast() + buffer && lo < PANAMA_LIMITS.E; lo += step) {
         for (let la = start.lat; la < b.getNorth() + buffer && la < PANAMA_LIMITS.N; la += step) {
-            if (count++ > 700) break;
+            if (count++ > 800) break;
 
             let data = getInfo(la + step/2, lo + step/2);
             if (!data) continue;
 
             L.rectangle([[la, lo], [la + step, lo + step]], {
-                color: '#1a73e8', weight: 0.5, fill: false, opacity: 0.15
+                color: '#1a73e8', weight: 0.4, fill: false, opacity: 0.15
             }).addTo(gridLayer);
 
             let txt = (z >= 17) ? data.nano : (z >= 14 ? data.micro : data.macro);
             
-            // Centrado corregido usando DivIcon con tamaño definido
+            // ANCLAJE CENTRADO: mitad de iconSize
             L.marker([la + step/2, lo + step/2], {
                 icon: L.divIcon({ 
                     className: `watermark-label ${labelClass}`, 
                     html: `<span>${txt}</span>`,
-                    iconSize: [60, 20],
-                    iconAnchor: [30, 10] // Esto ancla el centro del icono al centro del cuadro
+                    iconSize: iconSize,
+                    iconAnchor: [iconSize[0]/2, iconSize[1]/2] 
                 })
             }).addTo(labelLayer);
         }
@@ -139,6 +156,7 @@ mymap.on('click', function(e) {
     const snap = getSnappedCoords(e.latlng.lat, e.latlng.lng, step);
     const res = getInfo(snap.lat + step/2, snap.lng + step/2);
     if (!res) return;
+    
     selectionLayer.clearLayers();
 
     if (z >= 17) codigoDisplay = `${res.macro}-${res.micro}-${res.nano}`;
@@ -149,7 +167,7 @@ mymap.on('click', function(e) {
         color: '#f1c40f', weight: 3, fillOpacity: 0.4, fillColor: '#f1c40f'
     }).addTo(selectionLayer);
 
-    L.popup().setLatLng(e.latlng).setContent(`<div class="codigo-progresivo">${codigoDisplay}</div>`).openOn(mymap);
+    L.popup({ offset: [0, -5] }).setLatLng(e.latlng).setContent(`<div class="codigo-progresivo">${codigoDisplay}</div>`).openOn(mymap);
 });
 
 mymap.on('moveend', render);
