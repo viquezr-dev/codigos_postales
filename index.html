@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <title>SISTEMA POSTAL - CENTRADO NANO</title>
+    <title>SISTEMA POSTAL PANAMÁ V6</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -9,37 +9,27 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
     <style>
-        .leaflet-tile-container img { outline: 1px solid transparent; }
-        body, html, #mapid { width: 100%; height: 100%; margin: 0; padding: 0; background: #f8f8f8; }
+        body, html, #mapid { width: 100%; height: 100%; margin: 0; padding: 0; background: #f0f0f0; }
         
-        .map-header { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 4000; text-align: center; pointer-events: none; width: 100%; }
+        /* Tooltips personalizados para Watermarks (Centrado Nativo) */
+        .leaflet-tooltip.watermark-tooltip {
+            background: transparent!important;
+            border: none!important;
+            box-shadow: none!important;
+            color: rgba(0,0,0,0.5);
+            font-weight: bold;
+            font-family: monospace;
+            pointer-events: none!important;
+        }
+
+        .label-macro { color: #1a73e8!important; font-size: 16px; opacity: 0.6; }
+        .label-micro { color: #e67e22!important; font-size: 11px; opacity: 0.7; }
+        .label-nano { color: #2c3e50!important; font-size: 9px; opacity: 0.5; }
+
+        .map-header { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 4000; text-align: center; width: 100%; pointer-events: none; }
         .map-header h1 { margin: 0; font-size: 14px; color: #1a2a6c; font-family: sans-serif; background: white; padding: 8px 20px; border-radius: 30px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); display: inline-block; }
         
-        /* CONTENEDOR DE WATERMARK CORREGIDO */
-        .watermark-label { 
-            background: none!important; 
-            border:none!important; 
-            display: flex!important;
-            align-items: center;
-            justify-content: center;
-            pointer-events: none!important; 
-        }
-
-        /* Texto interno con centrado forzado */
-        .watermark-label span {
-            display: block;
-            width: 100%;
-            text-align: center;
-            font-weight: bold; 
-            font-family: 'Courier New', monospace;
-            white-space: nowrap;
-        }
-
-        .label-macro span { color: #1a73e8; font-size: 16px; opacity: 0.6; }
-        .label-micro span { color: #e67e22; font-size: 11px; opacity: 0.7; }
-        .label-nano span { color: #2c3e50; font-size: 10px; opacity: 0.8; letter-spacing: -0.5px; }
-
-        .codigo-progresivo { background: #1a2a6c; color: white; padding: 12px; border-radius: 8px; font-size: 18px; font-weight: bold; font-family: monospace; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .codigo-progresivo { background: #1a2a6c; color: white; padding: 12px; border-radius: 8px; font-size: 18px; font-weight: bold; font-family: monospace; text-align: center; }
     </style>
 </head>
 <body>
@@ -48,6 +38,7 @@
 <div id="mapid"></div>
 
 <script>
+// --- CONFIGURACIÓN ---
 const ORIGIN = { lat: 10.0, lng: -83.0 };
 const PANAMA_LIMITS = { N: 10.0, S: 7.0, W: -83.0, E: -77.0 };
 const PARAMS = {
@@ -58,11 +49,13 @@ const PARAMS = {
     MAX_Y_MACRO: 30, MAX_Y_MICRO: 24, MAX_Y_NANO: 25
 };
 
-const mymap = L.map('mapid', { zoomControl: false, zoomSnap: 0.1 }).setView([8.98, -79.51], 18);
+// Mapa inicia en una vista general (Zoom 8)
+const mymap = L.map('mapid', { zoomControl: false, zoomSnap: 0.1 }).setView([8.5, -80.0], 8);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(mymap);
 
-const gridLayer = L.layerGroup().addTo(mymap);
-const labelLayer = L.layerGroup().addTo(mymap);
+const layerMacro = L.layerGroup().addTo(mymap);
+const layerMicro = L.layerGroup().addTo(mymap);
+const layerNano = L.layerGroup().addTo(mymap);
 const selectionLayer = L.layerGroup().addTo(mymap);
 
 function encode(num, len) {
@@ -94,84 +87,85 @@ function getInfo(lat, lng) {
 }
 
 function render() {
-    gridLayer.clearLayers();
-    labelLayer.clearLayers();
-    const z = mymap.getZoom();
-    if (z < 10) return;
-
-    const b = mymap.getBounds();
-    let step, labelClass, iconSize;
+    layerMacro.clearLayers();
+    layerMicro.clearLayers();
+    layerNano.clearLayers();
     
-    if (z >= 17) { 
-        step = PARAMS.RES_NANO; 
-        labelClass = "label-nano"; 
-        iconSize = [30, 15]; // Más pequeño para el nivel Nano
-    } else if (z >= 14) { 
-        step = PARAMS.RES_MICRO; 
-        labelClass = "label-micro"; 
-        iconSize = [60, 20];
-    } else { 
-        step = PARAMS.RES_MACRO; 
-        labelClass = "label-macro"; 
-        iconSize = [80, 30];
+    const z = mymap.getZoom();
+    const b = mymap.getBounds();
+
+    // 1. DIBUJAR MACRO (Frontera siempre visible desde zoom 10)
+    if (z >= 10) {
+        drawGridLevel(PARAMS.RES_MACRO, layerMacro, 'label-macro', 2, '#1a73e8', 0.4);
+    }
+    
+    // 2. DIBUJAR MICRO (Desde zoom 14)
+    if (z >= 14) {
+        drawGridLevel(PARAMS.RES_MICRO, layerMicro, 'label-micro', 1, '#e67e22', 0.2);
     }
 
-    const buffer = step * 1;
-    let start = getSnappedCoords(b.getSouth() - buffer, b.getWest() - buffer, step);
+    // 3. DIBUJAR NANO (Desde zoom 17)
+    if (z >= 17.5) {
+        drawGridLevel(PARAMS.RES_NANO, layerNano, 'label-nano', 0.5, '#2c3e50', 0.1);
+    }
+}
 
+function drawGridLevel(step, layer, labelClass, weight, color, opacity) {
+    const b = mymap.getBounds();
+    const z = mymap.getZoom();
+    let start = getSnappedCoords(b.getSouth(), b.getWest(), step);
     let count = 0;
-    for (let lo = start.lng; lo < b.getEast() + buffer && lo < PANAMA_LIMITS.E; lo += step) {
-        for (let la = start.lat; la < b.getNorth() + buffer && la < PANAMA_LIMITS.N; la += step) {
-            if (count++ > 800) break;
+
+    for (let lo = start.lng; lo < b.getEast() && lo < PANAMA_LIMITS.E; lo += step) {
+        for (let la = start.lat; la < b.getNorth() && la < PANAMA_LIMITS.N; la += step) {
+            if (count++ > 500) return; // Protección para que no se congele
 
             let data = getInfo(la + step/2, lo + step/2);
             if (!data) continue;
 
+            // Dibujar Cuadro
             L.rectangle([[la, lo], [la + step, lo + step]], {
-                color: '#1a73e8', weight: 0.4, fill: false, opacity: 0.15
-            }).addTo(gridLayer);
+                color: color, weight: weight, fill: false, opacity: opacity, interactive: false
+            }).addTo(layer);
 
-            let txt = (z >= 17) ? data.nano : (z >= 14 ? data.micro : data.macro);
-            
-            // ANCLAJE CENTRADO: mitad de iconSize
-            L.marker([la + step/2, lo + step/2], {
-                icon: L.divIcon({ 
-                    className: `watermark-label ${labelClass}`, 
-                    html: `<span>${txt}</span>`,
-                    iconSize: iconSize,
-                    iconAnchor: [iconSize[0]/2, iconSize[1]/2] 
-                })
-            }).addTo(labelLayer);
+            // Solo poner texto si es el nivel predominante para no saturar
+            let showText = false;
+            let txt = "";
+            if (labelClass === 'label-macro' && z < 14) { showText = true; txt = data.macro; }
+            if (labelClass === 'label-micro' && z >= 14 && z < 17.5) { showText = true; txt = data.micro; }
+            if (labelClass === 'label-nano' && z >= 17.5) { showText = true; txt = data.nano; }
+
+            if (showText) {
+                L.marker([la + step/2, lo + step/2], { icon: L.divIcon({className: 'invisible-icon'}) })
+                 .bindTooltip(txt, { permanent: true, direction: 'center', className: `watermark-tooltip ${labelClass}` })
+                 .addTo(layer);
+            }
         }
     }
 }
 
 mymap.on('click', function(e) {
     const z = mymap.getZoom();
-    let step, codigoDisplay;
-    if (z >= 17) step = PARAMS.RES_NANO;
-    else if (z >= 14) step = PARAMS.RES_MICRO;
-    else step = PARAMS.RES_MACRO;
-
+    let step = (z >= 17.5) ? PARAMS.RES_NANO : (z >= 14 ? PARAMS.RES_MICRO : PARAMS.RES_MACRO);
+    
     const snap = getSnappedCoords(e.latlng.lat, e.latlng.lng, step);
     const res = getInfo(snap.lat + step/2, snap.lng + step/2);
     if (!res) return;
-    
-    selectionLayer.clearLayers();
 
-    if (z >= 17) codigoDisplay = `${res.macro}-${res.micro}-${res.nano}`;
-    else if (z >= 14) codigoDisplay = `${res.macro}-${res.micro}`;
-    else codigoDisplay = `${res.macro}`;
+    selectionLayer.clearLayers();
+    let codigoDisplay = (z >= 17.5) ? `${res.macro}-${res.micro}-${res.nano}` : (z >= 14 ? `${res.macro}-${res.micro}` : res.macro);
 
     L.rectangle([[snap.lat, snap.lng], [snap.lat + step, snap.lng + step]], {
-        color: '#f1c40f', weight: 3, fillOpacity: 0.4, fillColor: '#f1c40f'
+        color: '#f1c40f', weight: 4, fillOpacity: 0.4, fillColor: '#f1c40f'
     }).addTo(selectionLayer);
 
-    L.popup({ offset: [0, -5] }).setLatLng(e.latlng).setContent(`<div class="codigo-progresivo">${codigoDisplay}</div>`).openOn(mymap);
+    L.popup().setLatLng(e.latlng).setContent(`<div class="codigo-progresivo">${codigoDisplay}</div>`).openOn(mymap);
 });
 
 mymap.on('moveend', render);
 render();
 </script>
+
+<style> .invisible-icon { background: none; border: none; } </style>
 </body>
 </html>
