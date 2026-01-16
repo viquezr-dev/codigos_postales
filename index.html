@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <title>SISTEMA POSTAL PANAMÁ V7</title>
+    <title>SISTEMA POSTAL PANAMÁ V8</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -10,45 +10,24 @@
     <style>
         body, html, #mapid { width: 100%; height: 100%; margin: 0; padding: 0; background: #f0f0f0; }
         
-        /* Estilo de Etiquetas Macro y Micro (Watermarks) */
+        /* Watermarks Macro/Micro */
         .leaflet-tooltip.watermark-tooltip {
-            background: transparent!important;
-            border: none!important;
-            box-shadow: none!important;
-            color: rgba(0,0,0,0.4);
-            font-weight: bold;
-            font-family: monospace;
-            pointer-events: none!important;
+            background: transparent!important; border: none!important; box-shadow: none!important;
+            color: rgba(0,0,0,0.4); font-weight: bold; font-family: monospace; pointer-events: none!important;
         }
         .label-macro { color: #1a73e8!important; font-size: 16px; }
         .label-micro { color: #e67e22!important; font-size: 11px; }
 
-        /* Ajuste del Popup para que no cubra el cuadro */
-        .leaflet-popup-content-wrapper {
-            border-radius: 12px;
-            padding: 5px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        /* Estilo para el Texto Nano "CL" dentro del cuadro amarillo */
+        .nano-selection-label {
+            background: transparent!important; border: none!important; box-shadow: none!important;
+            color: #000000!important; font-weight: 900; font-family: monospace;
+            font-size: 14px; text-align: center;
         }
-        .popup-container {
-            text-align: center;
-            min-width: 150px;
-        }
-        .popup-label {
-            font-size: 10px;
-            color: #777;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 5px;
-        }
-        .codigo-final {
-            background: #1a2a6c;
-            color: white;
-            padding: 10px;
-            border-radius: 6px;
-            font-size: 20px;
-            font-weight: bold;
-            font-family: 'Courier New', monospace;
-        }
+
+        /* Popup */
+        .popup-container { text-align: center; min-width: 140px; }
+        .codigo-final { background: #1a2a6c; color: white; padding: 8px; border-radius: 6px; font-size: 18px; font-weight: bold; font-family: monospace; }
 
         .map-header { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 4000; text-align: center; width: 100%; pointer-events: none; }
         .map-header h1 { margin: 0; font-size: 14px; color: #1a2a6c; font-family: sans-serif; background: white; padding: 8px 20px; border-radius: 30px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); display: inline-block; }
@@ -63,9 +42,7 @@
 const ORIGIN = { lat: 10.0, lng: -83.0 };
 const PANAMA_LIMITS = { N: 10.0, S: 7.0, W: -83.0, E: -77.0 };
 const PARAMS = {
-    RES_MACRO: 0.1,
-    RES_MICRO: 0.1 / 24,
-    RES_NANO: (0.1 / 24) / 25,
+    RES_MACRO: 0.1, RES_MICRO: 0.1 / 24, RES_NANO: (0.1 / 24) / 25,
     ALFA: "23456789ABCDEFGHJKLMNPQRSTVWXYZ",
     MAX_Y_MACRO: 30, MAX_Y_MICRO: 24, MAX_Y_NANO: 25
 };
@@ -122,12 +99,13 @@ function render() {
 function drawGridLevel(step, layer, labelClass, weight, color, opacity) {
     const b = mymap.getBounds();
     const z = mymap.getZoom();
-    let start = getSnappedCoords(b.getSouth(), b.getWest(), step);
+    // Buffer aumentado para cubrir toda la pantalla sin huecos
+    let start = getSnappedCoords(b.getSouth() - step, b.getWest() - step, step);
     let count = 0;
 
-    for (let lo = start.lng; lo < b.getEast() && lo < PANAMA_LIMITS.E; lo += step) {
-        for (let la = start.lat; la < b.getNorth() && la < PANAMA_LIMITS.N; la += step) {
-            if (count++ > 600) return;
+    for (let lo = start.lng; lo < b.getEast() + step && lo < PANAMA_LIMITS.E; lo += step) {
+        for (let la = start.lat; la < b.getNorth() + step && la < PANAMA_LIMITS.N; la += step) {
+            if (count++ > 1500) return; // Aumentado para cubrir pantallas grandes
 
             let data = getInfo(la + step/2, lo + step/2);
             if (!data) continue;
@@ -136,12 +114,11 @@ function drawGridLevel(step, layer, labelClass, weight, color, opacity) {
                 color: color, weight: weight, fill: false, opacity: opacity, interactive: false
             }).addTo(layer);
 
-            // Watermarks solo para niveles superiores
             if (labelClass !== '') {
                 let showText = (labelClass === 'label-macro' && z < 14) || (labelClass === 'label-micro' && z >= 14 && z < 17.5);
                 if (showText) {
                     let txt = (labelClass === 'label-macro') ? data.macro : data.micro;
-                    L.marker([la + step/2, lo + step/2], { icon: L.divIcon({className: 'invisible-icon'}) })
+                    L.marker([la + step/2, lo + step/2], { icon: L.divIcon({className: 'inv'}) })
                      .bindTooltip(txt, { permanent: true, direction: 'center', className: `watermark-tooltip ${labelClass}` })
                      .addTo(layer);
                 }
@@ -153,7 +130,6 @@ function drawGridLevel(step, layer, labelClass, weight, color, opacity) {
 mymap.on('click', function(e) {
     const z = mymap.getZoom();
     let step = (z >= 17.5) ? PARAMS.RES_NANO : (z >= 14 ? PARAMS.RES_MICRO : PARAMS.RES_MACRO);
-    
     const snap = getSnappedCoords(e.latlng.lat, e.latlng.lng, step);
     const res = getInfo(snap.lat + step/2, snap.lng + step/2);
     if (!res) return;
@@ -161,30 +137,28 @@ mymap.on('click', function(e) {
     selectionLayer.clearLayers();
     let codigoDisplay = (z >= 17.5) ? `${res.macro}-${res.micro}-${res.nano}` : (z >= 14 ? `${res.macro}-${res.micro}` : res.macro);
 
-    // Sombreado del cuadro
+    // 1. Dibujar el cuadro amarillo seleccionado
     L.rectangle([[snap.lat, snap.lng], [snap.lat + step, snap.lng + step]], {
-        color: '#f1c40f', weight: 4, fillOpacity: 0.4, fillColor: '#f1c40f'
+        color: '#f1c40f', weight: 4, fillOpacity: 0.5, fillColor: '#f1c40f'
     }).addTo(selectionLayer);
 
-    // POPUP ELEVADO: Usamos un offset negativo en Y para que flote arriba del cuadro
-    L.popup({ 
-        offset: [0, -15], 
-        closeButton: false 
-    })
-    .setLatLng([snap.lat + step, snap.lng + step/2]) // Lo anclamos al borde superior del cuadro
-    .setContent(`
-        <div class="popup-container">
-            <div class="popup-label">Código Postal</div>
-            <div class="codigo-final">${codigoDisplay}</div>
-        </div>
-    `)
+    // 2. Colocar el texto Nano (ej: "CL") solo si estamos en nivel Nano
+    if (z >= 17.5) {
+        L.marker([snap.lat + step/2, snap.lng + step/2], { icon: L.divIcon({className: 'inv'}) })
+         .bindTooltip(res.nano, { permanent: true, direction: 'center', className: 'nano-selection-label' })
+         .addTo(selectionLayer);
+    }
+
+    // 3. Popup elevado
+    L.popup({ offset: [0, -20], closeButton: false })
+    .setLatLng([snap.lat + step, snap.lng + step/2])
+    .setContent(`<div class="popup-container"><div class="codigo-final">${codigoDisplay}</div></div>`)
     .openOn(mymap);
 });
 
 mymap.on('moveend', render);
 render();
 </script>
-
-<style> .invisible-icon { background: none; border: none; } </style>
+<style>.inv { background: none; border: none; }</style>
 </body>
 </html>
