@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>SISTEMA POSTAL DE PANAMÁ - CORE V2</title>
+    <title>SISTEMA POSTAL DE PANAMÁ</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
@@ -9,18 +9,21 @@
         body, html, #mapid { width: 100%; height: 100%; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
         .map-title { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 4000; text-align: center; pointer-events: none; width: 90%; }
         .map-title h1 { margin: 0; font-size: 18px; color: #2c3e50; text-shadow: 0 0 5px white; font-weight: bold; }
+        
         .search-container { position: absolute; top: 15px; right: 10px; z-index: 5000; display: flex; background: white; padding: 5px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); width: 280px; }
         input#search-input { flex: 1; border: none; padding: 8px; outline: none; }
-        button#search-btn { background: #1a73e8; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; margin-left: 5px; }
+        button#search-btn { background: #2c3e50; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; margin-left: 5px; }
+
+        /* Estilos de Etiquetas (Watermarks) */
+        .watermark-label { background: none!important; border:none!important; color: #1a73e8!important; text-align: center; pointer-events: none!important; text-shadow: 1px 1px 2px white; font-weight: bold; }
+        .label-macro { font-size: 16px; }
+        .label-micro { font-size: 12px; color: #3498db!important; }
         
-        /* Estilos de etiquetas y Popups */
-        .watermark-label-fixed { background: none!important; border:none!important; color: #1a73e8!important; text-align: center; pointer-events: none!important; text-shadow: 1px 1px 2px white; font-size: 14px; }
-        .micro-label-fixed { background: none!important; border:none!important; color: #3498db!important; text-align: center; pointer-events: none!important; text-shadow: 1px 1px 2px white; font-size: 11px; }
+        /* Popup Estilo Nano */
+        .nano-popup .leaflet-popup-content-wrapper { background: #e3f2fd; border: 2px solid #1976d2; border-radius: 8px; }
+        .codigo-final { background: #1976d2; color: white; padding: 10px; border-radius: 5px; font-size: 18px; font-weight: bold; text-align: center; margin: 5px 0; }
         
-        .nano-popup .leaflet-popup-content-wrapper { background: #e3f2fd; border: 2px solid #1976d2; border-radius: 8px; width: 220px; }
-        .codigo-final { background: #1976d2; color: white; padding: 8px; border-radius: 5px; font-size: 16px; font-weight: bold; text-align: center; margin: 5px 0; letter-spacing: 1px; }
-        
-        .btn-nav, .btn-ws { display: inline-block; padding: 8px 10px; color: white!important; text-decoration: none!important; border-radius: 5px; font-weight: bold; font-size: 11px; margin: 2px; border:none; cursor: pointer; }
+        .btn-nav, .btn-ws { display: inline-block; padding: 8px 12px; color: white!important; text-decoration: none!important; border-radius: 5px; font-weight: bold; font-size: 11px; margin: 2px; cursor: pointer; border: none; }
         .btn-nav { background-color: #3498db; }
         .btn-ws { background-color: #25D366; }
     </style>
@@ -39,21 +42,26 @@
 
 <script>
 // ==============================================
-// CONFIGURACIÓN MATEMÁTICA (SIN COLISIONES)
+// CONFIGURACIÓN GEOGRÁFICA DE PANAMÁ
 // ==============================================
-const GRID_CONFIG = {
-    ORIGIN_LAT: 10.0,  // Norte de Panamá
-    ORIGIN_LNG: -83.5, // Oeste de Panamá
-    RES_MACRO: 0.1,    // ~11km
-    RES_MICRO: 0.1 / 24,  // ~460m
-    RES_NANO: (0.1 / 24) / 25, // ~18m (Precisión final)
-    ALPHABET: "23456789BCDFGHJKLMNPQRSTVWXYZ", // Base 30
-    // Límites para evitar colisiones en el índice lineal
-    MACROS_X: 70, 
-    MACROS_Y: 40
+const PANAMA_BOUNDS = {
+    TOP: 10.0,    // Norte
+    BOTTOM: 7.0,  // Sur
+    LEFT: -83.1,  // Oeste
+    RIGHT: -77.0  // Este
 };
 
-const mymap = L.map('mapid').setView([8.50, -80.0], 8);
+const GRID_CONFIG = {
+    RES_MACRO: 0.1,    // Bloques de ~11km
+    RES_MICRO: 0.1 / 24, 
+    RES_NANO: (0.1 / 24) / 25,
+    ALPHABET: "23456789BCDFGHJKLMNPQRSTVWXYZ", // 30 caracteres
+    MAX_Y_MACRO: 30, // (10.0 - 7.0) / 0.1
+    MAX_Y_MICRO: 24,
+    MAX_Y_NANO: 25
+};
+
+const mymap = L.map('mapid').setView([8.5, -80.0], 8);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mymap);
 
 const gridLayer = L.layerGroup().addTo(mymap);
@@ -61,185 +69,161 @@ const labelLayer = L.layerGroup().addTo(mymap);
 const selectionLayer = L.layerGroup().addTo(mymap);
 
 // ==============================================
-// LÓGICA DE CODIFICACIÓN (BASE 30)
+// FUNCIONES DE CONVERSIÓN (SIN COLISIONES)
 // ==============================================
 
 function toBase30(num, digits) {
-    let result = "";
-    let n = Math.floor(num);
+    let res = "";
+    let n = Math.abs(Math.floor(num));
     for (let i = 0; i < digits; i++) {
-        result = GRID_CONFIG.ALPHABET[n % 30] + result;
+        res = GRID_CONFIG.ALPHABET[n % 30] + res;
         n = Math.floor(n / 30);
     }
-    return result;
+    return res;
 }
 
 function fromBase30(code) {
-    let result = 0;
-    for (let i = 0; i < code.length; i++) {
-        let char = code[i];
-        let val = GRID_CONFIG.ALPHABET.indexOf(char);
-        result = result * 30 + val;
+    let res = 0;
+    for (let char of code) {
+        res = res * 30 + GRID_CONFIG.ALPHABET.indexOf(char);
     }
-    return result;
+    return res;
 }
 
-// Genera el código basado en coordenadas
-function encodePos(lat, lng) {
-    const { ORIGIN_LAT, ORIGIN_LNG, RES_MACRO, RES_MICRO, RES_NANO, MACROS_Y } = GRID_CONFIG;
+function getPostalCode(lat, lng) {
+    if (lat > PANAMA_BOUNDS.TOP || lat < PANAMA_BOUNDS.BOTTOM || lng < PANAMA_BOUNDS.LEFT || lng > PANAMA_BOUNDS.RIGHT) {
+        return null;
+    }
 
-    // 1. Índices Macro
-    let mx = Math.floor((lng - ORIGIN_LNG) / RES_MACRO);
-    let my = Math.floor((ORIGIN_LAT - lat) / RES_MACRO);
-    // ID lineal único para Macro para evitar colisión X/Y
-    let macroID = (mx * MACROS_Y) + my; 
-    let macroCode = toBase30(macroID, 2);
+    // Calcular Índices Macro
+    let mx = Math.floor((lng - PANAMA_BOUNDS.LEFT) / GRID_CONFIG.RES_MACRO);
+    let my = Math.floor((PANAMA_BOUNDS.TOP - lat) / GRID_CONFIG.RES_MACRO);
+    let macroID = (mx * GRID_CONFIG.MAX_Y_MACRO) + my;
 
-    // 2. Índices Micro (dentro de la Macro)
-    let microX = Math.floor(((lng - ORIGIN_LNG) % RES_MACRO) / RES_MICRO);
-    let microY = Math.floor(((ORIGIN_LAT - lat) % RES_MACRO) / RES_MICRO);
-    let microID = (microX * 24) + microY;
-    let microCode = toBase30(microID, 3);
+    // Calcular Índices Micro
+    let microX = Math.floor(((lng - PANAMA_BOUNDS.LEFT) % GRID_CONFIG.RES_MACRO) / GRID_CONFIG.RES_MICRO);
+    let microY = Math.floor(((PANAMA_BOUNDS.TOP - lat) % GRID_CONFIG.RES_MACRO) / GRID_CONFIG.RES_MICRO);
+    let microID = (microX * GRID_CONFIG.MAX_Y_MICRO) + microY;
 
-    // 3. Índices Nano (dentro de la Micro)
-    let nanoX = Math.floor((((lng - ORIGIN_LNG) % RES_MACRO) % RES_MICRO) / RES_NANO);
-    let nanoY = Math.floor((((ORIGIN_LAT - lat) % RES_MACRO) % RES_MICRO) / RES_NANO);
-    let nanoID = (nanoX * 25) + nanoY;
-    let nanoCode = toBase30(nanoID, 2);
+    // Calcular Índices Nano
+    let nanoX = Math.floor((((lng - PANAMA_BOUNDS.LEFT) % GRID_CONFIG.RES_MACRO) % GRID_CONFIG.RES_MICRO) / GRID_CONFIG.RES_NANO);
+    let nanoY = Math.floor((((PANAMA_BOUNDS.TOP - lat) % GRID_CONFIG.RES_MACRO) % GRID_CONFIG.RES_MICRO) / GRID_CONFIG.RES_NANO);
+    let nanoID = (nanoX * GRID_CONFIG.MAX_Y_NANO) + nanoY;
 
-    return {
-        full: `${macroCode}-${microCode}-${nanoCode}`,
-        parts: { macroCode, microCode, nanoCode },
-        indices: { mx, my, microX, microY, nanoX, nanoY }
-    };
-}
-
-// Decodifica el código para obtener el centro del cuadro
-function decodePos(fullCode) {
-    const parts = fullCode.replace(/\s/g, '').split('-');
-    if (parts.length !== 3) return null;
-
-    const { ORIGIN_LAT, ORIGIN_LNG, RES_MACRO, RES_MICRO, RES_NANO, MACROS_Y } = GRID_CONFIG;
-
-    // Decodificar Macro
-    let macroID = fromBase30(parts[0]);
-    let mx = Math.floor(macroID / MACROS_Y);
-    let my = macroID % MACROS_Y;
-
-    // Decodificar Micro
-    let microID = fromBase30(parts[1]);
-    let microX = Math.floor(microID / 24);
-    let microY = microID % 24;
-
-    // Decodificar Nano
-    let nanoID = fromBase30(parts[2]);
-    let nanoX = Math.floor(nanoID / 25);
-    let nanoY = nanoID % 25;
-
-    // Calcular coordenadas (centro del cuadro nano)
-    let lng = ORIGIN_LNG + (mx * RES_MACRO) + (microX * RES_MICRO) + (nanoX * RES_NANO) + (RES_NANO/2);
-    let lat = ORIGIN_LAT - (my * RES_MACRO) - (microY * RES_MICRO) - (nanoY * RES_NANO) - (RES_NANO/2);
-
-    return [lat, lng];
+    return `${toBase30(macroID, 2)}-${toBase30(microID, 3)}-${toBase30(nanoID, 2)}`;
 }
 
 // ==============================================
-// DIBUJO DINÁMICO DE GRILLA
+// RENDERIZADO DE LA GRILLA (SOLO PANAMÁ)
 // ==============================================
 
-function updateGrid() {
+function drawGrid() {
     const z = mymap.getZoom();
     gridLayer.clearLayers();
     labelLayer.clearLayers();
 
     if (z < 10) return;
 
-    const bounds = mymap.getBounds();
-    const { ORIGIN_LAT, ORIGIN_LNG, RES_MACRO, RES_MICRO } = GRID_CONFIG;
+    const b = mymap.getBounds();
+    // Limitar el dibujado al área de Panamá
+    const startLat = Math.min(b.getNorth(), PANAMA_BOUNDS.TOP);
+    const endLat = Math.max(b.getSouth(), PANAMA_BOUNDS.BOTTOM);
+    const startLng = Math.max(b.getWest(), PANAMA_BOUNDS.LEFT);
+    const endLng = Math.min(b.getEast(), PANAMA_BOUNDS.RIGHT);
 
-    // Dibujar Macros (Zoom 10-13)
-    if (z >= 10 && z < 14) {
-        for (let x = bounds.getWest(); x <= bounds.getEast(); x += RES_MACRO) {
-            for (let y = bounds.getSouth(); y <= bounds.getNorth(); y += RES_MACRO) {
-                let snapX = Math.floor((x - ORIGIN_LNG) / RES_MACRO) * RES_MACRO + ORIGIN_LNG;
-                let snapY = Math.floor((ORIGIN_LAT - y) / RES_MACRO) * RES_MACRO;
-                let lat1 = ORIGIN_LAT - snapY;
-                let lng1 = snapX;
-                
-                L.rectangle([[lat1, lng1], [lat1 - RES_MACRO, lng1 + RES_MACRO]], {
-                    color: '#1a73e8', weight: 1, fill: false
-                }).addTo(gridLayer);
+    let step = (z >= 14) ? GRID_CONFIG.RES_MICRO : GRID_CONFIG.RES_MACRO;
 
-                let code = encodePos(lat1 - RES_MACRO/2, lng1 + RES_MACRO/2).parts.macroCode;
-                L.marker([lat1 - RES_MACRO/2, lng1 + RES_MACRO/2], {
-                    icon: L.divIcon({ className: 'watermark-label-fixed', html: code })
+    for (let lo = startLng; lo < endLng; lo += step) {
+        for (let la = endLat; la < startLat; la += step) {
+            
+            let code = getPostalCode(la + step/2, lo + step/2);
+            if (!code) continue;
+
+            // Dibujar Rectángulo
+            L.rectangle([[la, lo], [la + step, lo + step]], {
+                color: z >= 14 ? '#3498db' : '#1a73e8',
+                weight: 1,
+                fill: false,
+                opacity: 0.4
+            }).addTo(gridLayer);
+
+            // Dibujar Watermark
+            if (z >= 11 && z < 14) { // Solo Macro
+                let label = code.split('-')[0];
+                L.marker([la + step/2, lo + step/2], {
+                    icon: L.divIcon({ className: 'watermark-label label-macro', html: label })
                 }).addTo(labelLayer);
-            }
-        }
-    }
-
-    // Dibujar Micros (Zoom 15+)
-    if (z >= 15) {
-        let step = RES_MICRO;
-        for (let x = bounds.getWest(); x <= bounds.getEast(); x += step) {
-            for (let y = bounds.getSouth(); y <= bounds.getNorth(); y += step) {
-                let lat = y; let lng = x;
-                let codeInfo = encodePos(lat, lng);
-                
-                L.rectangle([[lat, lng], [lat + step, lng + step]], {
-                    color: '#3498db', weight: 0.5, fill: false, opacity: 0.5
-                }).addTo(gridLayer);
+            } else if (z >= 15 && z < 17) { // Solo Micro
+                let label = code.split('-')[1];
+                L.marker([la + step/2, lo + step/2], {
+                    icon: L.divIcon({ className: 'watermark-label label-micro', html: label })
+                }).addTo(labelLayer);
             }
         }
     }
 }
 
 // ==============================================
-// EVENTOS
+// INTERACCIÓN
 // ==============================================
 
 mymap.on('click', function(e) {
-    selectionLayer.clearLayers();
-    let codeInfo = encodePos(e.latlng.lat, e.latlng.lng);
-    
-    // Resaltar cuadro Nano
-    const { RES_NANO } = GRID_CONFIG;
-    // Ajustar al inicio del cuadro para el dibujo
-    let snapLat = ORIGIN_LAT - Math.floor((ORIGIN_LAT - e.latlng.lat) / RES_NANO) * RES_NANO;
-    let snapLng = ORIGIN_LNG + Math.floor((e.latlng.lng - ORIGIN_LNG) / RES_NANO) * RES_NANO;
+    const code = getPostalCode(e.latlng.lat, e.latlng.lng);
+    if (!code) return;
 
-    L.rectangle([[snapLat, snapLng], [snapLat - RES_NANO, snapLng + RES_NANO]], {
-        color: 'red', weight: 2, fillColor: 'red', fillOpacity: 0.2
+    selectionLayer.clearLayers();
+    
+    // Resaltar el cuadro Nano exacto
+    const r = GRID_CONFIG.RES_NANO;
+    const snapLat = PANAMA_BOUNDS.TOP - Math.floor((PANAMA_BOUNDS.TOP - e.latlng.lat) / r) * r;
+    const snapLng = PANAMA_BOUNDS.LEFT + Math.floor((e.latlng.lng - PANAMA_BOUNDS.LEFT) / r) * r;
+
+    L.rectangle([[snapLat, snapLng], [snapLat - r, snapLng + r]], {
+        color: '#e74c3c', weight: 3, fillOpacity: 0.3
     }).addTo(selectionLayer);
 
     L.popup({ className: 'nano-popup' })
         .setLatLng(e.latlng)
         .setContent(`
-            <div style="text-align:center">
-                <small>CÓDIGO POSTAL</small>
-                <div class="codigo-final">${codeInfo.full}</div>
-                <div style="font-size:10px; margin-bottom:10px;">
-                    GPS: ${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}
-                </div>
-                <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${e.latlng.lat},${e.latlng.lng}')">GOOGLE MAPS</button>
-                <button class="btn-ws" onclick="window.open('https://wa.me/?text=Mi+ubicación+postal:+${codeInfo.full}')">WHATSAPP</button>
+            <div style="text-align:center; min-width:180px;">
+                <b style="color:#777; font-size:10px;">CÓDIGO POSTAL DE PANAMÁ</b>
+                <div class="codigo-final">${code}</div>
+                <div style="font-size:11px; color:#555; margin-bottom:10px;">GPS: ${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}</div>
+                <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${e.latlng.lat},${e.latlng.lng}')">MAPS</button>
+                <button class="btn-ws" onclick="window.open('https://wa.me/?text=Mi+Código+Postal+Panamá:+${code}')">COMPARTIR</button>
             </div>
         `).openOn(mymap);
 });
 
 $('#search-btn').click(function() {
-    let query = $('#search-input').val().toUpperCase();
-    let coords = decodePos(query);
-    if (coords) {
-        mymap.setView(coords, 18);
-        L.marker(coords).addTo(selectionLayer).bindPopup("Ubicación encontrada: " + query).openPopup();
-    } else {
-        alert("Código no válido. Formato: XX-XXX-XX");
-    }
+    const val = $('#search-input').val().toUpperCase().trim();
+    const parts = val.split('-');
+    if (parts.length !== 3) { alert("Formato: XX-XXX-XX"); return; }
+
+    // Decodificar Macro
+    let mID = fromBase30(parts[0]);
+    let mx = Math.floor(mID / GRID_CONFIG.MAX_Y_MACRO);
+    let my = mID % GRID_CONFIG.MAX_Y_MACRO;
+
+    // Decodificar Micro
+    let miID = fromBase30(parts[1]);
+    let mix = Math.floor(miID / GRID_CONFIG.MAX_Y_MICRO);
+    let miy = miID % GRID_CONFIG.MAX_Y_MICRO;
+
+    // Decodificar Nano
+    let nID = fromBase30(parts[2]);
+    let nx = Math.floor(nID / GRID_CONFIG.MAX_Y_NANO);
+    let ny = nID % GRID_CONFIG.MAX_Y_NANO;
+
+    const lat = PANAMA_BOUNDS.TOP - (my * GRID_CONFIG.RES_MACRO) - (miy * GRID_CONFIG.RES_MICRO) - (ny * GRID_CONFIG.RES_NANO);
+    const lng = PANAMA_BOUNDS.LEFT + (mx * GRID_CONFIG.RES_MACRO) + (mix * GRID_CONFIG.RES_MICRO) + (nx * GRID_CONFIG.RES_NANO);
+
+    mymap.setView([lat, lng], 18);
+    L.circleMarker([lat, lng], { color: 'red' }).addTo(selectionLayer);
 });
 
-mymap.on('moveend', updateGrid);
-updateGrid();
+mymap.on('moveend', drawGrid);
+drawGrid();
 
 </script>
 </body>
