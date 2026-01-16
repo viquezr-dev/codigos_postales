@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <title>SISTEMA POSTAL DINÁMICO</title>
+    <title>SISTEMA POSTAL - ALINEACIÓN TOTAL</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -9,19 +9,21 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
     <style>
-        body, html, #mapid { width: 100%; height: 100%; margin: 0; padding: 0; background: #f0f0f0; }
-        .map-header { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 4000; text-align: center; width: auto; pointer-events: none; }
-        .map-header h1 { margin: 0; font-size: 16px; color: #1a2a6c; font-family: sans-serif; background: rgba(255,255,255,0.95); padding: 10px 25px; border-radius: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); letter-spacing: 1px; }
+        /* Corrección de renderizado de mapa base */
+        .leaflet-tile-container img { outline: 1px solid transparent; }
         
+        body, html, #mapid { width: 100%; height: 100%; margin: 0; padding: 0; background: #e0e0e0; }
+        
+        .map-header { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 4000; text-align: center; pointer-events: none; }
+        .map-header h1 { margin: 0; font-size: 16px; color: #1a2a6c; font-family: sans-serif; background: white; padding: 10px 25px; border-radius: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        
+        /* Estilos de Watermarks */
         .watermark-label { background: none!important; border:none!important; text-align: center; pointer-events: none!important; font-weight: bold; font-family: monospace; }
-        .label-macro { color: rgba(26, 115, 232, 0.7); font-size: 18px; }
-        .label-micro { color: rgba(230, 126, 34, 0.7); font-size: 12px; }
-        .label-nano { color: rgba(44, 62, 80, 0.6); font-size: 9px; }
+        .label-macro { color: #1a73e8; font-size: 16px; opacity: 0.6; }
+        .label-micro { color: #e67e22; font-size: 11px; opacity: 0.7; }
+        .label-nano { color: #2c3e50; font-size: 9px; opacity: 0.5; }
 
-        .popup-nivel { text-align: center; font-family: sans-serif; }
-        .popup-nivel small { color: #888; text-transform: uppercase; font-size: 10px; }
-        .codigo-progresivo { background: #1a2a6c; color: white; padding: 10px 15px; border-radius: 8px; font-size: 18px; font-weight: bold; margin: 8px 0; font-family: monospace; }
-        .btn-zoom { background: #3498db; color: white!important; padding: 5px 10px; text-decoration: none; border-radius: 4px; font-size: 11px; display: inline-block; margin-top: 5px; }
+        .codigo-progresivo { background: #1a2a6c; color: white; padding: 10px; border-radius: 8px; font-size: 18px; font-weight: bold; font-family: monospace; text-align: center; }
     </style>
 </head>
 <body>
@@ -30,22 +32,29 @@
 <div id="mapid"></div>
 
 <script>
-const PANAMA_LIMITS = { N: 10.0, S: 7.0, W: -83.1, E: -77.0 };
+// --- CONFIGURACIÓN MAESTRA ---
+const ORIGIN = { lat: 10.0, lng: -83.0 }; // Punto de anclaje Noroeste
+const PANAMA_LIMITS = { N: 10.0, S: 7.0, W: -83.0, E: -77.0 };
 const PARAMS = {
     RES_MACRO: 0.1,
     RES_MICRO: 0.1 / 24,
     RES_NANO: (0.1 / 24) / 25,
-    ALFA: "23456789ABCDEFGHJKLMNPQRSTVWXYZ", 
+    ALFA: "23456789ABCDEFGHJKLMNPQRSTVWXYZ",
     MAX_Y_MACRO: 30, MAX_Y_MICRO: 24, MAX_Y_NANO: 25
 };
 
-const mymap = L.map('mapid', { zoomControl: false }).setView([8.5, -80.1], 8);
+const mymap = L.map('mapid', { 
+    zoomControl: false,
+    zoomSnap: 0.1
+}).setView([8.5, -80.0], 8);
+
 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(mymap);
 
 const gridLayer = L.layerGroup().addTo(mymap);
 const labelLayer = L.layerGroup().addTo(mymap);
 const selectionLayer = L.layerGroup().addTo(mymap);
 
+// --- UTILIDADES ---
 function encode(num, len) {
     let s = "";
     let n = Math.abs(Math.floor(num));
@@ -53,28 +62,36 @@ function encode(num, len) {
     return s;
 }
 
+// Función unificada de alineación (Snap to Grid)
+function getSnappedCoords(lat, lng, step) {
+    const snapLng = Math.floor((lng - ORIGIN.lng) / step) * step + ORIGIN.lng;
+    const snapLat = ORIGIN.lat - Math.ceil((ORIGIN.lat - lat) / step) * step;
+    return { lat: snapLat, lng: snapLng };
+}
+
 function getInfo(lat, lng) {
     if (lat > PANAMA_LIMITS.N || lat < PANAMA_LIMITS.S || lng < PANAMA_LIMITS.W || lng > PANAMA_LIMITS.E) return null;
     
-    let mx = Math.floor((lng - PANAMA_LIMITS.W) / PARAMS.RES_MACRO);
-    let my = Math.floor((PANAMA_LIMITS.N - lat) / PARAMS.RES_MACRO);
+    let mx = Math.floor((lng - ORIGIN.lng) / PARAMS.RES_MACRO);
+    let my = Math.floor((ORIGIN.lat - lat) / PARAMS.RES_MACRO);
     let macroID = (mx * PARAMS.MAX_Y_MACRO) + my;
 
-    let microX = Math.floor(((lng - PANAMA_LIMITS.W) % PARAMS.RES_MACRO) / PARAMS.RES_MICRO);
-    let microY = Math.floor(((PANAMA_LIMITS.N - lat) % PARAMS.RES_MACRO) / PARAMS.RES_MICRO);
+    let microX = Math.floor(((lng - ORIGIN.lng) % PARAMS.RES_MACRO) / PARAMS.RES_MICRO);
+    let microY = Math.floor(((ORIGIN.lat - lat) % PARAMS.RES_MACRO) / PARAMS.RES_MICRO);
     let microID = (microX * PARAMS.MAX_Y_MICRO) + microY;
 
-    let nanoX = Math.floor((((lng - PANAMA_LIMITS.W) % PARAMS.RES_MACRO) % PARAMS.RES_MICRO) / PARAMS.RES_NANO);
-    let nanoY = Math.floor((((PANAMA_LIMITS.N - lat) % PARAMS.RES_MACRO) % PARAMS.RES_MICRO) / PARAMS.RES_NANO);
+    let nanoX = Math.floor((((lng - ORIGIN.lng) % PARAMS.RES_MACRO) % PARAMS.RES_MICRO) / PARAMS.RES_NANO);
+    let nanoY = Math.floor((((ORIGIN.lat - lat) % PARAMS.RES_MACRO) % PARAMS.RES_MICRO) / PARAMS.RES_NANO);
     let nanoID = (nanoX * PARAMS.MAX_Y_NANO) + nanoY;
 
-    return {
-        macro: encode(macroID, 2),
-        micro: encode(microID, 3),
-        nano: encode(nanoID, 2)
+    return { 
+        macro: encode(macroID, 2), 
+        micro: encode(microID, 3), 
+        nano: encode(nanoID, 2) 
     };
 }
 
+// --- RENDERIZADO ---
 function render() {
     gridLayer.clearLayers();
     labelLayer.clearLayers();
@@ -82,17 +99,19 @@ function render() {
     if (z < 10) return;
 
     const b = mymap.getBounds();
-    let step;
-    let labelClass = "";
+    let step, labelClass;
     
     if (z >= 17) { step = PARAMS.RES_NANO; labelClass = "label-nano"; }
     else if (z >= 14) { step = PARAMS.RES_MICRO; labelClass = "label-micro"; }
     else { step = PARAMS.RES_MACRO; labelClass = "label-macro"; }
 
+    // Usar la función de snap para iniciar el dibujo exactamente alineado
+    let start = getSnappedCoords(b.getSouth(), b.getWest(), step);
+
     let count = 0;
-    for (let lo = Math.max(b.getWest(), PANAMA_LIMITS.W); lo < Math.min(b.getEast(), PANAMA_LIMITS.E); lo += step) {
-        for (let la = Math.max(b.getSouth(), PANAMA_LIMITS.S); la < Math.min(b.getNorth(), PANAMA_LIMITS.N); la += step) {
-            if (count++ > 600) break;
+    for (let lo = start.lng; lo < b.getEast() && lo < PANAMA_LIMITS.E; lo += step) {
+        for (let la = start.lat; la < b.getNorth() && la < PANAMA_LIMITS.N; la += step) {
+            if (count++ > 500) break;
 
             let data = getInfo(la + step/2, lo + step/2);
             if (!data) continue;
@@ -109,45 +128,31 @@ function render() {
     }
 }
 
+// --- CLIC CON ALINEACIÓN FORZADA ---
 mymap.on('click', function(e) {
-    const res = getInfo(e.latlng.lat, e.latlng.lng);
-    if (!res) return;
-
-    selectionLayer.clearLayers();
     const z = mymap.getZoom();
+    let step, codigoDisplay;
     
-    let step, codigoDisplay, nivelTexto;
-    
-    // Determinar nivel y sombreado según Zoom actual
-    if (z >= 17) {
-        step = PARAMS.RES_NANO;
-        codigoDisplay = `${res.macro}-${res.micro}-${res.nano}`;
-        nivelTexto = "Nivel Nano (Final)";
-    } else if (z >= 14) {
-        step = PARAMS.RES_MICRO;
-        codigoDisplay = `${res.macro}-${res.micro}`;
-        nivelTexto = "Nivel Micro";
-    } else {
-        step = PARAMS.RES_MACRO;
-        codigoDisplay = `${res.macro}`;
-        nivelTexto = "Nivel Macro";
-    }
+    if (z >= 17) step = PARAMS.RES_NANO;
+    else if (z >= 14) step = PARAMS.RES_MICRO;
+    else step = PARAMS.RES_MACRO;
 
-    // Calcular el cuadro exacto para sombrear
-    const sLat = PANAMA_LIMITS.N - Math.floor((PANAMA_LIMITS.N - e.latlng.lat) / step) * step;
-    const sLng = PANAMA_LIMITS.W + Math.floor((e.latlng.lng - PANAMA_LIMITS.W) / step) * step;
+    // ALINEACIÓN CRÍTICA: Forzamos que el cuadro amarillo use el mismo SNAP que la grid
+    const snap = getSnappedCoords(e.latlng.lat, e.latlng.lng, step);
+    const res = getInfo(snap.lat + step/2, snap.lng + step/2);
     
-    L.rectangle([[sLat, sLng], [sLat - step, sLng + step]], {
-        color: '#f1c40f', weight: 2, fillOpacity: 0.4, fillColor: '#f1c40f'
+    if (!res) return;
+    selectionLayer.clearLayers();
+
+    if (z >= 17) codigoDisplay = `${res.macro}-${res.micro}-${res.nano}`;
+    else if (z >= 14) codigoDisplay = `${res.macro}-${res.micro}`;
+    else codigoDisplay = `${res.macro}`;
+
+    L.rectangle([[snap.lat, snap.lng], [snap.lat + step, snap.lng + step]], {
+        color: '#f1c40f', weight: 3, fillOpacity: 0.4, fillColor: '#f1c40f'
     }).addTo(selectionLayer);
 
-    L.popup().setLatLng(e.latlng).setContent(`
-        <div class="popup-nivel">
-            <small>${nivelTexto}</small>
-            <div class="codigo-progresivo">${codigoDisplay}</div>
-            ${z < 17 ? '<span style="font-size:10px; color:#666;">Haz zoom para ver más detalle</span>' : ''}
-        </div>
-    `).openOn(mymap);
+    L.popup().setLatLng(e.latlng).setContent(`<div class="codigo-progresivo">${codigoDisplay}</div>`).openOn(mymap);
 });
 
 mymap.on('moveend', render);
