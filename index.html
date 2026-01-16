@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <title>SISTEMA POSTAL PANAMÁ V5</title>
+    <title>SISTEMA POSTAL DINÁMICO</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -13,14 +13,15 @@
         .map-header { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 4000; text-align: center; width: auto; pointer-events: none; }
         .map-header h1 { margin: 0; font-size: 16px; color: #1a2a6c; font-family: sans-serif; background: rgba(255,255,255,0.95); padding: 10px 25px; border-radius: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); letter-spacing: 1px; }
         
-        /* Estilo de Watermarks dinámicos */
-        .watermark-label { background: none!important; border:none!important; text-align: center; pointer-events: none!important; font-weight: bold; font-family: monospace; white-space: nowrap; }
+        .watermark-label { background: none!important; border:none!important; text-align: center; pointer-events: none!important; font-weight: bold; font-family: monospace; }
         .label-macro { color: rgba(26, 115, 232, 0.7); font-size: 18px; }
         .label-micro { color: rgba(230, 126, 34, 0.7); font-size: 12px; }
         .label-nano { color: rgba(44, 62, 80, 0.6); font-size: 9px; }
 
-        .codigo-val { background: #1a2a6c; color: white; padding: 15px; border-radius: 10px; font-size: 22px; font-weight: bold; margin: 10px 0; font-family: monospace; }
-        .btn-google { display: block; width: 100%; padding: 12px; background: #4285F4; color: white!important; text-align: center; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 12px; }
+        .popup-nivel { text-align: center; font-family: sans-serif; }
+        .popup-nivel small { color: #888; text-transform: uppercase; font-size: 10px; }
+        .codigo-progresivo { background: #1a2a6c; color: white; padding: 10px 15px; border-radius: 8px; font-size: 18px; font-weight: bold; margin: 8px 0; font-family: monospace; }
+        .btn-zoom { background: #3498db; color: white!important; padding: 5px 10px; text-decoration: none; border-radius: 4px; font-size: 11px; display: inline-block; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -68,10 +69,9 @@ function getInfo(lat, lng) {
     let nanoID = (nanoX * PARAMS.MAX_Y_NANO) + nanoY;
 
     return {
-        full: `${encode(macroID, 2)}-${encode(microID, 3)}-${encode(nanoID, 2)}`,
-        m: encode(macroID, 2),
-        mi: encode(microID, 3),
-        na: encode(nanoID, 2)
+        macro: encode(macroID, 2),
+        micro: encode(microID, 3),
+        nano: encode(nanoID, 2)
     };
 }
 
@@ -85,16 +85,14 @@ function render() {
     let step;
     let labelClass = "";
     
-    // Decidir nivel de detalle según Zoom
     if (z >= 17) { step = PARAMS.RES_NANO; labelClass = "label-nano"; }
     else if (z >= 14) { step = PARAMS.RES_MICRO; labelClass = "label-micro"; }
     else { step = PARAMS.RES_MACRO; labelClass = "label-macro"; }
 
-    // Limitar la cantidad de cuadros dibujados para no congelar el navegador
     let count = 0;
     for (let lo = Math.max(b.getWest(), PANAMA_LIMITS.W); lo < Math.min(b.getEast(), PANAMA_LIMITS.E); lo += step) {
         for (let la = Math.max(b.getSouth(), PANAMA_LIMITS.S); la < Math.min(b.getNorth(), PANAMA_LIMITS.N); la += step) {
-            if (count++ > 800) break; // Seguridad de rendimiento
+            if (count++ > 600) break;
 
             let data = getInfo(la + step/2, lo + step/2);
             if (!data) continue;
@@ -103,8 +101,7 @@ function render() {
                 color: '#1a73e8', weight: 0.5, fill: false, opacity: 0.2
             }).addTo(gridLayer);
 
-            let txt = (z >= 17) ? data.na : (z >= 14 ? data.mi : data.m);
-            
+            let txt = (z >= 17) ? data.nano : (z >= 14 ? data.micro : data.macro);
             L.marker([la + step/2, lo + step/2], {
                 icon: L.divIcon({ className: `watermark-label ${labelClass}`, html: txt, iconSize: [40,20] })
             }).addTo(labelLayer);
@@ -117,19 +114,38 @@ mymap.on('click', function(e) {
     if (!res) return;
 
     selectionLayer.clearLayers();
-    // Resaltar cuadro seleccionado
-    const step = PARAMS.RES_NANO;
+    const z = mymap.getZoom();
+    
+    let step, codigoDisplay, nivelTexto;
+    
+    // Determinar nivel y sombreado según Zoom actual
+    if (z >= 17) {
+        step = PARAMS.RES_NANO;
+        codigoDisplay = `${res.macro}-${res.micro}-${res.nano}`;
+        nivelTexto = "Nivel Nano (Final)";
+    } else if (z >= 14) {
+        step = PARAMS.RES_MICRO;
+        codigoDisplay = `${res.macro}-${res.micro}`;
+        nivelTexto = "Nivel Micro";
+    } else {
+        step = PARAMS.RES_MACRO;
+        codigoDisplay = `${res.macro}`;
+        nivelTexto = "Nivel Macro";
+    }
+
+    // Calcular el cuadro exacto para sombrear
     const sLat = PANAMA_LIMITS.N - Math.floor((PANAMA_LIMITS.N - e.latlng.lat) / step) * step;
     const sLng = PANAMA_LIMITS.W + Math.floor((e.latlng.lng - PANAMA_LIMITS.W) / step) * step;
     
     L.rectangle([[sLat, sLng], [sLat - step, sLng + step]], {
-        color: '#f1c40f', weight: 2, fillOpacity: 0.5, fillColor: '#f1c40f'
+        color: '#f1c40f', weight: 2, fillOpacity: 0.4, fillColor: '#f1c40f'
     }).addTo(selectionLayer);
 
     L.popup().setLatLng(e.latlng).setContent(`
-        <div style="text-align:center;">
-            <div class="codigo-val">${res.full}</div>
-            <a class="btn-google" href="https://www.google.com/maps?q=${e.latlng.lat},${e.latlng.lng}" target="_blank">GOOGLE MAPS</a>
+        <div class="popup-nivel">
+            <small>${nivelTexto}</small>
+            <div class="codigo-progresivo">${codigoDisplay}</div>
+            ${z < 17 ? '<span style="font-size:10px; color:#666;">Haz zoom para ver más detalle</span>' : ''}
         </div>
     `).openOn(mymap);
 });
