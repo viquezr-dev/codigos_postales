@@ -1,109 +1,60 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <title>SISTEMA POSTAL PANAMÁ V4</title>
+    <title>SISTEMA POSTAL PANAMÁ V5</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
     <style>
         body, html, #mapid { width: 100%; height: 100%; margin: 0; padding: 0; background: #f0f0f0; }
+        .map-header { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 4000; text-align: center; width: auto; pointer-events: none; }
+        .map-header h1 { margin: 0; font-size: 16px; color: #1a2a6c; font-family: sans-serif; background: rgba(255,255,255,0.95); padding: 10px 25px; border-radius: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); letter-spacing: 1px; }
         
-        /* Título Flotante */
-        .map-header { 
-            position: absolute; top: 15px; left: 50%; transform: translateX(-50%); 
-            z-index: 4000; text-align: center; width: auto; pointer-events: none; 
-        }
-        .map-header h1 { 
-            margin: 0; font-size: 16px; color: #1a2a6c; font-family: sans-serif;
-            background: rgba(255,255,255,0.95); padding: 10px 25px; 
-            border-radius: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            letter-spacing: 1px;
-        }
-        
-        /* Contenedor de Búsqueda */
-        .search-box { 
-            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); 
-            z-index: 5000; display: flex; background: white; padding: 8px; 
-            border-radius: 12px; box-shadow: 0 5px 20px rgba(0,0,0,0.3); width: 280px;
-        }
-        input#search-input { border: none; padding: 10px; outline: none; flex: 1; text-transform: uppercase; font-size: 14px; }
-        button#search-btn { background: #1a2a6c; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        /* Estilo de Watermarks dinámicos */
+        .watermark-label { background: none!important; border:none!important; text-align: center; pointer-events: none!important; font-weight: bold; font-family: monospace; white-space: nowrap; }
+        .label-macro { color: rgba(26, 115, 232, 0.7); font-size: 18px; }
+        .label-micro { color: rgba(230, 126, 34, 0.7); font-size: 12px; }
+        .label-nano { color: rgba(44, 62, 80, 0.6); font-size: 9px; }
 
-        /* Estilo de los Números en el Mapa (Watermarks) */
-        .watermark-label { 
-            background: none!important; border:none!important; 
-            color: rgba(26, 115, 232, 0.6)!important; /* Azul suave semi-transparente */
-            text-align: center; pointer-events: none!important; 
-            font-weight: 800; font-family: sans-serif;
-        }
-        
-        /* Popup de Información */
-        .codigo-card { text-align: center; padding: 5px; }
-        .codigo-card b { color: #777; font-size: 10px; text-transform: uppercase; }
-        .codigo-val { 
-            background: #1a2a6c; color: white; padding: 15px; 
-            border-radius: 10px; font-size: 22px; font-weight: bold; 
-            margin: 10px 0; font-family: monospace; box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
-        }
-        .btn-google { 
-            display: block; width: 100%; padding: 12px; background: #4285F4; 
-            color: white!important; text-align: center; text-decoration: none; 
-            border-radius: 8px; font-weight: bold; font-size: 12px;
-        }
+        .codigo-val { background: #1a2a6c; color: white; padding: 15px; border-radius: 10px; font-size: 22px; font-weight: bold; margin: 10px 0; font-family: monospace; }
+        .btn-google { display: block; width: 100%; padding: 12px; background: #4285F4; color: white!important; text-align: center; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 12px; }
     </style>
 </head>
 <body>
 
 <div class="map-header"><h1>SISTEMA POSTAL DE PANAMÁ</h1></div>
-
-<div class="search-box">
-    <input type="text" id="search-input" placeholder="BUSCAR CÓDIGO (XX-XXX-XX)">
-    <button id="search-btn">IR</button>
-</div>
-
 <div id="mapid"></div>
 
 <script>
-// --- CONFIGURACIÓN TÉCNICA ---
 const PANAMA_LIMITS = { N: 10.0, S: 7.0, W: -83.1, E: -77.0 };
 const PARAMS = {
     RES_MACRO: 0.1,
     RES_MICRO: 0.1 / 24,
     RES_NANO: (0.1 / 24) / 25,
     ALFA: "23456789ABCDEFGHJKLMNPQRSTVWXYZ", 
-    MAX_Y_MACRO: 30,
-    MAX_Y_MICRO: 24,
-    MAX_Y_NANO: 25
+    MAX_Y_MACRO: 30, MAX_Y_MICRO: 24, MAX_Y_NANO: 25
 };
 
-// --- MAPA CON ESTILO LIMPIO (SIN CUADRÍCULA PROPIA) ---
 const mymap = L.map('mapid', { zoomControl: false }).setView([8.5, -80.1], 8);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-    attribution: 'Postal Panama'
-}).addTo(mymap);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(mymap);
 
 const gridLayer = L.layerGroup().addTo(mymap);
 const labelLayer = L.layerGroup().addTo(mymap);
 const selectionLayer = L.layerGroup().addTo(mymap);
 
-// --- LÓGICA DE CÓDIGOS ---
 function encode(num, len) {
     let s = "";
     let n = Math.abs(Math.floor(num));
-    for (let i = 0; i < len; i++) {
-        s = PARAMS.ALFA[n % 30] + s;
-        n = Math.floor(n / 30);
-    }
+    for (let i = 0; i < len; i++) { s = PARAMS.ALFA[n % 30] + s; n = Math.floor(n / 30); }
     return s;
 }
 
 function getInfo(lat, lng) {
     if (lat > PANAMA_LIMITS.N || lat < PANAMA_LIMITS.S || lng < PANAMA_LIMITS.W || lng > PANAMA_LIMITS.E) return null;
-
+    
     let mx = Math.floor((lng - PANAMA_LIMITS.W) / PARAMS.RES_MACRO);
     let my = Math.floor((PANAMA_LIMITS.N - lat) / PARAMS.RES_MACRO);
     let macroID = (mx * PARAMS.MAX_Y_MACRO) + my;
@@ -117,12 +68,13 @@ function getInfo(lat, lng) {
     let nanoID = (nanoX * PARAMS.MAX_Y_NANO) + nanoY;
 
     return {
-        cod: `${encode(macroID, 2)}-${encode(microID, 3)}-${encode(nanoID, 2)}`,
-        m: encode(macroID, 2)
+        full: `${encode(macroID, 2)}-${encode(microID, 3)}-${encode(nanoID, 2)}`,
+        m: encode(macroID, 2),
+        mi: encode(microID, 3),
+        na: encode(nanoID, 2)
     };
 }
 
-// --- DIBUJO ---
 function render() {
     gridLayer.clearLayers();
     labelLayer.clearLayers();
@@ -130,42 +82,56 @@ function render() {
     if (z < 10) return;
 
     const b = mymap.getBounds();
-    const step = (z >= 14) ? PARAMS.RES_MICRO : PARAMS.RES_MACRO;
+    let step;
+    let labelClass = "";
+    
+    // Decidir nivel de detalle según Zoom
+    if (z >= 17) { step = PARAMS.RES_NANO; labelClass = "label-nano"; }
+    else if (z >= 14) { step = PARAMS.RES_MICRO; labelClass = "label-micro"; }
+    else { step = PARAMS.RES_MACRO; labelClass = "label-macro"; }
 
+    // Limitar la cantidad de cuadros dibujados para no congelar el navegador
+    let count = 0;
     for (let lo = Math.max(b.getWest(), PANAMA_LIMITS.W); lo < Math.min(b.getEast(), PANAMA_LIMITS.E); lo += step) {
         for (let la = Math.max(b.getSouth(), PANAMA_LIMITS.S); la < Math.min(b.getNorth(), PANAMA_LIMITS.N); la += step) {
-            
+            if (count++ > 800) break; // Seguridad de rendimiento
+
             let data = getInfo(la + step/2, lo + step/2);
             if (!data) continue;
 
             L.rectangle([[la, lo], [la + step, lo + step]], {
-                color: '#1a73e8', weight: 0.8, fill: false, opacity: 0.3
+                color: '#1a73e8', weight: 0.5, fill: false, opacity: 0.2
             }).addTo(gridLayer);
 
-            if (z >= 11 && z < 14) {
-                L.marker([la + step/2, lo + step/2], {
-                    icon: L.divIcon({ className: 'watermark-label', html: data.m, iconSize: [30,20] })
-                }).addTo(labelLayer);
-            }
+            let txt = (z >= 17) ? data.na : (z >= 14 ? data.mi : data.m);
+            
+            L.marker([la + step/2, lo + step/2], {
+                icon: L.divIcon({ className: `watermark-label ${labelClass}`, html: txt, iconSize: [40,20] })
+            }).addTo(labelLayer);
         }
     }
 }
 
-// --- CLIC ---
 mymap.on('click', function(e) {
     const res = getInfo(e.latlng.lat, e.latlng.lng);
     if (!res) return;
 
     selectionLayer.clearLayers();
-    L.popup()
-        .setLatLng(e.latlng)
-        .setContent(`
-            <div class="codigo-card">
-                <b>Ubicación Identificada</b>
-                <div class="codigo-val">${res.cod}</div>
-                <a class="btn-google" href="https://www.google.com/maps?q=${e.latlng.lat},${e.latlng.lng}" target="_blank">VER EN GOOGLE MAPS</a>
-            </div>
-        `).openOn(mymap);
+    // Resaltar cuadro seleccionado
+    const step = PARAMS.RES_NANO;
+    const sLat = PANAMA_LIMITS.N - Math.floor((PANAMA_LIMITS.N - e.latlng.lat) / step) * step;
+    const sLng = PANAMA_LIMITS.W + Math.floor((e.latlng.lng - PANAMA_LIMITS.W) / step) * step;
+    
+    L.rectangle([[sLat, sLng], [sLat - step, sLng + step]], {
+        color: '#f1c40f', weight: 2, fillOpacity: 0.5, fillColor: '#f1c40f'
+    }).addTo(selectionLayer);
+
+    L.popup().setLatLng(e.latlng).setContent(`
+        <div style="text-align:center;">
+            <div class="codigo-val">${res.full}</div>
+            <a class="btn-google" href="https://www.google.com/maps?q=${e.latlng.lat},${e.latlng.lng}" target="_blank">GOOGLE MAPS</a>
+        </div>
+    `).openOn(mymap);
 });
 
 mymap.on('moveend', render);
