@@ -1,38 +1,33 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>SISTEMA POSTAL DE PANAMÁ</title>
+    <title>SISTEMA POSTAL PANAMÁ V3</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <style>
-        body, html, #mapid { width: 100%; height: 100%; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
-        .map-title { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 4000; text-align: center; pointer-events: none; width: 90%; }
-        .map-title h1 { margin: 0; font-size: 18px; color: #2c3e50; text-shadow: 0 0 5px white; font-weight: bold; }
+        body, html, #mapid { width: 100%; height: 100%; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .map-title { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 4000; text-align: center; pointer-events: none; }
+        .map-title h1 { margin: 0; font-size: 20px; color: #1a2a6c; text-shadow: 0 0 5px white; background: rgba(255,255,255,0.7); padding: 5px 15px; border-radius: 20px; }
         
-        .search-container { position: absolute; top: 15px; right: 10px; z-index: 5000; display: flex; background: white; padding: 5px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); width: 280px; }
-        input#search-input { flex: 1; border: none; padding: 8px; outline: none; }
-        button#search-btn { background: #2c3e50; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; margin-left: 5px; }
+        .search-container { position: absolute; top: 70px; right: 10px; z-index: 5000; display: flex; background: white; padding: 5px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+        input#search-input { border: none; padding: 8px; outline: none; width: 180px; text-transform: uppercase; }
+        button#search-btn { background: #1a2a6c; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; }
 
-        /* Estilos de Etiquetas (Watermarks) */
-        .watermark-label { background: none!important; border:none!important; color: #1a73e8!important; text-align: center; pointer-events: none!important; text-shadow: 1px 1px 2px white; font-weight: bold; }
-        .label-macro { font-size: 16px; }
-        .label-micro { font-size: 12px; color: #3498db!important; }
+        /* Watermarks Labels */
+        .watermark-label { background: none!important; border:none!important; color: #1a73e8!important; text-align: center; pointer-events: none!important; text-shadow: 2px 2px 4px white; font-weight: bold; width: 60px!important; margin-left: -30px!important; }
+        .label-macro { font-size: 16px; opacity: 0.8; }
+        .label-micro { font-size: 11px; color: #e67e22!important; }
         
-        /* Popup Estilo Nano */
-        .nano-popup .leaflet-popup-content-wrapper { background: #e3f2fd; border: 2px solid #1976d2; border-radius: 8px; }
-        .codigo-final { background: #1976d2; color: white; padding: 10px; border-radius: 5px; font-size: 18px; font-weight: bold; text-align: center; margin: 5px 0; }
-        
-        .btn-nav, .btn-ws { display: inline-block; padding: 8px 12px; color: white!important; text-decoration: none!important; border-radius: 5px; font-weight: bold; font-size: 11px; margin: 2px; cursor: pointer; border: none; }
-        .btn-nav { background-color: #3498db; }
-        .btn-ws { background-color: #25D366; }
+        .codigo-final { background: #1a2a6c; color: white; padding: 12px; border-radius: 8px; font-size: 20px; font-weight: bold; text-align: center; margin: 10px 0; letter-spacing: 2px; }
+        .btn-nav { display: block; width: 100%; padding: 10px; background: #3498db; color: white; text-align: center; text-decoration: none; border-radius: 5px; margin-top: 5px; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="map-title"><h1>SISTEMA POSTAL DE PANAMÁ</h1></div>
 <div class="search-container">
-    <input type="text" id="search-input" placeholder="Ej: B4-H6K-2W">
+    <input type="text" id="search-input" placeholder="EJ: B4-H6K-2W">
     <button id="search-btn">BUSCAR</button>
 </div>
 <div id="mapid"></div>
@@ -42,41 +37,39 @@
 
 <script>
 // ==============================================
-// CONFIGURACIÓN GEOGRÁFICA DE PANAMÁ
+// CONFIGURACIÓN (LÍMITES PANAMÁ)
 // ==============================================
-const PANAMA_BOUNDS = {
-    TOP: 10.0,    // Norte
-    BOTTOM: 7.0,  // Sur
-    LEFT: -83.1,  // Oeste
-    RIGHT: -77.0  // Este
+const PANAMA = {
+    N: 10.0, S: 7.0, W: -83.1, E: -77.0
 };
 
-const GRID_CONFIG = {
-    RES_MACRO: 0.1,    // Bloques de ~11km
+const CONFIG = {
+    RES_MACRO: 0.1,    // Bloques ~11km
     RES_MICRO: 0.1 / 24, 
     RES_NANO: (0.1 / 24) / 25,
-    ALPHABET: "23456789BCDFGHJKLMNPQRSTVWXYZ", // 30 caracteres
-    MAX_Y_MACRO: 30, // (10.0 - 7.0) / 0.1
+    ALPHABET: "23456789ABCDEFGHJKLMNPQRSTVWXYZ", // 30 Caracteres exactos
+    MAX_Y_MACRO: 30, // (10-7)/0.1
     MAX_Y_MICRO: 24,
     MAX_Y_NANO: 25
 };
 
-const mymap = L.map('mapid').setView([8.5, -80.0], 8);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mymap);
+const mymap = L.map('mapid').setView([8.5, -80.1], 8);
+L.tileLayer('https://{s}.tile.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(mymap);
 
 const gridLayer = L.layerGroup().addTo(mymap);
 const labelLayer = L.layerGroup().addTo(mymap);
 const selectionLayer = L.layerGroup().addTo(mymap);
 
 // ==============================================
-// FUNCIONES DE CONVERSIÓN (SIN COLISIONES)
+// LÓGICA DE CODIFICACIÓN
 // ==============================================
 
 function toBase30(num, digits) {
     let res = "";
     let n = Math.abs(Math.floor(num));
     for (let i = 0; i < digits; i++) {
-        res = GRID_CONFIG.ALPHABET[n % 30] + res;
+        let index = n % 30;
+        res = CONFIG.ALPHABET[index] + res;
         n = Math.floor(n / 30);
     }
     return res;
@@ -84,37 +77,37 @@ function toBase30(num, digits) {
 
 function fromBase30(code) {
     let res = 0;
-    for (let char of code) {
-        res = res * 30 + GRID_CONFIG.ALPHABET.indexOf(char);
+    for (let i = 0; i < code.length; i++) {
+        res = res * 30 + CONFIG.ALPHABET.indexOf(code[i]);
     }
     return res;
 }
 
 function getPostalCode(lat, lng) {
-    if (lat > PANAMA_BOUNDS.TOP || lat < PANAMA_BOUNDS.BOTTOM || lng < PANAMA_BOUNDS.LEFT || lng > PANAMA_BOUNDS.RIGHT) {
-        return null;
-    }
+    // Validar si está fuera de Panamá
+    if (lat > PANAMA.N || lat < PANAMA.S || lng < PANAMA.W || lng > PANAMA.E) return null;
 
-    // Calcular Índices Macro
-    let mx = Math.floor((lng - PANAMA_BOUNDS.LEFT) / GRID_CONFIG.RES_MACRO);
-    let my = Math.floor((PANAMA_BOUNDS.TOP - lat) / GRID_CONFIG.RES_MACRO);
-    let macroID = (mx * GRID_CONFIG.MAX_Y_MACRO) + my;
+    let mx = Math.floor((lng - PANAMA.W) / CONFIG.RES_MACRO);
+    let my = Math.floor((PANAMA.N - lat) / CONFIG.RES_MACRO);
+    let macroID = (mx * CONFIG.MAX_Y_MACRO) + my;
 
-    // Calcular Índices Micro
-    let microX = Math.floor(((lng - PANAMA_BOUNDS.LEFT) % GRID_CONFIG.RES_MACRO) / GRID_CONFIG.RES_MICRO);
-    let microY = Math.floor(((PANAMA_BOUNDS.TOP - lat) % GRID_CONFIG.RES_MACRO) / GRID_CONFIG.RES_MICRO);
-    let microID = (microX * GRID_CONFIG.MAX_Y_MICRO) + microY;
+    let microX = Math.floor(((lng - PANAMA.W) % CONFIG.RES_MACRO) / CONFIG.RES_MICRO);
+    let microY = Math.floor(((PANAMA.N - lat) % CONFIG.RES_MACRO) / CONFIG.RES_MICRO);
+    let microID = (microX * CONFIG.MAX_Y_MICRO) + microY;
 
-    // Calcular Índices Nano
-    let nanoX = Math.floor((((lng - PANAMA_BOUNDS.LEFT) % GRID_CONFIG.RES_MACRO) % GRID_CONFIG.RES_MICRO) / GRID_CONFIG.RES_NANO);
-    let nanoY = Math.floor((((PANAMA_BOUNDS.TOP - lat) % GRID_CONFIG.RES_MACRO) % GRID_CONFIG.RES_MICRO) / GRID_CONFIG.RES_NANO);
-    let nanoID = (nanoX * GRID_CONFIG.MAX_Y_NANO) + nanoY;
+    let nanoX = Math.floor((((lng - PANAMA.W) % CONFIG.RES_MACRO) % CONFIG.RES_MICRO) / CONFIG.RES_NANO);
+    let nanoY = Math.floor((((PANAMA.N - lat) % CONFIG.RES_MACRO) % CONFIG.RES_MICRO) / CONFIG.RES_NANO);
+    let nanoID = (nanoX * CONFIG.MAX_Y_NANO) + nanoY;
 
-    return `${toBase30(macroID, 2)}-${toBase30(microID, 3)}-${toBase30(nanoID, 2)}`;
+    return {
+        full: `${toBase30(macroID, 2)}-${toBase30(microID, 3)}-${toBase30(nanoID, 2)}`,
+        macro: toBase30(macroID, 2),
+        micro: toBase30(microID, 3)
+    };
 }
 
 // ==============================================
-// RENDERIZADO DE LA GRILLA (SOLO PANAMÁ)
+// RENDERIZADO DINÁMICO
 // ==============================================
 
 function drawGrid() {
@@ -125,38 +118,31 @@ function drawGrid() {
     if (z < 10) return;
 
     const b = mymap.getBounds();
-    // Limitar el dibujado al área de Panamá
-    const startLat = Math.min(b.getNorth(), PANAMA_BOUNDS.TOP);
-    const endLat = Math.max(b.getSouth(), PANAMA_BOUNDS.BOTTOM);
-    const startLng = Math.max(b.getWest(), PANAMA_BOUNDS.LEFT);
-    const endLng = Math.min(b.getEast(), PANAMA_BOUNDS.RIGHT);
+    const sLat = Math.min(b.getNorth(), PANAMA.N);
+    const eLat = Math.max(b.getSouth(), PANAMA.S);
+    const sLng = Math.max(b.getWest(), PANAMA.W);
+    const eLng = Math.min(b.getEast(), PANAMA.E);
 
-    let step = (z >= 14) ? GRID_CONFIG.RES_MICRO : GRID_CONFIG.RES_MACRO;
+    let step = (z >= 14) ? CONFIG.RES_MICRO : CONFIG.RES_MACRO;
 
-    for (let lo = startLng; lo < endLng; lo += step) {
-        for (let la = endLat; la < startLat; la += step) {
-            
-            let code = getPostalCode(la + step/2, lo + step/2);
-            if (!code) continue;
+    for (let lo = sLng; lo < eLng; lo += step) {
+        for (let la = eLat; la < sLat; la += step) {
+            let info = getPostalCode(la + step/2, lo + step/2);
+            if (!info) continue;
 
-            // Dibujar Rectángulo
             L.rectangle([[la, lo], [la + step, lo + step]], {
-                color: z >= 14 ? '#3498db' : '#1a73e8',
-                weight: 1,
-                fill: false,
-                opacity: 0.4
+                color: z >= 14 ? '#e67e22' : '#1a73e8',
+                weight: 0.5, fill: false
             }).addTo(gridLayer);
 
-            // Dibujar Watermark
-            if (z >= 11 && z < 14) { // Solo Macro
-                let label = code.split('-')[0];
+            // Watermarks por nivel de zoom
+            if (z >= 11 && z < 14) {
                 L.marker([la + step/2, lo + step/2], {
-                    icon: L.divIcon({ className: 'watermark-label label-macro', html: label })
+                    icon: L.divIcon({ className: 'watermark-label label-macro', html: info.macro })
                 }).addTo(labelLayer);
-            } else if (z >= 15 && z < 17) { // Solo Micro
-                let label = code.split('-')[1];
+            } else if (z >= 15 && z < 18) {
                 L.marker([la + step/2, lo + step/2], {
-                    icon: L.divIcon({ className: 'watermark-label label-micro', html: label })
+                    icon: L.divIcon({ className: 'watermark-label label-micro', html: info.micro })
                 }).addTo(labelLayer);
             }
         }
@@ -164,62 +150,60 @@ function drawGrid() {
 }
 
 // ==============================================
-// INTERACCIÓN
+// EVENTOS E INTERACCIÓN
 // ==============================================
 
 mymap.on('click', function(e) {
-    const code = getPostalCode(e.latlng.lat, e.latlng.lng);
-    if (!code) return;
+    const info = getPostalCode(e.latlng.lat, e.latlng.lng);
+    if (!info) return;
 
     selectionLayer.clearLayers();
-    
-    // Resaltar el cuadro Nano exacto
-    const r = GRID_CONFIG.RES_NANO;
-    const snapLat = PANAMA_BOUNDS.TOP - Math.floor((PANAMA_BOUNDS.TOP - e.latlng.lat) / r) * r;
-    const snapLng = PANAMA_BOUNDS.LEFT + Math.floor((e.latlng.lng - PANAMA_BOUNDS.LEFT) / r) * r;
+    const r = CONFIG.RES_NANO;
+    const snapLat = PANAMA.N - Math.floor((PANAMA.N - e.latlng.lat) / r) * r;
+    const snapLng = PANAMA.W + Math.floor((e.latlng.lng - PANAMA.W) / r) * r;
 
     L.rectangle([[snapLat, snapLng], [snapLat - r, snapLng + r]], {
-        color: '#e74c3c', weight: 3, fillOpacity: 0.3
+        color: 'red', weight: 2, fillOpacity: 0.4
     }).addTo(selectionLayer);
 
-    L.popup({ className: 'nano-popup' })
+    L.popup()
         .setLatLng(e.latlng)
         .setContent(`
-            <div style="text-align:center; min-width:180px;">
-                <b style="color:#777; font-size:10px;">CÓDIGO POSTAL DE PANAMÁ</b>
-                <div class="codigo-final">${code}</div>
-                <div style="font-size:11px; color:#555; margin-bottom:10px;">GPS: ${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}</div>
-                <button class="btn-nav" onclick="window.open('https://www.google.com/maps?q=${e.latlng.lat},${e.latlng.lng}')">MAPS</button>
-                <button class="btn-ws" onclick="window.open('https://wa.me/?text=Mi+Código+Postal+Panamá:+${code}')">COMPARTIR</button>
+            <div style="text-align:center; min-width:200px">
+                <small>UBICACIÓN POSTAL</small>
+                <div class="codigo-final">${info.full}</div>
+                <small>GPS: ${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}</small>
+                <a class="btn-nav" href="https://www.google.com/maps/dir/?api=1&destination=${e.latlng.lat},${e.latlng.lng}" target="_blank">CÓMO LLEGAR</a>
             </div>
         `).openOn(mymap);
 });
 
 $('#search-btn').click(function() {
-    const val = $('#search-input').val().toUpperCase().trim();
+    const val = $('#search-input').val().toUpperCase().replace(/\s/g, '');
     const parts = val.split('-');
-    if (parts.length !== 3) { alert("Formato: XX-XXX-XX"); return; }
+    if (parts.length !== 3) { alert("Formato requerido: XX-XXX-XX"); return; }
 
-    // Decodificar Macro
-    let mID = fromBase30(parts[0]);
-    let mx = Math.floor(mID / GRID_CONFIG.MAX_Y_MACRO);
-    let my = mID % GRID_CONFIG.MAX_Y_MACRO;
+    try {
+        let mID = fromBase30(parts[0]);
+        let mx = Math.floor(mID / CONFIG.MAX_Y_MACRO);
+        let my = mID % CONFIG.MAX_Y_MACRO;
 
-    // Decodificar Micro
-    let miID = fromBase30(parts[1]);
-    let mix = Math.floor(miID / GRID_CONFIG.MAX_Y_MICRO);
-    let miy = miID % GRID_CONFIG.MAX_Y_MICRO;
+        let miID = fromBase30(parts[1]);
+        let mix = Math.floor(miID / CONFIG.MAX_Y_MICRO);
+        let miy = miID % CONFIG.MAX_Y_MICRO;
 
-    // Decodificar Nano
-    let nID = fromBase30(parts[2]);
-    let nx = Math.floor(nID / GRID_CONFIG.MAX_Y_NANO);
-    let ny = nID % GRID_CONFIG.MAX_Y_NANO;
+        let nID = fromBase30(parts[2]);
+        let nx = Math.floor(nID / CONFIG.MAX_Y_NANO);
+        let ny = nID % CONFIG.MAX_Y_NANO;
 
-    const lat = PANAMA_BOUNDS.TOP - (my * GRID_CONFIG.RES_MACRO) - (miy * GRID_CONFIG.RES_MICRO) - (ny * GRID_CONFIG.RES_NANO);
-    const lng = PANAMA_BOUNDS.LEFT + (mx * GRID_CONFIG.RES_MACRO) + (mix * GRID_CONFIG.RES_MICRO) + (nx * GRID_CONFIG.RES_NANO);
+        const lat = PANAMA.N - (my * CONFIG.RES_MACRO) - (miy * CONFIG.RES_MICRO) - (ny * CONFIG.RES_NANO);
+        const lng = PANAMA.W + (mx * CONFIG.RES_MACRO) + (mix * CONFIG.RES_MICRO) + (nx * CONFIG.RES_NANO);
 
-    mymap.setView([lat, lng], 18);
-    L.circleMarker([lat, lng], { color: 'red' }).addTo(selectionLayer);
+        mymap.setView([lat, lng], 18);
+        L.marker([lat, lng]).addTo(selectionLayer).bindPopup("Código: " + val).openPopup();
+    } catch(e) {
+        alert("Código no reconocido.");
+    }
 });
 
 mymap.on('moveend', drawGrid);
