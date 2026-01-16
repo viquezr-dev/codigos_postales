@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <title>SISTEMA POSTAL - MOTOR DE BÚSQUEDA</title>
+    <title>SISTEMA POSTAL PANAMÁ - V9 (ÚNICO)</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <style>
-        body, html, #mapid { width: 100%; height: 100%; margin: 0; padding: 0; background: #f0f0f0; }
+        body, html, #mapid { width: 100%; height: 100%; margin: 0; padding: 0; background: #f4f4f4; }
         
         /* Interfaz de Búsqueda */
         .search-container {
@@ -22,11 +22,11 @@
             font-family: monospace; font-size: 16px; text-transform: uppercase;
         }
         #search-btn {
-            background: #e74c3c; color: white; border: none;
+            background: #27ae60; color: white; border: none;
             padding: 8px 20px; border-radius: 30px; cursor: pointer; font-weight: bold;
         }
 
-        /* Tooltips y Casillas */
+        /* Estilos de Etiquetas */
         .leaflet-tooltip.watermark-tooltip {
             background: transparent!important; border: none!important; box-shadow: none!important;
             color: rgba(0,0,0,0.4); font-weight: bold; font-family: monospace;
@@ -38,24 +38,28 @@
             color: #000!important; font-weight: 900; font-family: monospace; font-size: 14px;
         }
 
-        .codigo-final { background: #1a2a6c; color: white; padding: 8px; border-radius: 6px; font-size: 18px; font-weight: bold; text-align: center; }
+        .codigo-final { background: #1a2a6c; color: white; padding: 10px; border-radius: 6px; font-size: 18px; font-weight: bold; text-align: center; }
     </style>
 </head>
 <body>
 
 <div class="search-container">
-    <input type="text" id="search-input" placeholder="CÓDIGO (XX-XXX-XX)" maxlength="9">
+    <input type="text" id="search-input" placeholder="XX-XXX-XX" maxlength="9">
     <button id="search-btn">BUSCAR</button>
 </div>
 
 <div id="mapid"></div>
 
 <script>
+// --- CONFIGURACIÓN MAESTRA (ANTICOLISIÓN) ---
+const ORIGIN = { lat: 10.0, lng: -83.0 };
+const PANAMA_LIMITS = { N: 10.0, S: 7.0, W: -83.0, E: -77.0 };
 const PARAMS = {
     RES_MACRO: 0.1, 
     RES_MICRO: 0.1 / 24, 
     RES_NANO: (0.1 / 24) / 25,
     ALFA: "23456789ABCDEFGHJKLMNPQRSTVWXYZ",
+    // MAX_Y aumentados a 100 para evitar que los IDs se repitan entre columnas
     MAX_Y_MACRO: 100, 
     MAX_Y_MICRO: 100, 
     MAX_Y_NANO: 100
@@ -69,7 +73,7 @@ const layerMicro = L.layerGroup().addTo(mymap);
 const layerNano = L.layerGroup().addTo(mymap);
 const selectionLayer = L.layerGroup().addTo(mymap);
 
-// --- MOTOR DE CODIFICACIÓN / DECODIFICACIÓN ---
+// --- UTILIDADES DE CODIFICACIÓN ---
 function encode(num, len) {
     let s = ""; let n = Math.abs(Math.floor(num));
     for (let i = 0; i < len; i++) { s = PARAMS.ALFA[n % 30] + s; n = Math.floor(n / 30); }
@@ -93,20 +97,27 @@ function getSnappedCoords(lat, lng, step) {
 function getInfo(lat, lng) {
     if (lat > PANAMA_LIMITS.N || lat < PANAMA_LIMITS.S || lng < PANAMA_LIMITS.W || lng > PANAMA_LIMITS.E) return null;
     
-    // Calculamos la posición absoluta desde el origen
+    // MACRO
     let mx = Math.floor((lng - ORIGIN.lng) / PARAMS.RES_MACRO);
     let my = Math.floor((ORIGIN.lat - lat) / PARAMS.RES_MACRO);
-    
-    // El ID Macro ahora tiene un rango de 100 filas antes de saltar a la siguiente columna
     let macroID = (mx * PARAMS.MAX_Y_MACRO) + my;
 
+    // MICRO
     let microX = Math.floor(((lng - ORIGIN.lng) % PARAMS.RES_MACRO) / PARAMS.RES_MICRO);
     let microY = Math.floor(((ORIGIN.lat - lat) % PARAMS.RES_MACRO) / PARAMS.RES_MICRO);
     let microID = (microX * PARAMS.MAX_Y_MICRO) + microY;
+
+    // NANO
+    let n_rem_x = ((lng - ORIGIN.lng) % PARAMS.RES_MACRO) % PARAMS.RES_MICRO;
+    let n_rem_y = ((ORIGIN.lat - lat) % PARAMS.RES_MACRO) % PARAMS.RES_MICRO;
+    let nanoX = Math.floor(n_rem_x / PARAMS.RES_NANO);
+    let nanoY = Math.floor(n_rem_y / PARAMS.RES_NANO);
+    let nanoID = (nanoX * PARAMS.MAX_Y_NANO) + nanoY;
+
     return { 
-        macro: encode((mx * PARAMS.MAX_Y_MACRO) + my, 2), 
-        micro: encode((microX * PARAMS.MAX_Y_MICRO) + microY, 3), 
-        nano: encode((nanoX * PARAMS.MAX_Y_NANO) + nanoY, 2) 
+        macro: encode(macroID, 2), 
+        micro: encode(microID, 3), 
+        nano: encode(nanoID, 2) 
     };
 }
 
@@ -114,9 +125,11 @@ function getInfo(lat, lng) {
 function render() {
     layerMacro.clearLayers(); layerMicro.clearLayers(); layerNano.clearLayers();
     const z = mymap.getZoom(); const b = mymap.getBounds();
-    if (z >= 10) drawGridLevel(PARAMS.RES_MACRO, layerMacro, 'label-macro', 2, '#1a73e8', 0.4);
-    if (z >= 14) drawGridLevel(PARAMS.RES_MICRO, layerMicro, 'label-micro', 1, '#e67e22', 0.2);
-    if (z >= 17.5) drawGridLevel(PARAMS.RES_NANO, layerNano, '', 0.5, '#2c3e50', 0.1);
+    
+    // Grosor jerárquico para diferenciar fronteras
+    if (z >= 10) drawGridLevel(PARAMS.RES_MACRO, layerMacro, 'label-macro', 2.5, '#1a73e8', 0.4);
+    if (z >= 14) drawGridLevel(PARAMS.RES_MICRO, layerMicro, 'label-micro', 1.2, '#e67e22', 0.25);
+    if (z >= 17.5) drawGridLevel(PARAMS.RES_NANO, layerNano, '', 0.5, '#2c3e50', 0.15);
 }
 
 function drawGridLevel(step, layer, labelClass, weight, color, opacity) {
@@ -125,10 +138,12 @@ function drawGridLevel(step, layer, labelClass, weight, color, opacity) {
     let count = 0;
     for (let lo = start.lng; lo < b.getEast() + step && lo < PANAMA_LIMITS.E; lo += step) {
         for (let la = start.lat; la < b.getNorth() + step && la < PANAMA_LIMITS.N; la += step) {
-            if (count++ > 1200) return;
+            if (count++ > 1500) return;
             let data = getInfo(la + step/2, lo + step/2);
             if (!data) continue;
+            
             L.rectangle([[la, lo], [la + step, lo + step]], { color: color, weight: weight, fill: false, opacity: opacity, interactive: false }).addTo(layer);
+            
             if (labelClass !== '') {
                 let showText = (labelClass === 'label-macro' && z < 14) || (labelClass === 'label-micro' && z >= 14 && z < 17.5);
                 if (showText) {
@@ -140,23 +155,22 @@ function drawGridLevel(step, layer, labelClass, weight, color, opacity) {
     }
 }
 
-// --- FUNCIÓN DE SELECCIÓN Y PIN ---
+// --- ACCIÓN DE SELECCIÓN ---
 function seleccionarCuadro(lat, lng, codFull, nanoPart) {
     selectionLayer.clearLayers();
-    const step = PARAMS.RES_NANO;
+    const step = (mymap.getZoom() >= 17.5) ? PARAMS.RES_NANO : (mymap.getZoom() >= 14 ? PARAMS.RES_MICRO : PARAMS.RES_MACRO);
     const snap = getSnappedCoords(lat, lng, step);
 
-    // Sombreado
     L.rectangle([[snap.lat, snap.lng], [snap.lat + step, snap.lng + step]], {
         color: '#f1c40f', weight: 4, fillOpacity: 0.5, fillColor: '#f1c40f'
     }).addTo(selectionLayer);
 
-    // Etiqueta Nano
-    L.marker([snap.lat + step/2, snap.lng + step/2], { icon: L.divIcon({className: 'inv'}) })
-     .bindTooltip(nanoPart, { permanent: true, direction: 'center', className: 'nano-selection-label' })
-     .addTo(selectionLayer);
+    if (mymap.getZoom() >= 17.5) {
+        L.marker([snap.lat + step/2, snap.lng + step/2], { icon: L.divIcon({className: 'inv'}) })
+         .bindTooltip(nanoPart, { permanent: true, direction: 'center', className: 'nano-selection-label' })
+         .addTo(selectionLayer);
+    }
 
-    // Pin Rojo
     const redIcon = L.icon({
         iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
         shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
@@ -165,28 +179,23 @@ function seleccionarCuadro(lat, lng, codFull, nanoPart) {
     
     L.marker([snap.lat + step/2, snap.lng + step/2], { icon: redIcon }).addTo(selectionLayer);
 
-    // Popup
     L.popup({ offset: [0, -35], closeButton: false })
      .setLatLng([snap.lat + step, snap.lng + step/2])
      .setContent(`<div class="codigo-final">${codFull}</div>`)
      .openOn(mymap);
-
-    mymap.flyTo([snap.lat + step/2, snap.lng + step/2], 18);
 }
 
-// --- LÓGICA DE BÚSQUEDA ---
+// --- BÚSQUEDA ---
 document.getElementById('search-btn').addEventListener('click', () => {
     const input = document.getElementById('search-input').value.toUpperCase().replace(/\s/g, '');
     const parts = input.split('-');
-    
-    if (parts.length !== 3) { alert("Formato requerido: XX-XXX-XX"); return; }
+    if (parts.length !== 3) { alert("Formato: XX-XXX-XX"); return; }
 
     try {
         const idMacro = decode(parts[0]);
         const idMicro = decode(parts[1]);
         const idNano = decode(parts[2]);
 
-        // Decodificar Coordenadas
         const mx = Math.floor(idMacro / PARAMS.MAX_Y_MACRO);
         const my = idMacro % PARAMS.MAX_Y_MACRO;
         const mix = Math.floor(idMicro / PARAMS.MAX_Y_MICRO);
@@ -197,8 +206,9 @@ document.getElementById('search-btn').addEventListener('click', () => {
         const targetLng = ORIGIN.lng + (mx * PARAMS.RES_MACRO) + (mix * PARAMS.RES_MICRO) + (nax * PARAMS.RES_NANO) + (PARAMS.RES_NANO/2);
         const targetLat = ORIGIN.lat - (my * PARAMS.RES_MACRO) - (miy * PARAMS.RES_MICRO) - (nay * PARAMS.RES_NANO) - (PARAMS.RES_NANO/2);
 
-        seleccionarCuadro(targetLat, targetLng, input, parts[2]);
-    } catch(e) { alert("Código no válido"); }
+        mymap.flyTo([targetLat, targetLng], 18);
+        setTimeout(() => seleccionarCuadro(targetLat, targetLng, input, parts[2]), 500);
+    } catch(e) { alert("Error en el código"); }
 });
 
 mymap.on('click', (e) => {
@@ -212,4 +222,3 @@ render();
 <style>.inv { background: none; border: none; }</style>
 </body>
 </html>
-
