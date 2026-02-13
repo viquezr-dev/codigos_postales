@@ -32,7 +32,7 @@
 
 <div class="map-title">
     <h1>SISTEMAS POSTALES DE PANAMÁ</h1>
-    <span style="font-weight: bold; color: #333; text-shadow: 1px 1px 0px #fff;">COTEL-PANAMÁ</span>
+    <span style="font-weight: bold; color: #333; text-shadow: 1px 1px 0px #fff;">COTEL - PANAMÁ</span>
 </div>
 
 <div class="search-container">
@@ -50,8 +50,8 @@ const R_3M = 0.000027;
 
 const PARAMS = {
     RES_NANO: R_3M,
-    RES_MICRO: R_3M * 30, // ~90m
-    RES_MACRO: R_3M * 30 * 30, // ~2.7km
+    RES_MICRO: R_3M * 30, 
+    RES_MACRO: R_3M * 900, 
     MACRO_X_COUNT: 2000
 };
 
@@ -72,23 +72,24 @@ const layerZonas = L.geoJSON(null, {
 
 const layerMacro = L.layerGroup().addTo(mymap);
 const layerMicro = L.layerGroup().addTo(mymap);
-const layerLocalNano = L.layerGroup().addTo(mymap); // Rejilla 3m solo para el área seleccionada
+const layerLocalNano = L.layerGroup().addTo(mymap);
 const layerRutas = L.layerGroup().addTo(mymap);
 const layerEstafetas = L.layerGroup().addTo(mymap);
 const layerMiUbicacion = L.layerGroup().addTo(mymap);
 const selectionLayer = L.layerGroup().addTo(mymap);
 const distanceLayer = L.layerGroup().addTo(mymap);
 
-fetch('estafetas.geojson').then(r => r.json()).then(data => layerZonas.addData(data));
+// Carga de Datos
+fetch('estafetas.geojson').then(r => r.json()).then(data => layerZonas.addData(data)).catch(e => console.log("geojson no encontrado"));
 fetch('estafetasl.geojson').then(r => r.json()).then(data => {
     L.geoJSON(data, { style: { color: 'red', weight: 3, opacity: 0.7 }, onEachFeature: (f, l) => { l.bindPopup(`<b>RUTA:</b> ${f.properties.RUTA || 'N/A'}`); } }).addTo(layerRutas);
-});
+}).catch(e => {});
 fetch('estafetasp.geojson').then(r => r.json()).then(data => {
     L.geoJSON(data, {
         pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 7, fillColor: '#27ae60', color: '#fff', weight: 2, fillOpacity: 1 }),
         onEachFeature: (f, l) => { l.bindPopup(`<b>ESTAFETA:</b> ${f.properties.ESTAF_NAME || 'N/A'}`); }
     }).addTo(layerEstafetas);
-});
+}).catch(e => {});
 
 function encode(num, len) {
     let s = ""; let n = Math.abs(Math.floor(num));
@@ -97,11 +98,14 @@ function encode(num, len) {
 }
 
 function getGridInfo(lat, lng) {
-    const gx = Math.floor((lng - ORIGIN.lng) / PARAMS.RES_NANO + 0.000001);
-    const gy = Math.floor((ORIGIN.lat - lat) / PARAMS.RES_NANO + 0.000001);
+    // Usamos Math.floor estricto sin offsets variables
+    const gx = Math.floor((lng - ORIGIN.lng) / PARAMS.RES_NANO);
+    const gy = Math.floor((ORIGIN.lat - lat) / PARAMS.RES_NANO);
+    
     const macroX = Math.floor(gx / 900), macroY = Math.floor(gy / 900);
     const microX = Math.floor((gx % 900) / 30), microY = Math.floor((gy % 900) / 30);
     const nanoX = gx % 30, nanoY = gy % 30;
+    
     return {
         macro: encode((macroY * PARAMS.MACRO_X_COUNT) + macroX, 3),
         micro: encode((microY * 30) + microX, 3),
@@ -112,7 +116,7 @@ function getGridInfo(lat, lng) {
 function seleccionar(lat, lng, forcedZonaID = null) {
     selectionLayer.clearLayers();
     distanceLayer.clearLayers();
-    layerLocalNano.clearLayers(); // Limpiar rejilla previa
+    layerLocalNano.clearLayers();
     const z = mymap.getZoom();
     
     let zonaID = forcedZonaID;
@@ -142,12 +146,11 @@ function seleccionar(lat, lng, forcedZonaID = null) {
             codigoFinal = `${zonaLimpia}${res.macro}-${res.micro}${res.nano}`;
             step = PARAMS.RES_NANO;
             
-            // --- DIBUJAR REJILLA 3M SOLO EN EL BLOQUE MICRO ACTUAL ---
-            const mStep = PARAMS.RES_MICRO;
-            const mIdxX = Math.floor((lng - ORIGIN.lng) / mStep);
-            const mIdxY = Math.floor((ORIGIN.lat - lat) / mStep);
-            const mStartLng = ORIGIN.lng + (mIdxX * mStep);
-            const mStartLat = ORIGIN.lat - (mIdxY * mStep);
+            // Dibujar rejilla local 30x30 estable
+            const mIdxX = Math.floor((lng - ORIGIN.lng) / PARAMS.RES_MICRO);
+            const mIdxY = Math.floor((ORIGIN.lat - lat) / PARAMS.RES_MICRO);
+            const mStartLng = ORIGIN.lng + (mIdxX * PARAMS.RES_MICRO);
+            const mStartLat = ORIGIN.lat - (mIdxY * PARAMS.RES_MICRO);
 
             for(let i=0; i<30; i++) {
                 for(let j=0; j<30; j++) {
@@ -162,8 +165,8 @@ function seleccionar(lat, lng, forcedZonaID = null) {
     }
 
     if (step > 0) {
-        const idxX = Math.floor((lng - ORIGIN.lng) / step + 0.000001);
-        const idxY = Math.floor((ORIGIN.lat - lat) / step + 0.000001);
+        const idxX = Math.floor((lng - ORIGIN.lng) / step);
+        const idxY = Math.floor((ORIGIN.lat - lat) / step);
         const sLng = ORIGIN.lng + (idxX * step), sLat = ORIGIN.lat - (idxY * step);
         L.rectangle([[sLat, sLng], [sLat - step, sLng + step]], { color: '#e74c3c', weight: 2, fillOpacity: 0.4, interactive: false }).addTo(selectionLayer);
     }
@@ -199,26 +202,44 @@ function buscarEstafetaCercana(lat, lng) {
 }
 
 function render() {
-    layerMacro.clearLayers(); layerMicro.clearLayers();
+    layerMacro.clearLayers(); 
+    layerMicro.clearLayers();
     const z = mymap.getZoom(), b = mymap.getBounds();
+
     const draw = (step, layer, labelClass, color, weight, opacity, maxRects) => {
-        let sIdxX = Math.floor((b.getWest() - ORIGIN.lng) / step), sIdxY = Math.floor((ORIGIN.lat - b.getNorth()) / step);
-        let sLng = ORIGIN.lng + (sIdxX * step), sLat = ORIGIN.lat - (sIdxY * step);
+        // Cálculo de inicio basado estrictamente en el ORIGIN para evitar desplazamientos
+        let sIdxX = Math.floor((b.getWest() - ORIGIN.lng) / step);
+        let sIdxY = Math.floor((ORIGIN.lat - b.getNorth()) / step);
+        
+        let sLng = ORIGIN.lng + (sIdxX * step);
+        let sLat = ORIGIN.lat - (sIdxY * step);
+
         let count = 0;
         for (let lo = sLng; lo < b.getEast() + step; lo += step) {
             for (let la = sLat; la > b.getSouth() - step; la -= step) {
                 if (count++ > maxRects) return;
-                const info = getGridInfo(la - step/2, lo + step/2);
+                
+                const cLat = la - step/2;
+                const cLng = lo + step/2;
+                const info = getGridInfo(cLat, cLng);
+                
                 L.rectangle([[la, lo], [la - step, lo + step]], { color: color, weight: weight, fill: false, opacity: opacity, interactive: false }).addTo(layer);
-                if (labelClass && ((labelClass==='label-macro' && z < 13) || (labelClass==='label-micro' && z >= 13 && z < 16))) {
-                    const txt = labelClass === 'label-macro' ? info.macro : info.micro;
-                    L.marker([la - step/2, lo + step/2], { icon: L.divIcon({className: 'inv'}) }).bindTooltip(txt, { permanent: true, direction: 'center', className: `watermark-tooltip ${labelClass}` }).addTo(layer);
+                
+                if (labelClass) {
+                    const showMacro = (labelClass==='label-macro' && z >= 9 && z < 13.5);
+                    const showMicro = (labelClass==='label-micro' && z >= 13.5 && z < 17);
+                    
+                    if (showMacro || showMicro) {
+                        const txt = labelClass === 'label-macro' ? info.macro : info.micro;
+                        L.marker([cLat, cLng], { icon: L.divIcon({className: 'inv'}) }).bindTooltip(txt, { permanent: true, direction: 'center', className: `watermark-tooltip ${labelClass}` }).addTo(layer);
+                    }
                 }
             }
         }
     };
+    
     if (z >= 9) draw(PARAMS.RES_MACRO, layerMacro, 'label-macro', '#1a73e8', 1.5, 0.2, 500);
-    if (z >= 13) draw(PARAMS.RES_MICRO, layerMicro, 'label-micro', '#e67e22', 1, 0.2, 800);
+    if (z >= 13.5) draw(PARAMS.RES_MICRO, layerMicro, 'label-micro', '#e67e22', 1, 0.2, 800);
 }
 
 function findMe() { mymap.locate({setView: true, maxZoom: 19}); }
