@@ -42,7 +42,7 @@
 <div id="mapid"></div>
 
 <script>
-// --- CONFIGURACIÓN MAESTRA ---
+// --- CONFIGURACIÓN ---
 const ORIGIN = { lat: 10.0, lng: -83.0 };
 const ALFA = "23456789ABCDEFGHJKLMNPQRSTVWXYZ";
 const R_3M = 0.000027; 
@@ -53,29 +53,42 @@ const PARAMS = {
     RES_MACRO: R_3M * 900
 };
 
-// --- INICIALIZACIÓN ---
-const mymap = L.map('mapid', { zoomSnap: 0, zoomControl: false, maxZoom: 22 }).setView([8.5, -80.0], 8);
+// --- MAPA ---
+const mymap = L.map('mapid', { zoomSnap: 0.1, zoomControl: false, maxZoom: 22 }).setView([8.5, -80.0], 8);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 22, maxNativeZoom: 19 }).addTo(mymap);
 L.control.zoom({ position: 'bottomright' }).addTo(mymap);
 
-// Capas (Preservadas)
+// --- CAPAS ---
 const layerZonas = L.geoJSON(null, { 
     style: { color: "#333", weight: 1.5, fillOpacity: 0.1, fillColor: "#3498db" },
     onEachFeature: (f, l) => {
-        l.on('click', (e) => { seleccionar(e.latlng.lat, e.latlng.lng, f.properties.VM_LEVEL); L.DomEvent.stopPropagation(e); });
+        l.on({
+            mouseover: (e) => { e.target.setStyle({ weight: 3, color: '#f1c40f', fillOpacity: 0.3 }); },
+            mouseout: (e) => { layerZonas.resetStyle(e.target); },
+            click: (e) => { seleccionar(e.latlng.lat, e.latlng.lng, f.properties.VM_LEVEL); L.DomEvent.stopPropagation(e); }
+        });
     }
 }).addTo(mymap);
 
 const layerMacro = L.layerGroup().addTo(mymap);
 const layerMicro = L.layerGroup().addTo(mymap);
 const layerLocalNano = L.layerGroup().addTo(mymap);
+const layerRutas = L.layerGroup().addTo(mymap);
 const layerEstafetas = L.layerGroup().addTo(mymap);
 const layerMiUbicacion = L.layerGroup().addTo(mymap);
 const selectionLayer = L.layerGroup().addTo(mymap);
 const distanceLayer = L.layerGroup().addTo(mymap);
 
-// Carga de GeoJSON
+// --- CARGA DE DATOS (FUNCIONALIDADES RECUPERADAS) ---
 fetch('estafetas.geojson').then(r => r.json()).then(data => layerZonas.addData(data)).catch(() => {});
+
+fetch('estafetasl.geojson').then(r => r.json()).then(data => {
+    L.geoJSON(data, { 
+        style: { color: 'red', weight: 2.5, opacity: 0.6 },
+        onEachFeature: (f, l) => { l.bindPopup(`<b>RUTA:</b> ${f.properties.RUTA || 'N/A'}`); }
+    }).addTo(layerRutas);
+}).catch(() => {});
+
 fetch('estafetasp.geojson').then(r => r.json()).then(data => {
     L.geoJSON(data, {
         pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 6, fillColor: '#27ae60', color: '#fff', weight: 2, fillOpacity: 1 }),
@@ -104,56 +117,46 @@ function getGridInfo(lat, lng) {
     };
 }
 
-// --- RENDERIZADO ESTABLE ---
+// --- RENDER ESTABLE ---
 function render() {
-    layerMacro.clearLayers(); 
-    layerMicro.clearLayers();
-    const z = mymap.getZoom();
-    const b = mymap.getBounds();
+    layerMacro.clearLayers(); layerMicro.clearLayers();
+    const z = mymap.getZoom(); const b = mymap.getBounds();
 
     const drawGrid = (step, layer, labelClass, color, weight, opacity) => {
-        // Obtenemos los índices de inicio y fin basados en el área visible
         const sX = Math.floor((b.getWest() - ORIGIN.lng) / step);
         const sY = Math.floor((ORIGIN.lat - b.getNorth()) / step);
         const eX = Math.ceil((b.getEast() - ORIGIN.lng) / step);
         const eY = Math.ceil((ORIGIN.lat - b.getSouth()) / step);
 
-        // Limitador para evitar el "apiñamiento" en zooms bajos
-        if ((eX - sX) * (eY - sY) > 800) return; 
+        if ((eX - sX) * (eY - sY) > 900) return;
 
         for (let ix = sX; ix <= eX; ix++) {
             for (let iy = sY; iy <= eY; iy++) {
                 const lon = ORIGIN.lng + (ix * step);
                 const lat = ORIGIN.lat - (iy * step);
-                
-                // Usamos una precisión de 6 decimales para clavar el rectángulo
-                const bounds = [[lat.toFixed(6), lon.toFixed(6)], [(lat - step).toFixed(6), (lon + step).toFixed(6)]];
-                
-                L.rectangle(bounds, { color, weight, fill: false, opacity, interactive: false }).addTo(layer);
+                L.rectangle([[lat, lon], [lat - step, lon + step]], { color, weight, fill: false, opacity, interactive: false }).addTo(layer);
 
-                if (labelClass && ((labelClass === 'label-macro' && z >= 10 && z < 13.5) || (labelClass === 'label-micro' && z >= 14 && z < 17.5))) {
+                if (labelClass && ((labelClass === 'label-macro' && z >= 10.5 && z < 13.5) || (labelClass === 'label-micro' && z >= 14.5 && z < 17.5))) {
                     const info = getGridInfo(lat - step/2, lon + step/2);
                     const txt = (labelClass === 'label-macro') ? info.macro : info.micro;
                     L.marker([lat - step/2, lon + step/2], { icon: L.divIcon({className: 'inv'}) })
-                     .bindTooltip(txt, { permanent: true, direction: 'center', className: `watermark-tooltip ${labelClass}` })
-                     .addTo(layer);
+                     .bindTooltip(txt, { permanent: true, direction: 'center', className: `watermark-tooltip ${labelClass}` }).addTo(layer);
                 }
             }
         }
     };
 
-    if (z >= 9) drawGrid(PARAMS.RES_MACRO, layerMacro, 'label-macro', '#1a73e8', 1.2, 0.2);
-    if (z >= 13.5) drawGrid(PARAMS.RES_MICRO, layerMicro, 'label-micro', '#e67e22', 0.8, 0.2);
+    if (z >= 10) drawGrid(PARAMS.RES_MACRO, layerMacro, 'label-macro', '#1a73e8', 1.2, 0.2);
+    if (z >= 14) drawGrid(PARAMS.RES_MICRO, layerMicro, 'label-micro', '#e67e22', 0.8, 0.2);
 }
 
-// --- SELECCIÓN Y POPUPS ---
 function seleccionar(lat, lng, forcedZonaID = null) {
-    selectionLayer.clearLayers(); layerLocalNano.clearLayers();
+    selectionLayer.clearLayers(); layerLocalNano.clearLayers(); distanceLayer.clearLayers();
     const z = mymap.getZoom();
     let zonaID = forcedZonaID;
     
     if (!zonaID) {
-        layerZonas.eachLayer(l => { if (l.getBounds().contains([lat, lng])) zonaID = l.feature.properties.VM_LEVEL; });
+        layerZonas.eachLayer(l => { if (l instanceof L.Polygon && l.getBounds().contains([lat, lng])) zonaID = l.feature.properties.VM_LEVEL; });
     }
     if (!zonaID) return;
 
@@ -169,7 +172,6 @@ function seleccionar(lat, lng, forcedZonaID = null) {
         { color: '#e74c3c', weight: 3, fillOpacity: 0.3 }).addTo(selectionLayer);
     }
 
-    // Grid local 3m si estamos muy cerca
     if (z >= 18.5) {
         const mX = Math.floor((lng - ORIGIN.lng) / PARAMS.RES_MICRO);
         const mY = Math.floor((ORIGIN.lat - lat) / PARAMS.RES_MICRO);
@@ -177,14 +179,14 @@ function seleccionar(lat, lng, forcedZonaID = null) {
             for(let j=0; j<30; j++) {
                 L.rectangle([[ORIGIN.lat - (mY*PARAMS.RES_MICRO + i*R_3M), ORIGIN.lng + (mX*PARAMS.RES_MICRO + j*R_3M)], 
                              [ORIGIN.lat - (mY*PARAMS.RES_MICRO + (i+1)*R_3M), ORIGIN.lng + (mX*PARAMS.RES_MICRO + (j+1)*R_3M)]],
-                { color: '#2c3e50', weight: 0.5, fill: false, opacity: 0.1 }).addTo(layerLocalNano);
+                { color: '#2c3e50', weight: 0.5, fill: false, opacity: 0.15 }).addTo(layerLocalNano);
             }
         }
     }
 
     L.marker([lat, lng], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [20, 32], iconAnchor: [10, 32] }) })
      .addTo(selectionLayer).bindPopup(`
-        <span class="popup-header">DIRECCIÓN POSTAL</span>
+        <span class="popup-header">CÓDIGO POSTAL</span>
         <div class="codigo-final">${cod}</div>
         <div class="btn-container">
             <a href="https://wa.me/?text=Mi+Dirección+Postal:+${cod}" target="_blank" class="btn-ws">WhatsApp</a>
@@ -196,7 +198,7 @@ function seleccionar(lat, lng, forcedZonaID = null) {
 function buscarEstafetaCercana(lat, lng) {
     distanceLayer.clearLayers();
     const userPt = L.latLng(lat, lng);
-    let cercana = null, dMin = Infinity;
+    let cercana = null; let dMin = Infinity;
     layerEstafetas.eachLayer(l => {
         const d = userPt.distanceTo(l.getLatLng());
         if (d < dMin) { dMin = d; cercana = l; }
@@ -219,7 +221,7 @@ mymap.on('click', (e) => seleccionar(e.latlng.lat, e.latlng.lng));
 mymap.on('moveend', render);
 
 L.control.layers(null, { 
-    "🔲 Zonas": layerZonas, "🟦 Macro": layerMacro, "🟧 Micro": layerMicro, "⬛ Grid 3m": layerLocalNano, "📍 Estafetas": layerEstafetas
+    "🔲 Zonas": layerZonas, "🛣️ Rutas": layerRutas, "🟦 Macro": layerMacro, "🟧 Micro": layerMicro, "⬛ Grid 3m": layerLocalNano, "📍 Estafetas": layerEstafetas
 }, { collapsed: false }).addTo(mymap);
 
 render();
