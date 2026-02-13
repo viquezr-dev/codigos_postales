@@ -35,7 +35,7 @@
 </div>
 
 <div class="search-container">
-    <input type="text" id="search-input" placeholder="BUSCAR CÓDIGO O ESTAFETA..." maxlength="15">
+    <input type="text" id="search-input" placeholder="CÓDIGO O ESTAFETA..." maxlength="15">
     <button id="search-btn" onclick="buscarCodigo()">IR</button>
 </div>
 
@@ -43,17 +43,17 @@
 <div id="mapid"></div>
 
 <script>
+// --- CONFIGURACIÓN ---
 const ORIGIN = { lat: 10.0, lng: -83.0 };
 const ALFA = "23456789ABCDEFGHJKLMNPQRSTVWXYZ";
 const R_3M = 0.000027; 
-
 const PARAMS = { RES_NANO: R_3M, RES_MICRO: R_3M * 30, RES_MACRO: R_3M * 900 };
 
 const mymap = L.map('mapid', { zoomSnap: 0.1, zoomControl: false, maxZoom: 22 }).setView([8.5, -80.0], 8);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 22, maxNativeZoom: 19 }).addTo(mymap);
 L.control.zoom({ position: 'bottomright' }).addTo(mymap);
 
-// Capas
+// --- CAPAS ---
 const layerZonas = L.geoJSON(null, { 
     style: { color: "#333", weight: 1.5, fillOpacity: 0.1, fillColor: "#3498db" },
     onEachFeature: (f, l) => {
@@ -74,7 +74,7 @@ const layerMiUbicacion = L.layerGroup().addTo(mymap);
 const selectionLayer = L.layerGroup().addTo(mymap);
 const distanceLayer = L.layerGroup().addTo(mymap);
 
-// Carga de Datos
+// --- FETCH DATA ---
 fetch('estafetas.geojson').then(r => r.json()).then(data => layerZonas.addData(data)).catch(()=>{});
 fetch('estafetasl.geojson').then(r => r.json()).then(data => {
     L.geoJSON(data, { style: { color: 'red', weight: 2.5, opacity: 0.5 }, onEachFeature: (f,l) => l.bindPopup(`RUTA: ${f.properties.RUTA}`) }).addTo(layerRutas);
@@ -86,6 +86,7 @@ fetch('estafetasp.geojson').then(r => r.json()).then(data => {
     }).addTo(layerEstafetas);
 }).catch(()=>{});
 
+// --- ENGINE ---
 function encode(num, len) {
     let s = ""; let n = Math.abs(Math.floor(num));
     for (let i = 0; i < len; i++) { s = ALFA[n % 30] + s; n = Math.floor(n / 30); }
@@ -131,10 +132,25 @@ function seleccionar(lat, lng, forcedZonaID = null) {
     selectionLayer.clearLayers(); layerLocalNano.clearLayers(); distanceLayer.clearLayers();
     const z = mymap.getZoom();
     let zonaID = forcedZonaID;
+    
+    // RESTAURACIÓN: Búsqueda de colisión con GeoJSON para detectar área no definida
     if (!zonaID) {
-        layerZonas.eachLayer(l => { if (l instanceof L.Polygon && l.getBounds().contains([lat, lng])) zonaID = l.feature.properties.VM_LEVEL; });
+        layerZonas.eachLayer(l => { 
+            if (l.getBounds && l.getBounds().contains([lat, lng])) {
+                // Validación extra por si es un polígono complejo
+                if (typeof l.containsPoint === 'function' && l.containsPoint(L.latLng(lat, lng))) {
+                    zonaID = l.feature.properties.VM_LEVEL; 
+                } else { zonaID = l.feature.properties.VM_LEVEL; }
+            }
+        });
     }
-    if (!zonaID) return;
+
+    if (!zonaID) {
+        L.marker([lat, lng], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', iconSize: [20, 32], iconAnchor: [10, 32] }) })
+        .addTo(selectionLayer)
+        .bindPopup('<b style="color:red">⚠️ ÁREA NO DEFINIDA</b><br><small>Centro de cuadrícula fuera de límites.</small>').openPopup();
+        return;
+    }
 
     const res = getGridInfo(lat, lng);
     let step = (z < 13) ? 0 : (z < 16) ? PARAMS.RES_MACRO : (z < 18.5) ? PARAMS.RES_MICRO : PARAMS.RES_NANO;
@@ -159,7 +175,7 @@ function seleccionar(lat, lng, forcedZonaID = null) {
         <div class="codigo-final">${cod}</div>
         <div class="btn-container">
             <a href="https://wa.me/?text=Mi+Dirección+Postal:+${cod}" target="_blank" class="btn-ws">WHATSAPP</a>
-            <a href="https://www.google.com/maps/search/?api=1&query=${lat},${lng}" target="_blank" class="btn-maps">GOOGLE MAPS</a>
+            <a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" class="btn-maps">GOOGLE MAPS</a>
             <button onclick="buscarEstafetaCercana(${lat}, ${lng})" class="btn-cercana">📍 BUSCAR ESTAFETA CERCANA</button>
         </div>
      `, { offset: L.point(0, -30) }).openPopup();
@@ -175,7 +191,7 @@ function buscarCodigo() {
             encontrado = true;
         }
     });
-    if(!encontrado) alert("CÓDIGO NO ENCONTRADO O FUERA DE RANGO");
+    if(!encontrado) alert("CÓDIGO NO ENCONTRADO O ÁREA FUERA DE SERVICIO");
 }
 
 function buscarEstafetaCercana(lat, lng) {
