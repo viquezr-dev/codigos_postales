@@ -43,7 +43,6 @@
 <div id="mapid"></div>
 
 <script>
-// --- CONSTANTES ---
 const ORIGIN = { lat: 10.0, lng: -83.0 };
 const ALFA = "23456789ABCDEFGHJKLMNPQRSTVWXYZ";
 const R_3M = 0.000027; 
@@ -55,12 +54,10 @@ const PARAMS = {
     MACRO_X_COUNT: 2000
 };
 
-// --- MAPA ---
-const mymap = L.map('mapid', { zoomSnap: 0.1, zoomControl: false, maxZoom: 22 }).setView([8.5, -80.0], 8);
+const mymap = L.map('mapid', { zoomSnap: 0, zoomControl: false, maxZoom: 22 }).setView([8.5, -80.0], 8);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 22, maxNativeZoom: 19 }).addTo(mymap);
 L.control.zoom({ position: 'bottomright' }).addTo(mymap);
 
-// Capas
 const layerZonas = L.geoJSON(null, { 
     style: { color: "#333", weight: 1.5, fillOpacity: 0.1, fillColor: "#3498db" },
     onEachFeature: (f, l) => {
@@ -81,7 +78,7 @@ const layerMiUbicacion = L.layerGroup().addTo(mymap);
 const selectionLayer = L.layerGroup().addTo(mymap);
 const distanceLayer = L.layerGroup().addTo(mymap);
 
-// Carga de GeoJSON (Funcionalidades preservadas)
+// Carga de Datos
 fetch('estafetas.geojson').then(r => r.json()).then(data => layerZonas.addData(data)).catch(e => {});
 fetch('estafetasl.geojson').then(r => r.json()).then(data => {
     L.geoJSON(data, { style: { color: 'red', weight: 3, opacity: 0.7 }, onEachFeature: (f, l) => { l.bindPopup(`<b>RUTA:</b> ${f.properties.RUTA || 'N/A'}`); } }).addTo(layerRutas);
@@ -93,7 +90,6 @@ fetch('estafetasp.geojson').then(r => r.json()).then(data => {
     }).addTo(layerEstafetas);
 }).catch(e => {});
 
-// --- LOGICA DE COORDENADAS ---
 function encode(num, len) {
     let s = ""; let n = Math.abs(Math.floor(num));
     for (let i = 0; i < len; i++) { s = ALFA[n % 30] + s; n = Math.floor(n / 30); }
@@ -101,9 +97,8 @@ function encode(num, len) {
 }
 
 function getGridInfo(lat, lng) {
-    // Auditado: Cálculo estricto sin desplazamientos por zoom
-    const gx = Math.floor((lng - ORIGIN.lng) / PARAMS.RES_NANO);
-    const gy = Math.floor((ORIGIN.lat - lat) / PARAMS.RES_NANO);
+    const gx = Math.round((lng - ORIGIN.lng) / PARAMS.RES_NANO);
+    const gy = Math.round((ORIGIN.lat - lat) / PARAMS.RES_NANO);
     const macroX = Math.floor(gx / 900), macroY = Math.floor(gy / 900);
     const microX = Math.floor((gx % 900) / 30), microY = Math.floor((gy % 900) / 30);
     const nanoX = (gx % 30 + 30) % 30;
@@ -128,7 +123,7 @@ function seleccionar(lat, lng, forcedZonaID = null) {
 
     if (!zonaID) {
         L.marker([lat, lng], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', iconSize: [20, 32] }) })
-        .addTo(selectionLayer).bindPopup('<span class="popup-header">⚠️ ÁREA NO DEFINIDA</span>').openPopup();
+        .addTo(selectionLayer).bindPopup('ÁREA NO DEFINIDA').openPopup();
         return;
     }
 
@@ -148,7 +143,6 @@ function seleccionar(lat, lng, forcedZonaID = null) {
             codigoFinal = `${zonaLimpia}${res.macro}-${res.micro}${res.nano}`;
             step = PARAMS.RES_NANO;
             
-            // Rejilla 3m (Preservada)
             const mIdxX = Math.floor((lng - ORIGIN.lng) / PARAMS.RES_MICRO);
             const mIdxY = Math.floor((ORIGIN.lat - lat) / PARAMS.RES_MICRO);
             const mStartLng = ORIGIN.lng + (mIdxX * PARAMS.RES_MICRO);
@@ -170,19 +164,52 @@ function seleccionar(lat, lng, forcedZonaID = null) {
         const idxX = Math.floor((lng - ORIGIN.lng) / step);
         const idxY = Math.floor((ORIGIN.lat - lat) / step);
         const sLng = ORIGIN.lng + (idxX * step), sLat = ORIGIN.lat - (idxY * step);
-        L.rectangle([[sLat, sLng], [sLat - step, sLng + step]], { color: '#e74c3c', weight: 2, fillOpacity: 0.4, interactive: false }).addTo(selectionLayer);
+        L.rectangle([[sLat, sLng], [sLat - step, sLng + step]], { color: '#e74c3c', weight: 3, fillOpacity: 0.3, interactive: false }).addTo(selectionLayer);
     }
 
     L.marker([lat, lng], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [20, 32], iconAnchor: [10, 32] }) })
      .addTo(selectionLayer)
-     .bindPopup(`
-        <span class="popup-header">${titulo}</span>
-        <div class="codigo-final">${codigoFinal}</div>
-        <div class="btn-container">
-            <a href="https://wa.me/?text=Mi+Dirección+Postal:+${codigoFinal}" target="_blank" class="btn-ws">WhatsApp</a>
-            <button onclick="buscarEstafetaCercana(${lat}, ${lng})" class="btn-cercana">📍 ESTAFETA CERCANA</button>
-        </div>
-     `, { offset: L.point(0, -30) }).openPopup();
+     .bindPopup(`<span class="popup-header">${titulo}</span><div class="codigo-final">${codigoFinal}</div><div class="btn-container"><a href="https://wa.me/?text=Mi+Dirección+Postal:+${codigoFinal}" target="_blank" class="btn-ws">WhatsApp</a><button onclick="buscarEstafetaCercana(${lat}, ${lng})" class="btn-cercana">📍 ESTAFETA CERCANA</button></div>`, { offset: L.point(0, -30) }).openPopup();
+}
+
+function render() {
+    layerMacro.clearLayers(); layerMicro.clearLayers();
+    const z = mymap.getZoom(), b = mymap.getBounds();
+    
+    const draw = (step, layer, labelClass, color, weight, opacity, limit) => {
+        // CORRECCIÓN: Definir límites estrictos para evitar el apiñamiento
+        const west = Math.max(b.getWest(), -85), east = Math.min(b.getEast(), -77);
+        const north = Math.min(b.getNorth(), 11), south = Math.max(b.getSouth(), 7);
+
+        let sIdxX = Math.floor((west - ORIGIN.lng) / step);
+        let sIdxY = Math.floor((ORIGIN.lat - north) / step);
+        let eIdxX = Math.ceil((east - ORIGIN.lng) / step);
+        let eIdxY = Math.ceil((ORIGIN.lat - south) / step);
+
+        let count = 0;
+        for (let ix = sIdxX; ix <= eIdxX; ix++) {
+            for (let iy = sIdxY; iy <= eIdxY; iy++) {
+                if (count++ > limit) return;
+                const lon = ORIGIN.lng + (ix * step);
+                const lat = ORIGIN.lat - (iy * step);
+                
+                L.rectangle([[lat, lon], [lat - step, lon + step]], { color: color, weight: weight, fill: false, opacity: opacity, interactive: false }).addTo(layer);
+                
+                if (labelClass) {
+                    const isMacro = (labelClass === 'label-macro' && z >= 9 && z < 13.5);
+                    const isMicro = (labelClass === 'label-micro' && z >= 13.5 && z < 17);
+                    if (isMacro || isMicro) {
+                        const info = getGridInfo(lat - step/2, lon + step/2);
+                        const txt = (labelClass === 'label-macro') ? info.macro : info.micro;
+                        L.marker([lat - step/2, lon + step/2], { icon: L.divIcon({className: 'inv'}) }).bindTooltip(txt, { permanent: true, direction: 'center', className: `watermark-tooltip ${labelClass}` }).addTo(layer);
+                    }
+                }
+            }
+        }
+    };
+
+    if (z >= 9) draw(PARAMS.RES_MACRO, layerMacro, 'label-macro', '#1a73e8', 1.5, 0.2, 400);
+    if (z >= 13.5) draw(PARAMS.RES_MICRO, layerMicro, 'label-micro', '#e67e22', 1, 0.2, 600);
 }
 
 function buscarEstafetaCercana(lat, lng) {
@@ -205,36 +232,6 @@ function buscarEstafetaCercana(lat, lng) {
     }
 }
 
-function render() {
-    layerMacro.clearLayers(); layerMicro.clearLayers();
-    const z = mymap.getZoom(), b = mymap.getBounds();
-    const draw = (step, layer, labelClass, color, weight, opacity, maxRects) => {
-        // CORRECCION FINAL: Inicio basado en múltiplos del origen para evitar desplazamiento por zoom
-        let sIdxX = Math.floor((b.getWest() - ORIGIN.lng) / step);
-        let sIdxY = Math.floor((ORIGIN.lat - b.getNorth()) / step);
-        let sLng = ORIGIN.lng + (sIdxX * step);
-        let sLat = ORIGIN.lat - (sIdxY * step);
-        let count = 0;
-        for (let lo = sLng; lo < b.getEast() + step; lo += step) {
-            for (let la = sLat; la > b.getSouth() - step; la -= step) {
-                if (count++ > maxRects) return;
-                const info = getGridInfo(la - step/2, lo + step/2);
-                L.rectangle([[la, lo], [la - step, lo + step]], { color: color, weight: weight, fill: false, opacity: opacity, interactive: false }).addTo(layer);
-                if (labelClass) {
-                    const showMacro = (labelClass==='label-macro' && z >= 9 && z < 13);
-                    const showMicro = (labelClass==='label-micro' && z >= 13 && z < 16);
-                    if (showMacro || showMicro) {
-                        const txt = labelClass === 'label-macro' ? info.macro : info.micro;
-                        L.marker([la - step/2, lo + step/2], { icon: L.divIcon({className: 'inv'}) }).bindTooltip(txt, { permanent: true, direction: 'center', className: `watermark-tooltip ${labelClass}` }).addTo(layer);
-                    }
-                }
-            }
-        }
-    };
-    if (z >= 9) draw(PARAMS.RES_MACRO, layerMacro, 'label-macro', '#1a73e8', 1.5, 0.2, 500);
-    if (z >= 13) draw(PARAMS.RES_MICRO, layerMicro, 'label-micro', '#e67e22', 1, 0.2, 800);
-}
-
 function findMe() { mymap.locate({setView: true, maxZoom: 19}); }
 mymap.on('locationfound', (e) => {
     layerMiUbicacion.clearLayers();
@@ -244,10 +241,10 @@ mymap.on('locationfound', (e) => {
 
 mymap.on('click', (e) => seleccionar(e.latlng.lat, e.latlng.lng));
 mymap.on('moveend', render);
+mymap.on('zoomend', render);
 
 L.control.layers(null, { 
-    "🔲 Zonas": layerZonas, "🟦 Macro": layerMacro, "🟧 Micro": layerMicro, "⬛ Grid 3m (Local)": layerLocalNano,
-    "🛣️ Rutas": layerRutas, "📍 Estafetas": layerEstafetas, "🔵 Mi Ubicación": layerMiUbicacion
+    "🔲 Zonas": layerZonas, "🟦 Macro": layerMacro, "🟧 Micro": layerMicro, "⬛ Grid 3m (Local)": layerLocalNano, "📍 Estafetas": layerEstafetas
 }, { collapsed: false }).addTo(mymap);
 
 render();
