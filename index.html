@@ -15,6 +15,7 @@
         .leaflet-tooltip.watermark-tooltip { background: transparent!important; border: none!important; box-shadow: none!important; color: rgba(0,0,0,0.4); font-weight: bold; font-family: monospace; text-shadow: 1px 1px 0px white; pointer-events: none; }
         .label-macro { color: #1a73e8!important; font-size: 14px; }
         .label-micro { color: #e67e22!important; font-size: 10px; }
+        .label-nano { color: #2c3e50!important; font-size: 7px; opacity: 0.5; }
         .codigo-final { background: #1a2a6c; color: white; padding: 12px; border-radius: 6px; font-size: 18px; font-weight: bold; text-align: center; margin-bottom: 8px; border: 2px solid #f1c40f; font-family: monospace; }
         .popup-header { font-weight: bold; display: block; margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 3px; text-align: center; font-size: 11px; text-transform: uppercase; color: #666; }
         .btn-container { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; justify-content: center; }
@@ -133,11 +134,9 @@ function seleccionar(lat, lng, forcedZonaID = null) {
     const z = mymap.getZoom();
     let zonaID = forcedZonaID;
     
-    // RESTAURACIÓN: Búsqueda de colisión con GeoJSON para detectar área no definida
     if (!zonaID) {
         layerZonas.eachLayer(l => { 
             if (l.getBounds && l.getBounds().contains([lat, lng])) {
-                // Validación extra por si es un polígono complejo
                 if (typeof l.containsPoint === 'function' && l.containsPoint(L.latLng(lat, lng))) {
                     zonaID = l.feature.properties.VM_LEVEL; 
                 } else { zonaID = l.feature.properties.VM_LEVEL; }
@@ -162,11 +161,33 @@ function seleccionar(lat, lng, forcedZonaID = null) {
         L.rectangle([[ORIGIN.lat - iY*step, ORIGIN.lng + iX*step], [ORIGIN.lat - (iY+1)*step, ORIGIN.lng + (iX+1)*step]], { color: '#e74c3c', weight: 3, fillOpacity: 0.3 }).addTo(selectionLayer);
     }
 
+    // --- BLOQUE CORREGIDO: CUADRICULA NANO (3M) ORDENADA ---
     if (z >= 18.5) {
-        const mX = Math.floor((lng - ORIGIN.lng) / PARAMS.RES_MICRO); const mY = Math.floor((ORIGIN.lat - lat) / PARAMS.RES_MICRO);
-        for(let i=0; i<30; i++) { for(let j=0; j<30; j++) {
-            L.rectangle([[ORIGIN.lat - (mY*PARAMS.RES_MICRO + i*R_3M), ORIGIN.lng + (mX*PARAMS.RES_MICRO + j*R_3M)], [ORIGIN.lat - (mY*PARAMS.RES_MICRO + (i+1)*R_3M), ORIGIN.lng + (mX*PARAMS.RES_MICRO + (j+1)*R_3M)]], { color: '#2c3e50', weight: 0.5, fill: false, opacity: 0.15 }).addTo(layerLocalNano);
-        }}
+        const mX = Math.floor((lng - ORIGIN.lng) / PARAMS.RES_MICRO); 
+        const mY = Math.floor((ORIGIN.lat - lat) / PARAMS.RES_MICRO);
+        
+        for(let i=0; i<30; i++) { 
+            for(let j=0; j<30; j++) {
+                const latN = ORIGIN.lat - (mY * PARAMS.RES_MICRO + i * R_3M);
+                const lonN = ORIGIN.lng + (mX * PARAMS.RES_MICRO + j * R_3M);
+                
+                L.rectangle([[latN, lonN], [latN - R_3M, lonN + R_3M]], { 
+                    color: '#2c3e50', 
+                    weight: 0.5, 
+                    fill: false, 
+                    opacity: 0.15,
+                    interactive: false 
+                }).addTo(layerLocalNano);
+
+                // Etiqueta opcional para verificar el orden (solo si el zoom es muy alto)
+                if (z >= 21) {
+                    const index = (i * 30) + j;
+                    L.marker([latN - R_3M/2, lonN + R_3M/2], { icon: L.divIcon({className: 'inv'}) })
+                     .bindTooltip(index.toString(), { permanent: true, direction: 'center', className: 'watermark-tooltip label-nano' })
+                     .addTo(layerLocalNano);
+                }
+            }
+        }
     }
 
     L.marker([lat, lng], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [20, 32], iconAnchor: [10, 32] }) })
