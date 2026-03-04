@@ -15,12 +15,16 @@
         .leaflet-tooltip.watermark-tooltip { background: transparent!important; border: none!important; box-shadow: none!important; color: rgba(0,0,0,0.4); font-weight: bold; font-family: monospace; text-shadow: 1px 1px 0px white; pointer-events: none; }
         .label-macro { color: #1a73e8!important; font-size: 14px; }
         .label-micro { color: #e67e22!important; font-size: 10px; }
+        
+        /* Estilos de Popup Actualizados */
+        .zona-postal-box { background: #2c3e50; color: white; padding: 5px; text-align: center; font-weight: bold; font-size: 11px; text-transform: uppercase; border-radius: 4px 4px 0 0; }
         .codigo-final { background: #1a2a6c; color: white; padding: 12px; border-radius: 6px; font-size: 18px; font-weight: bold; text-align: center; margin-bottom: 8px; border: 2px solid #f1c40f; font-family: monospace; }
-        .popup-header { font-weight: bold; display: block; margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 3px; text-align: center; font-size: 11px; text-transform: uppercase; color: #666; }
+        .popup-header { font-weight: bold; display: block; margin-bottom: 5px; padding-top: 5px; text-align: center; font-size: 12px; color: #333; }
+        
         .btn-container { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; justify-content: center; }
         .btn-ws { background: #25D366; color: white !important; padding: 8px; border-radius: 4px; text-decoration: none; font-size: 10px; font-weight: bold; text-align: center; }
         .btn-maps { background: #4285F4; color: white !important; padding: 8px; border-radius: 4px; text-decoration: none; font-size: 10px; font-weight: bold; text-align: center; }
-        .btn-cercana { background: #003366; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 10px; font-weight: bold; grid-column: span 2; }
+        .btn-cercana { background: #003366; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 10px; font-weight: bold; grid-column: span 2; margin-top: 5px; }
         .locate-button { position: absolute; bottom: 30px; left: 10px; z-index: 1000; background: white; width: 40px; height: 40px; border-radius: 4px; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: none; display: flex; align-items: center; justify-content: center; font-size: 20px; }
         .inv { background: none; border: none; }
         .map-title { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; text-align: center; pointer-events: none; width: 100%; }
@@ -60,7 +64,7 @@ const layerZonas = L.geoJSON(null, {
         l.on({
             mouseover: (e) => { e.target.setStyle({ weight: 3, color: '#f1c40f', fillOpacity: 0.3 }); },
             mouseout: (e) => { layerZonas.resetStyle(e.target); },
-            click: (e) => { seleccionar(e.latlng.lat, e.latlng.lng, f.properties.VM_LEVEL); L.DomEvent.stopPropagation(e); }
+            click: (e) => { seleccionar(e.latlng.lat, e.latlng.lng); L.DomEvent.stopPropagation(e); }
         });
     }
 }).addTo(mymap);
@@ -94,17 +98,10 @@ function encode(num, len) {
 }
 
 function getGridInfo(lat, lng) {
-    // Calculamos los índices globales gx y gy
     const gx = Math.floor((lng - ORIGIN.lng) / PARAMS.RES_NANO);
     const gy = Math.floor((ORIGIN.lat - lat) / PARAMS.RES_NANO);
-
-    // Identificamos la posición dentro del bloque micro (0 a 29)
-    // Usamos Math.abs y el operador resto para asegurar que el orden sea siempre positivo
     const localX = ((gx % 30) + 30) % 30;
     const localY = ((gy % 30) + 30) % 30;
-
-    // El índice secuencial para el código Nano (0 a 899)
-    // localY * 30 + localX garantiza orden: fila 0 (0-29), fila 1 (30-59), etc.
     const nanoIndex = (localY * 30) + localX;
 
     return {
@@ -139,32 +136,42 @@ function render() {
     if (z >= 14) drawGrid(PARAMS.RES_MICRO, layerMicro, 'label-micro', '#e67e22', 0.6, 0.2);
 }
 
-function seleccionar(lat, lng, forcedZonaID = null) {
+function seleccionar(lat, lng) {
     selectionLayer.clearLayers(); layerLocalNano.clearLayers(); distanceLayer.clearLayers();
     const z = mymap.getZoom();
-    let zonaID = forcedZonaID;
-    
-    if (!zonaID) {
-        layerZonas.eachLayer(l => { 
-            if (l.getBounds && l.getBounds().contains([lat, lng])) {
-                if (typeof l.containsPoint === 'function' && l.containsPoint(L.latLng(lat, lng))) {
-                    zonaID = l.feature.properties.VM_LEVEL; 
-                } else { zonaID = l.feature.properties.VM_LEVEL; }
-            }
-        });
-    }
+    let props = null;
 
-    if (!zonaID) {
+    // Buscar zona en el GeoJSON
+    layerZonas.eachLayer(l => { 
+        if (l.getBounds && l.getBounds().contains([lat, lng])) {
+            props = l.feature.properties;
+        }
+    });
+
+    if (!props) {
         L.marker([lat, lng], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', iconSize: [20, 32], iconAnchor: [10, 32] }) })
-        .addTo(selectionLayer)
-        .bindPopup('<b style="color:red">⚠️ ÁREA NO DEFINIDA</b><br><small>Centro de cuadrícula fuera de límites.</small>').openPopup();
+        .addTo(selectionLayer).bindPopup('<b style="color:red">⚠️ ÁREA NO DEFINIDA</b>').openPopup();
         return;
     }
 
+    const vLev5 = props.VM_LEVEL;   // Ej: A6299
+    const vLev2 = props.VM_LEVEL2D; // Ej: AM
     const res = getGridInfo(lat, lng);
+    
     let step = (z < 13) ? 0 : (z < 16) ? PARAMS.RES_MACRO : (z < 18.5) ? PARAMS.RES_MICRO : PARAMS.RES_NANO;
-    let zonaLimpia = zonaID.toString().charAt(0) + zonaID.toString().substring(3);
-    let cod = (z < 13) ? zonaID : (z < 16) ? `${zonaID}-${res.macro}` : (z < 18.5) ? `${zonaID}-${res.macro}-${res.micro}` : `${zonaLimpia}${res.macro}-${res.micro}${res.nano}`;
+    
+    // --- Lógica de Construcción de Código Compacto Solicitado ---
+    let cod = "";
+    if (z < 13) {
+        cod = `${vLev5} = ${vLev2}`;
+    } else if (z < 16) {
+        cod = `${vLev2}${res.macro}`;
+    } else if (z < 18.5) {
+        cod = `${vLev2}${res.macro}-${res.micro}`;
+    } else {
+        // Formato final de 3m: AMSL7-2SJX8
+        cod = `${vLev2}${res.macro}-${res.micro}${res.nano}`;
+    }
 
     if (step > 0) {
         const iX = Math.floor((lng - ORIGIN.lng) / step); const iY = Math.floor((ORIGIN.lat - lat) / step);
@@ -174,47 +181,43 @@ function seleccionar(lat, lng, forcedZonaID = null) {
     if (z >= 18.5) {
         const mX = Math.floor((lng - ORIGIN.lng) / PARAMS.RES_MICRO); 
         const mY = Math.floor((ORIGIN.lat - lat) / PARAMS.RES_MICRO);
-        
-        // El bucle ahora sigue exactamente el orden del índice calculado en getGridInfo
         for(let i=0; i<30; i++) { 
             for(let j=0; j<30; j++) {
                 const latN = ORIGIN.lat - (mY * PARAMS.RES_MICRO + i * R_3M);
                 const lonN = ORIGIN.lng + (mX * PARAMS.RES_MICRO + j * R_3M);
-                
-                L.rectangle([[latN, lonN], [latN - R_3M, lonN + R_3M]], { 
-                    color: '#2c3e50', 
-                    weight: 0.5, 
-                    fill: false, 
-                    opacity: 0.15,
-                    interactive: false 
-                }).addTo(layerLocalNano);
+                L.rectangle([[latN, lonN], [latN - R_3M, lonN + R_3M]], { color: '#2c3e50', weight: 0.5, fill: false, opacity: 0.15, interactive: false }).addTo(layerLocalNano);
             }
         }
     }
 
-    L.marker([lat, lng], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [20, 32], iconAnchor: [10, 32] }) })
-     .addTo(selectionLayer).bindPopup(`
-        <span class="popup-header">CÓDIGO POSTAL</span>
+    // --- Ventana Informativa Actualizada ---
+    const popupContent = `
+        <div class="zona-postal-box">ZONA POSTAL</div>
+        <div class="popup-header">${vLev5} = <b>${vLev2}</b></div>
         <div class="codigo-final">${cod}</div>
         <div class="btn-container">
             <a href="https://wa.me/?text=Mi+Dirección+Postal:+${cod}" target="_blank" class="btn-ws">WHATSAPP</a>
-            <a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" class="btn-maps">GOOGLE MAPS</a>
+            <a href="http://maps.google.com/maps?q=${lat},${lng}" target="_blank" class="btn-maps">GOOGLE MAPS</a>
             <button onclick="buscarEstafetaCercana(${lat}, ${lng})" class="btn-cercana">📍 BUSCAR ESTAFETA CERCANA</button>
         </div>
-     `, { offset: L.point(0, -30) }).openPopup();
+    `;
+
+    L.marker([lat, lng], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [20, 32], iconAnchor: [10, 32] }) })
+     .addTo(selectionLayer).bindPopup(popupContent, { offset: L.point(0, -30) }).openPopup();
 }
 
 function buscarCodigo() {
-    const val = document.getElementById('search-input').value.toUpperCase();
+    const val = document.getElementById('search-input').value.toUpperCase().trim();
     let encontrado = false;
-    layerEstafetas.eachLayer(l => {
-        if (l.feature && l.feature.properties.VM_LEVEL === val) {
-            mymap.setView(l.getLatLng(), 18);
-            seleccionar(l.getLatLng().lat, l.getLatLng().lng, val);
+    layerZonas.eachLayer(l => {
+        if (l.feature.properties.VM_LEVEL === val || l.feature.properties.VM_LEVEL2D === val) {
+            const centro = l.getBounds().getCenter();
+            mymap.setView(centro, 14);
+            seleccionar(centro.lat, centro.lng);
             encontrado = true;
         }
     });
-    if(!encontrado) alert("CÓDIGO NO ENCONTRADO O ÁREA FUERA DE SERVICIO");
+    if(!encontrado) alert("CÓDIGO NO ENCONTRADO");
 }
 
 function buscarEstafetaCercana(lat, lng) {
@@ -230,7 +233,7 @@ function buscarEstafetaCercana(lat, lng) {
     }
 }
 
-function findMe() { mymap.locate({setView: true, maxZoom: 19}); }
+function findMe() { mymap.locate({setView: true, maxZoom: 18}); }
 mymap.on('locationfound', (e) => {
     layerMiUbicacion.clearLayers();
     L.circleMarker(e.latlng, {radius: 8, color: 'white', fillColor: '#1a73e8', fillOpacity: 1, weight: 3}).addTo(layerMiUbicacion);
