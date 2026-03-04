@@ -233,17 +233,18 @@ function buscarCodigo() {
     let val = inputRaw.replace(/-/g, "").replace(/\s/g, ""); 
     let enc = false;
 
-    // 1. Buscamos la zona primero (Indispensable para el anclaje)
-    let zonaEncontrada = null;
-    let prefijoZona = val.substring(0, 2);
+    // 1. ANCLA: Buscamos el polígono de la Zona (Ej: "AJ")
+    let zonaPolygon = null;
+    let prefijo = val.substring(0, 2);
 
     layerZonas.eachLayer(l => {
-        if (l.feature.properties.VM_LEVEL2D === prefijoZona || l.feature.properties.VM_LEVEL === inputRaw) {
-            zonaEncontrada = l;
+        if (l.feature.properties.VM_LEVEL2D === prefijo || l.feature.properties.VM_LEVEL === inputRaw) {
+            zonaPolygon = l;
         }
     });
 
-    if (val.length === 10 && zonaEncontrada) {
+    // 2. Si es código completo (10) y tenemos la zona anclada
+    if (val.length === 10 && zonaPolygon) {
         try {
             const decode = (s) => {
                 let n = 0;
@@ -253,70 +254,65 @@ function buscarCodigo() {
                 return n;
             };
 
-            // Decodificamos los bloques exactos
+            // Decodificamos la dirección relativa
             const nMacro = decode(val.substring(2, 5));  
             const nMicro = decode(val.substring(5, 8));  
             const nNano  = decode(val.substring(8, 10)); 
 
-            // IMPORTANTE: Usamos la reversa exacta de tu getGridInfo original
-            const mY = Math.floor(nMacro / 2000), mX = nMacro % 2000;
-            const miY = Math.floor(nMicro / 30), miX = nMicro % 30;
+            // Punto de referencia: Esquina Noroeste de la zona AJ
+            const bounds = zonaPolygon.getBounds();
+            const anchorLat = bounds.getNorth(); // El límite superior de la zona
+            const anchorLng = bounds.getWest();  // El límite izquierdo de la zona
+
+            // Calculamos el desplazamiento local (dentro de la zona)
+            const miY = Math.floor(nMicro / 30), mix = nMicro % 30;
             const nY = Math.floor(nNano / 30), nX = nNano % 30;
 
-            const totalGX = (mX * 900) + (miX * 30) + nX;
-            const totalGY = (mY * 900) + (miY * 30) + nY;
-
-            // Coordenadas exactas del centro del cuadrito de 3m
-            const lon = ORIGIN.lng + (totalGX * PARAMS.RES_NANO) + (PARAMS.RES_NANO / 2);
-            const lat = ORIGIN.lat - (totalGY * PARAMS.RES_NANO) - (PARAMS.RES_NANO / 2);
+            // La coordenada final es el ANCLA de la zona + el código postal
+            const lat = anchorLat - (miY * PARAMS.RES_MICRO) - (nY * PARAMS.RES_NANO);
+            const lon = anchorLng + (mix * PARAMS.RES_MICRO) + (nX * PARAMS.RES_NANO);
 
             if (!isNaN(lat) && !isNaN(lon)) {
-                mymap.flyTo([lat, lon], 20); // Zoom más profundo para notar la precisión
+                mymap.flyTo([lat, lon], 19);
                 
                 mymap.once('moveend', () => {
-                    // Limpiamos capas previas
+                    // Limpieza y dibujado manual para evitar saltos
                     selectionLayer.clearLayers();
-                    layerLocalNano.clearLayers();
                     
-                    // Dibujamos el cuadro rojo exactamente donde dice el código
-                    L.rectangle([
-                        [ORIGIN.lat - totalGY * PARAMS.RES_NANO, ORIGIN.lng + totalGX * PARAMS.RES_NANO],
-                        [ORIGIN.lat - (totalGY + 1) * PARAMS.RES_NANO, ORIGIN.lng + (totalGX + 1) * PARAMS.RES_NANO]
-                    ], { color: '#e74c3c', weight: 2, fillOpacity: 0.4 }).addTo(selectionLayer);
-
-                    // Forzamos el popup con el código original buscado
-                    const props = zonaEncontrada.feature.properties;
+                    // Creamos el marcador con el código exacto buscado
                     const popupContent = `
-                        <div style="font-family: sans-serif;">
-                            <div class="zona-postal-box">ZONA POSTAL</div>
-                            <div class="zona-info">${props.VM_LEVEL} = <b>${props.VM_LEVEL2D}</b></div>
-                            <hr style="border:0; border-top:1px dashed #ccc; margin: 2px 0;">
-                            <span class="label-titulo">CÓDIGO POSTAL</span>
-                            <div class="codigo-final">${inputRaw}</div>
-                            <div class="btn-container">
-                                <a href="https://wa.me/?text=Mi+Dirección+Postal:+${inputRaw}" target="_blank" class="btn-ws">WHATSAPP</a>
-                                <a href="http://maps.google.com/?q=${lat},${lon}" target="_blank" class="btn-maps">G. MAPS</a>
-                                <button onclick="buscarEstafetaCercana(${lat}, ${lon})" class="btn-cercana">📍 BUSCAR ESTAFETA CERCANA</button>
-                            </div>
-                        </div>
-                    `;
+                        <div style="text-align:center;">
+                            <b>ZONA ${prefijo}</b><br>
+                            <span style="font-size:1.2em; color:#e74c3c;">${inputRaw}</span><br>
+                            <button onclick="buscarEstafetaCercana(${lat}, ${lon})" style="margin-top:5px; cursor:pointer;">📍 Ver Estafeta</button>
+                        </div>`;
 
-                    L.marker([lat, lon], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [16, 26], iconAnchor: [8, 26] }) })
-                     .addTo(selectionLayer).bindPopup(popupContent, { offset: L.point(0, -20) }).openPopup();
+                    L.marker([lat, lon], {
+                        icon: L.icon({
+                            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+                            iconSize: [20, 32], iconAnchor: [10, 32]
+                        })
+                    }).addTo(selectionLayer).bindPopup(popupContent).openPopup();
+                    
+                    // Dibujamos el cuadro de 3m
+                    L.rectangle([
+                        [lat - 0.00001, lon - 0.00001],
+                        [lat + 0.00001, lon + 0.00001]
+                    ], {color: "red", weight: 1}).addTo(selectionLayer);
                 });
                 enc = true;
             }
-        } catch (e) { console.error(e); }
+        } catch (e) { console.error("Error en ancla:", e); }
     }
 
-    if (!enc && zonaEncontrada) {
-        const c = zonaEncontrada.getBounds().getCenter();
+    // 3. Si no es código exacto, vamos al centro de la zona
+    if (!enc && zonaPolygon) {
+        const c = zonaPolygon.getBounds().getCenter();
         mymap.setView(c, 14);
-        seleccionar(c.lat, c.lng);
         enc = true;
     }
 
-    if (!enc) alert("CÓDIGO NO ENCONTRADO");
+    if (!enc) alert("CÓDIGO NO ENCONTRADO EN PANAMÁ");
 }
 
 mymap.on('click', (e) => seleccionar(e.latlng.lat, e.latlng.lng));
@@ -337,6 +333,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
