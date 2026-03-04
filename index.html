@@ -15,7 +15,6 @@
         .leaflet-tooltip.watermark-tooltip { background: transparent!important; border: none!important; box-shadow: none!important; color: rgba(0,0,0,0.4); font-weight: bold; font-family: monospace; text-shadow: 1px 1px 0px white; pointer-events: none; }
         .label-macro { color: #1a73e8!important; font-size: 14px; }
         .label-micro { color: #e67e22!important; font-size: 10px; }
-        .label-nano { color: #2c3e50!important; font-size: 7px; opacity: 0.5; }
         .codigo-final { background: #1a2a6c; color: white; padding: 12px; border-radius: 6px; font-size: 18px; font-weight: bold; text-align: center; margin-bottom: 8px; border: 2px solid #f1c40f; font-family: monospace; }
         .popup-header { font-weight: bold; display: block; margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 3px; text-align: center; font-size: 11px; text-transform: uppercase; color: #666; }
         .btn-container { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; justify-content: center; }
@@ -95,12 +94,23 @@ function encode(num, len) {
 }
 
 function getGridInfo(lat, lng) {
-    const gx = Math.round((lng - ORIGIN.lng) / PARAMS.RES_NANO);
-    const gy = Math.round((ORIGIN.lat - lat) / PARAMS.RES_NANO);
+    // Calculamos los índices globales gx y gy
+    const gx = Math.floor((lng - ORIGIN.lng) / PARAMS.RES_NANO);
+    const gy = Math.floor((ORIGIN.lat - lat) / PARAMS.RES_NANO);
+
+    // Identificamos la posición dentro del bloque micro (0 a 29)
+    // Usamos Math.abs y el operador resto para asegurar que el orden sea siempre positivo
+    const localX = ((gx % 30) + 30) % 30;
+    const localY = ((gy % 30) + 30) % 30;
+
+    // El índice secuencial para el código Nano (0 a 899)
+    // localY * 30 + localX garantiza orden: fila 0 (0-29), fila 1 (30-59), etc.
+    const nanoIndex = (localY * 30) + localX;
+
     return {
         macro: encode((Math.floor(gy / 900) * 2000) + Math.floor(gx / 900), 3),
         micro: encode((Math.floor((gy % 900) / 30) * 30) + Math.floor((gx % 900) / 30), 3),
-        nano: encode(((gy % 30 + 30) % 30 * 30) + (gx % 30 + 30) % 30, 2)
+        nano: encode(nanoIndex, 2)
     };
 }
 
@@ -161,11 +171,11 @@ function seleccionar(lat, lng, forcedZonaID = null) {
         L.rectangle([[ORIGIN.lat - iY*step, ORIGIN.lng + iX*step], [ORIGIN.lat - (iY+1)*step, ORIGIN.lng + (iX+1)*step]], { color: '#e74c3c', weight: 3, fillOpacity: 0.3 }).addTo(selectionLayer);
     }
 
-    // --- BLOQUE CORREGIDO: CUADRICULA NANO (3M) ORDENADA ---
     if (z >= 18.5) {
         const mX = Math.floor((lng - ORIGIN.lng) / PARAMS.RES_MICRO); 
         const mY = Math.floor((ORIGIN.lat - lat) / PARAMS.RES_MICRO);
         
+        // El bucle ahora sigue exactamente el orden del índice calculado en getGridInfo
         for(let i=0; i<30; i++) { 
             for(let j=0; j<30; j++) {
                 const latN = ORIGIN.lat - (mY * PARAMS.RES_MICRO + i * R_3M);
@@ -178,14 +188,6 @@ function seleccionar(lat, lng, forcedZonaID = null) {
                     opacity: 0.15,
                     interactive: false 
                 }).addTo(layerLocalNano);
-
-                // Etiqueta opcional para verificar el orden (solo si el zoom es muy alto)
-                if (z >= 21) {
-                    const index = (i * 30) + j;
-                    L.marker([latN - R_3M/2, lonN + R_3M/2], { icon: L.divIcon({className: 'inv'}) })
-                     .bindTooltip(index.toString(), { permanent: true, direction: 'center', className: 'watermark-tooltip label-nano' })
-                     .addTo(layerLocalNano);
-                }
             }
         }
     }
