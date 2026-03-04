@@ -125,28 +125,66 @@ function getGridInfo(lat, lng) {
 }
 
 function render() {
-    layerMacro.clearLayers(); layerMicro.clearLayers();
-    const z = mymap.getZoom(); const b = mymap.getBounds();
-    const drawGrid = (step, layer, labelClass, color, weight, opacity) => {
+    layerMacro.clearLayers(); 
+    layerMicro.clearLayers(); 
+    layerLocalNano.clearLayers(); // Aquí dibujaremos los Nano/Pico dinámicos
+
+    const z = mymap.getZoom(); 
+    const b = mymap.getBounds();
+
+    const drawGrid = (step, layer, labelType, color, weight, opacity) => {
         const sX = Math.floor((b.getWest() - ORIGIN.lng) / step);
         const sY = Math.floor((ORIGIN.lat - b.getNorth()) / step);
         const eX = Math.ceil((b.getEast() - ORIGIN.lng) / step);
         const eY = Math.ceil((ORIGIN.lat - b.getSouth()) / step);
-        if ((eX - sX) * (eY - sY) > 900) return;
+
+        // Seguridad para no colapsar el navegador
+        if ((eX - sX) * (eY - sY) > 1200) return;
+
         for (let ix = sX; ix <= eX; ix++) {
             for (let iy = sY; iy <= eY; iy++) {
-                const lon = ORIGIN.lng + (ix * step); const lat = ORIGIN.lat - (iy * step);
-                L.rectangle([[lat, lon], [lat - step, lon + step]], { color, weight, fill: false, opacity, interactive: false }).addTo(layer);
-                if (labelClass && ((labelClass === 'label-macro' && z >= 11 && z < 13.5) || (labelClass === 'label-micro' && z >= 14.5 && z < 17.5))) {
-                    const info = getGridInfo(lat - step/2, lon + step/2);
-                    L.marker([lat - step/2, lon + step/2], { icon: L.divIcon({className: 'inv'}) })
-                     .bindTooltip(labelClass === 'label-macro' ? info.macro : info.micro, { permanent: true, direction: 'center', className: `watermark-tooltip ${labelClass}` }).addTo(layer);
+                const lon = ORIGIN.lng + (ix * step); 
+                const lat = ORIGIN.lat - (iy * step);
+                const centerLat = lat - (step / 2);
+                const centerLon = lon + (step / 2);
+
+                // Dibujar el cuadro
+                L.rectangle([[lat, lon], [lat - step, lon + step]], { 
+                    color, weight, fill: false, opacity, interactive: false 
+                }).addTo(layer);
+
+                // Lógica de Watermarks (Etiquetas)
+                let showLabel = false;
+                let labelText = "";
+
+                if (labelType === 'MACRO' && z >= 11 && z < 14) {
+                    showLabel = true;
+                    labelText = getGridInfo(centerLat, centerLon).macro;
+                } else if (labelType === 'MICRO' && z >= 15 && z < 18) {
+                    showLabel = true;
+                    labelText = getGridInfo(centerLat, centerLon).micro;
+                } else if (labelType === 'NANO' && z >= 18.5) {
+                    showLabel = true;
+                    labelText = getGridInfo(centerLat, centerLon).nano;
+                }
+
+                if (showLabel) {
+                    L.marker([centerLat, centerLon], { 
+                        icon: L.divIcon({
+                            className: 'inv',
+                            html: `<div class="watermark-tooltip">${labelText}</div>`
+                        }),
+                        interactive: false
+                    }).addTo(layer);
                 }
             }
         }
     };
-    if (z >= 10) drawGrid(RES.MACRO, layerMacro, 'label-macro', '#1a73e8', 1, 0.2);
-    if (z >= 14) drawGrid(RES.MICRO, layerMicro, 'label-micro', '#e67e22', 0.6, 0.2);
+
+    // Capas dinámicas según zoom
+    if (z >= 10) drawGrid(RES.MACRO, layerMacro, 'MACRO', '#1a73e8', 1.5, 0.3);
+    if (z >= 14) drawGrid(RES.MICRO, layerMicro, 'MICRO', '#e67e22', 0.8, 0.3);
+    if (z >= 18) drawGrid(RES.NANO, layerLocalNano, 'NANO', '#27ae60', 0.4, 0.2);
 }
 
 function seleccionar(lat, lng) {
@@ -229,35 +267,47 @@ function buscarCodigo() {
     let val = inputRaw.replace(/-/g, "").replace(/\s/g, ""); 
     let enc = false;
 
+    // Aceptamos códigos de 8 (AJVSV2LC) o 10 caracteres (si incluyes zona postal)
     if (val.length >= 8) {
         try {
             const decode = (s) => {
                 let n = 0;
-                for (let i = 0; i < s.length; i++) { n = n * 30 + ALFA.indexOf(s[i]); }
+                for (let i = 0; i < s.length; i++) { 
+                    let idx = ALFA.indexOf(s[i]);
+                    if (idx === -1) return -1;
+                    n = n * 30 + idx; 
+                }
                 return n;
             };
 
-            const idMacro = decode(val.substring(0, 2));
-            const idMicro = decode(val.substring(2, 4));
-            const idNano  = decode(val.substring(4, 6));
-            const idPico  = decode(val.substring(6, 8));
+            // Si el código es largo (ej: 08AJVSV2LC), ignoramos los primeros 2 dígitos de zona
+            let offset = (val.length > 8) ? 2 : 0;
+            
+            const idMacro = decode(val.substring(offset, offset + 2));
+            const idMicro = decode(val.substring(offset + 2, offset + 4));
+            const idNano  = decode(val.substring(offset + 4, offset + 6));
+            const idPico  = decode(val.substring(offset + 6, offset + 8));
 
-            const maY = Math.floor(idMacro / 10), maX = idMacro % 10;
-            const miY = Math.floor(idMicro / 24), miX = idMicro % 24;
-            const naY = Math.floor(idNano / 25), naX = idNano % 25;
-            const piY = Math.floor(idPico / 10), piX = idPico % 10;
+            if (idMacro !== -1 && idMicro !== -1 && idNano !== -1) {
+                // Desglose de coordenadas por rejilla jerárquica
+                const maY = Math.floor(idMacro / 10), maX = idMacro % 10;
+                const miY = Math.floor(idMicro / 24), miX = idMicro % 24;
+                const naY = Math.floor(idNano / 25), naX = idNano % 25;
+                const piY = Math.floor(idPico / 10), piX = idPico % 10;
 
-            const lon = ORIGIN.lng + (maX * RES.MACRO) + (miX * RES.MICRO) + (naX * RES.NANO) + (piX * RES.PICO);
-            const lat = ORIGIN.lat - (maY * RES.MACRO) - (miY * RES.MICRO) - (naY * RES.NANO) - (piY * RES.PICO);
+                // Cálculo de posición final sumando desplazamientos
+                const lon = ORIGIN.lng + (maX * RES.MACRO) + (miX * RES.MICRO) + (naX * RES.NANO) + (piX * RES.PICO) + (RES.PICO / 2);
+                const lat = ORIGIN.lat - (maY * RES.MACRO) - (miY * RES.MICRO) - (naY * RES.NANO) - (piY * RES.PICO) - (RES.PICO / 2);
 
-            if (!isNaN(lat) && !isNaN(lon)) {
-                mymap.flyTo([lat, lon], 19);
-                mymap.once('moveend', () => seleccionar(lat, lon));
-                enc = true;
+                if (!isNaN(lat) && !isNaN(lon)) {
+                    mymap.flyTo([lat, lon], 20); // Zoom máximo para ver el cuadro de 3m
+                    mymap.once('moveend', () => seleccionar(lat, lon));
+                    enc = true;
+                }
             }
-        } catch (e) { console.error(e); }
+        } catch (e) { console.error("Error decodificando:", e); }
     }
-    if (!enc) alert("CÓDIGO NO VÁLIDO");
+    if (!enc) alert("CÓDIGO NO VÁLIDO O FORMATO INCORRECTO");
 }
 
 mymap.on('click', (e) => seleccionar(e.latlng.lat, e.latlng.lng));
@@ -277,3 +327,4 @@ render();
 </script>
 </body>
 </html>
+
