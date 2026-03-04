@@ -229,55 +229,70 @@ mymap.on('locationfound', (e) => {
 });
 
 function buscarCodigo() {
-    let val = document.getElementById('search-input').value.toUpperCase().trim().replace(/-/g, "");
+    let input = document.getElementById('search-input').value.toUpperCase().trim();
+    let val = input.replace(/-/g, ""); // Quitamos guiones
     let enc = false;
 
-    // CASO 1: Es un código de punto exacto (Ej: AB7PD23S7G -> 10 caracteres o similar)
-    // Según tu lógica: quitamos los primeros 2 (zona) y usamos los 8 restantes (Macro+Micro+Nano)
-    if (val.length >= 8) {
+    // Si el código tiene longitud de punto exacto (ej. 10 caracteres: AB 7PD 23S 7G)
+    if (val.length >= 10) {
         try {
-            // Extraemos los bloques según tu algoritmo de codificación
-            // Si el código es Z1M1M2M3m1n1n2 (ej: AB 7PD 23S 7G)
-            // Tomamos los caracteres que representan la posición en el Grid
-            let parteGrid = val.substring(2); // Quitamos los 2 de la zona (VM_LEVEL2D)
+            // 1. Ignoramos los primeros 2 dígitos (Zona) y tomamos los 8 de ubicación
+            let parteGrid = val.substring(2); 
             
-            // Decodificador inverso del ALFA "23456789ABCDEFGHJKLMNPQRSTVWXYZ"
+            // Función interna para revertir el encode (Base 30)
             const decode = (s) => {
                 let n = 0;
                 for (let i = 0; i < s.length; i++) {
-                    n = n * 30 + ALFA.indexOf(s[i]);
+                    let charIndex = ALFA.indexOf(s[i]);
+                    if (charIndex === -1) return -1;
+                    n = n * 30 + charIndex;
                 }
                 return n;
             };
 
-            // Reconstruimos los índices GX y GY (basados en tu getGridInfo)
-            // Esto asume que el código tiene la estructura: MACRO(3) MICRO(3) NANO(2)
-            let iMacro = decode(parteGrid.substring(0, 3));
-            let iMicro = decode(parteGrid.substring(3, 6));
-            let iNano  = decode(parteGrid.substring(6, 8));
+            // 2. Extraemos los índices originales (Macro 3, Micro 3, Nano 2)
+            let nMacro = decode(parteGrid.substring(0, 3));
+            let nMicro = decode(parteGrid.substring(3, 6));
+            let nNano  = decode(parteGrid.substring(6, 8));
 
-            // Cálculo de coordenadas inversas
-            // Recomponemos GX y GY sumando las jerarquías
-            let gx = (Math.floor(iMacro % 2000) * 900) + (Math.floor(iMicro % 30)) + (iNano % 30);
-            let gy = (Math.floor(iMacro / 2000) * 900) + (Math.floor(iMicro / 30)) + (Math.floor(iNano / 30));
+            if (nMacro !== -1 && nMicro !== -1 && nNano !== -1) {
+                // 3. Reconstruimos GX y GY siguiendo la lógica inversa de tu getGridInfo
+                // Macro: (gy/900 * 2000) + (gx/900)
+                let macroY = Math.floor(nMacro / 2000);
+                let macroX = nMacro % 2000;
 
-            let lon = ORIGIN.lng + (gx * PARAMS.RES_NANO) + (PARAMS.RES_NANO / 2);
-            let lat = ORIGIN.lat - (gy * PARAMS.RES_NANO) - (PARAMS.RES_NANO / 2);
+                // Micro: (y_rem/30 * 30) + (x_rem/30) -> Nota: tu fórmula original usa 30*30
+                let microY = Math.floor(nMicro / 30);
+                let microX = nMicro % 30;
 
-            if (!isNaN(lat) && !isNaN(lon)) {
-                mymap.setView([lat, lon], 19);
-                seleccionar(lat, lon);
-                enc = true;
+                // Nano: (y_local * 30) + x_local
+                let nanoY = Math.floor(nNano / 30);
+                let nanoX = nNano % 30;
+
+                // 4. Sumamos todas las jerarquías para obtener los "pasos" totales desde el origen
+                let totalGX = (macroX * 900) + (microX * 30) + nanoX;
+                let totalGY = (macroY * 900) + (microY * 30) + nanoY;
+
+                // 5. Convertimos pasos a coordenadas geográficas
+                // Usamos +0.5 para caer en el centro del cuadrito de 3m
+                let lon = ORIGIN.lng + ((totalGX + 0.5) * PARAMS.RES_NANO);
+                let lat = ORIGIN.lat - ((totalGY + 0.5) * PARAMS.RES_NANO);
+
+                if (!isNaN(lat) && !isNaN(lon)) {
+                    mymap.setView([lat, lon], 19);
+                    seleccionar(lat, lon); // Esto abrirá el popup y dibujará el cuadro
+                    enc = true;
+                }
             }
         } catch (e) {
-            console.error("Error decodificando punto:", e);
+            console.error("Error en decodificación:", e);
         }
     }
 
-    // CASO 2: Si no fue punto exacto o falló, buscamos por nombre de ZONA (VM_LEVEL)
+    // Si no es un código largo o la decodificación falló, busca por nombre de zona
     if (!enc) {
         layerZonas.eachLayer(l => {
-            if (l.feature.properties.VM_LEVEL === val || l.feature.properties.VM_LEVEL2D === val) {
+            if (l.feature.properties.VM_LEVEL === input || l.feature.properties.VM_LEVEL2D === input) {
                 const c = l.getBounds().getCenter(); 
                 mymap.setView(c, 14); 
                 seleccionar(c.lat, c.lng); 
@@ -307,4 +322,5 @@ render();
 </script>
 </body>
 </html>
+
 
