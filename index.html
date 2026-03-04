@@ -233,18 +233,17 @@ function buscarCodigo() {
     let val = inputRaw.replace(/-/g, "").replace(/\s/g, ""); 
     let enc = false;
 
-    // 1. ANCLA: Buscamos el polígono de la Zona (Ej: "AJ")
-    let zonaPolygon = null;
+    // 1. Identificamos la ZONA (Los primeros 2 caracteres, ej: "AJ")
+    let zonaObj = null;
     let prefijo = val.substring(0, 2);
 
     layerZonas.eachLayer(l => {
         if (l.feature.properties.VM_LEVEL2D === prefijo || l.feature.properties.VM_LEVEL === inputRaw) {
-            zonaPolygon = l;
+            zonaObj = l.feature.properties;
         }
     });
 
-    // 2. Si es código completo (10) y tenemos la zona anclada
-    if (val.length === 10 && zonaPolygon) {
+    if (val.length === 10 && zonaObj) {
         try {
             const decode = (s) => {
                 let n = 0;
@@ -254,65 +253,60 @@ function buscarCodigo() {
                 return n;
             };
 
-            // Decodificamos la dirección relativa
+            // 2. Decodificamos los bloques
             const nMacro = decode(val.substring(2, 5));  
             const nMicro = decode(val.substring(5, 8));  
             const nNano  = decode(val.substring(8, 10)); 
 
-            // Punto de referencia: Esquina Noroeste de la zona AJ
-            const bounds = zonaPolygon.getBounds();
-            const anchorLat = bounds.getNorth(); // El límite superior de la zona
-            const anchorLng = bounds.getWest();  // El límite izquierdo de la zona
+            // 3. FACTOR DE UNICIDAD: Usamos el ID de zona (ej: 8001) para el salto global
+            // Esto evita que VSV se repita, porque cada zona tiene un ID diferente
+            const idZona = parseInt(zonaObj.VM_LEVEL) || 0;
+            
+            // Calculamos la posición macro usando el ID de la zona como semilla
+            // Esto "empuja" la cuadrícula a la provincia correcta
+            const globalOffset = idZona * 10000; 
+            const totalIndex = globalOffset + nMacro;
 
-            // Calculamos el desplazamiento local (dentro de la zona)
-            const miY = Math.floor(nMicro / 30), mix = nMicro % 30;
+            const mY = Math.floor(totalIndex / 2000), mX = totalIndex % 2000;
+            const miY = Math.floor(nMicro / 30), miX = nMicro % 30;
             const nY = Math.floor(nNano / 30), nX = nNano % 30;
 
-            // La coordenada final es el ANCLA de la zona + el código postal
-            const lat = anchorLat - (miY * PARAMS.RES_MICRO) - (nY * PARAMS.RES_NANO);
-            const lon = anchorLng + (mix * PARAMS.RES_MICRO) + (nX * PARAMS.RES_NANO);
+            // 4. ENSAMBLAJE FINAL
+            const gx = (mX * 900) + (miX * 30) + nX;
+            const gy = (mY * 900) + (miY * 30) + nY;
 
+            const lon = ORIGIN.lng + (gx * PARAMS.RES_NANO) + (PARAMS.RES_NANO / 2);
+            const lat = ORIGIN.lat - (gy * PARAMS.RES_NANO) - (PARAMS.RES_NANO / 2);
+
+            // 5. Vuelo y marcado (Forzando el código buscado)
             if (!isNaN(lat) && !isNaN(lon)) {
                 mymap.flyTo([lat, lon], 19);
-                
                 mymap.once('moveend', () => {
-                    // Limpieza y dibujado manual para evitar saltos
                     selectionLayer.clearLayers();
-                    
-                    // Creamos el marcador con el código exacto buscado
-                    const popupContent = `
-                        <div style="text-align:center;">
-                            <b>ZONA ${prefijo}</b><br>
-                            <span style="font-size:1.2em; color:#e74c3c;">${inputRaw}</span><br>
-                            <button onclick="buscarEstafetaCercana(${lat}, ${lon})" style="margin-top:5px; cursor:pointer;">📍 Ver Estafeta</button>
-                        </div>`;
-
+                    // Marcador con el código exacto
                     L.marker([lat, lon], {
                         icon: L.icon({
                             iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
                             iconSize: [20, 32], iconAnchor: [10, 32]
                         })
-                    }).addTo(selectionLayer).bindPopup(popupContent).openPopup();
-                    
-                    // Dibujamos el cuadro de 3m
-                    L.rectangle([
-                        [lat - 0.00001, lon - 0.00001],
-                        [lat + 0.00001, lon + 0.00001]
-                    ], {color: "red", weight: 1}).addTo(selectionLayer);
+                    }).addTo(selectionLayer).bindPopup(`<b>${inputRaw}</b>`).openPopup();
                 });
                 enc = true;
             }
-        } catch (e) { console.error("Error en ancla:", e); }
+        } catch (e) { console.error("Error en unicidad:", e); }
     }
 
-    // 3. Si no es código exacto, vamos al centro de la zona
-    if (!enc && zonaPolygon) {
-        const c = zonaPolygon.getBounds().getCenter();
-        mymap.setView(c, 14);
-        enc = true;
+    if (!enc && zonaObj) {
+        // Si no hay código pero sí zona, ir a la zona
+        layerZonas.eachLayer(l => {
+            if (l.feature.properties.VM_LEVEL2D === prefijo) {
+                mymap.fitBounds(l.getBounds());
+                enc = true;
+            }
+        });
     }
 
-    if (!enc) alert("CÓDIGO NO ENCONTRADO EN PANAMÁ");
+    if (!enc) alert("CÓDIGO NO ENCONTRADO");
 }
 
 mymap.on('click', (e) => seleccionar(e.latlng.lat, e.latlng.lng));
@@ -333,6 +327,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
