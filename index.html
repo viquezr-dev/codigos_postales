@@ -230,13 +230,13 @@ mymap.on('locationfound', (e) => {
 
 function buscarCodigo() {
     let input = document.getElementById('search-input').value.toUpperCase().trim();
-    let val = input.replace(/-/g, ""); // Quitamos guiones
+    let val = input.replace(/-/g, ""); // Limpiamos guiones
     let enc = false;
 
-    // CASO: CÓDIGO DE PUNTO EXACTO (Ej: AB7PD23S7G -> 10 caracteres)
+    // CASO: CÓDIGO DE PUNTO EXACTO (Ej: AB7PD23S7G)
     if (val.length >= 10) {
         try {
-            // 1. Ignoramos los primeros 2 dígitos (Zona/VM_LEVEL2D)
+            // 1. Saltamos los primeros 2 (Zona) y procesamos los 8 de ubicación
             let parteGrid = val.substring(2); 
             
             const decode = (s) => {
@@ -249,44 +249,50 @@ function buscarCodigo() {
                 return n;
             };
 
-            // 2. Extraemos los bloques (Macro 3, Micro 3, Nano 2)
-            let nMacro = decode(parteGrid.substring(0, 3));
-            let nMicro = decode(parteGrid.substring(3, 6));
-            let nNano  = decode(parteGrid.substring(6, 8));
+            // 2. Decodificamos los tres bloques según tu estructura
+            let nMacro = decode(parteGrid.substring(0, 3)); // Bloque de 3
+            let nMicro = decode(parteGrid.substring(3, 6)); // Bloque de 3
+            let nNano  = decode(parteGrid.substring(6, 8)); // Bloque de 2
 
             if (nMacro !== -1 && nMicro !== -1 && nNano !== -1) {
-                // 3. RECONSTRUCCIÓN GX / GY (Inversa exacta de tu getGridInfo)
                 
-                // Del Macro sacamos los bloques de 900x900
+                // 3. REVERSA EXACTA DE TU LÓGICA:
+                
+                // De nMacro (Macro):
                 let mY = Math.floor(nMacro / 2000);
                 let mX = nMacro % 2000;
 
-                // Del Micro sacamos la posición dentro del bloque Macro (pasos de 30)
+                // De nMicro (Micro): 
+                // Tu fórmula era: (Math.floor((gy % 900) / 30) * 30) + Math.floor((gx % 900) / 30)
                 let miY = Math.floor(nMicro / 30);
                 let miX = nMicro % 30;
 
-                // Del Nano sacamos la posición final (pasos de 1)
+                // De nNano (Nano):
+                // Tu fórmula era: (localY * 30) + localX
                 let nY = Math.floor(nNano / 30);
                 let nX = nNano % 30;
 
-                // Sumamos todo para obtener los pasos totales desde el ORIGIN
-                let gx = (mX * 900) + (miX * 30) + nX;
-                let gy = (mY * 900) + (miY * 30) + nY;
+                // 4. ENSAMBLAJE DE PASOS TOTALES (GX y GY)
+                // gx = (macro_bloque * 900) + (micro_bloque) + (nano_local)
+                // Nota: nMicro ya contiene el factor *30 en su estructura original
+                let gx = (mX * 900) + miX + nX;
+                let gy = (mY * 900) + miY + nY;
 
-                // 4. Convertir a Lat/Lng usando tu R_3M (0.000027)
+                // 5. CONVERSIÓN A COORDENADAS (Desde ORIGIN -83, 10)
                 let lon = ORIGIN.lng + (gx * PARAMS.RES_NANO) + (PARAMS.RES_NANO / 2);
                 let lat = ORIGIN.lat - (gy * PARAMS.RES_NANO) - (PARAMS.RES_NANO / 2);
 
-                if (!isNaN(lat) && !isNaN(lon)) {
+                // Validación de rango para asegurar que caiga en Panamá
+                if (lat > 5 && lat < 11 && lon > -84 && lon < -76) {
                     mymap.setView([lat, lon], 19);
-                    seleccionar(lat, lon); // Esto activa el popup y el cuadro rojo
+                    seleccionar(lat, lon); 
                     enc = true;
                 }
             }
-        } catch (e) { console.error(e); }
+        } catch (e) { console.error("Error decodificando:", e); }
     }
 
-    // CASO: BÚSQUEDA POR NOMBRE DE ZONA (Si lo anterior falla o es corto)
+    // BÚSQUEDA POR ZONA (Si no es código largo o falló la ubicación)
     if (!enc) {
         layerZonas.eachLayer(l => {
             if (l.feature.properties.VM_LEVEL === input || l.feature.properties.VM_LEVEL2D === input) {
@@ -319,6 +325,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
