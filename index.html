@@ -19,7 +19,6 @@
         .zona-postal-box { background: #2c3e50; color: white; padding: 3px; text-align: center; font-weight: bold; font-size: 9px; text-transform: uppercase; }
         .label-titulo { display: block; font-size: 9px; color: #7f8c8d; font-weight: bold; margin-top: 4px; text-transform: uppercase; text-align: center; }
         .zona-info { font-size: 13px; color: #2c3e50; text-align: center; padding: 2px 0; }
-        .zona-info b { color: #e67e22; }
         .codigo-final { background: #1a2a6c; color: white; padding: 6px; border-radius: 4px; font-size: 16px; font-weight: bold; text-align: center; margin: 3px 8px 6px 8px; border: 1.5px solid #f1c40f; font-family: monospace; letter-spacing: 0.5px; }
         .btn-container { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 0 8px 8px 8px; }
         .btn-ws { background: #25D366; color: white !important; padding: 5px; border-radius: 3px; text-decoration: none; font-size: 9px; font-weight: bold; text-align: center; }
@@ -52,8 +51,14 @@
 <script>
 const ORIGIN = { lat: 10.0, lng: -83.0 };
 const ALFA = "23456789ABCDEFGHJKLMNPQRSTVWXYZ";
-const R_3M = 0.000027; 
-const PARAMS = { RES_NANO: R_3M, RES_MICRO: R_3M * 30, RES_MACRO: R_3M * 900 };
+
+// 1. RESOLUCIONES SEGÚN REINGENIERÍA
+const RES = {
+    MACRO: 0.143,
+    MICRO: 0.143 / 24,
+    NANO: (0.143 / 24) / 25,
+    PICO: ((0.143 / 24) / 25) / 10 
+};
 
 const mymap = L.map('mapid', { zoomSnap: 0.1, zoomControl: false, maxZoom: 22 }).setView([8.5, -80.0], 8);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 22, maxNativeZoom: 19 }).addTo(mymap);
@@ -86,7 +91,6 @@ fetch('estafetasl.geojson').then(r => r.json()).then(data => {
     L.geoJSON(data, { style: { color: 'red', weight: 2.5, opacity: 0.5 }, onEachFeature: (f,l) => l.bindPopup(`RUTA: ${f.properties.RUTA}`) }).addTo(layerRutas);
 }).catch(()=>{});
 fetch('estafetasp.geojson').then(r => r.json()).then(data => {
-    // IMPORTANTE: Se envuelve en una subcapa GeoJSON para mantener la estructura de búsqueda
     L.geoJSON(data, {
         pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 5, fillColor: '#27ae60', color: '#fff', weight: 2, fillOpacity: 1 }),
         onEachFeature: (f, l) => { l.bindPopup(`<small><b>ESTAFETA:</b> ${f.properties.ESTAF_NAME || 'N/A'}</small>`); }
@@ -100,38 +104,23 @@ function encode(num, len) {
 }
 
 function getGridInfo(lat, lng) {
-    // RESOLUCIONES DEFINIDAS POR REINGENIERÍA
-    const RES = {
-        MACRO: 0.143,
-        MICRO: 0.143 / 24,
-        NANO: (0.143 / 24) / 25,
-        PICO: ((0.143 / 24) / 25) / 10 // Aproximadamente 2.6m - 3m
-    };
-
-    // 1. Pasos totales desde el origen
     let dx = (lng - ORIGIN.lng);
     let dy = (ORIGIN.lat - lat);
 
-    // 2. Extraer índices por nivel (Jerarquía)
     const maX = Math.floor(dx / RES.MACRO);
     const maY = Math.floor(dy / RES.MACRO);
-
     const miX = Math.floor((dx % RES.MACRO) / RES.MICRO);
     const miY = Math.floor((dy % RES.MACRO) / RES.MICRO);
-
     const naX = Math.floor(((dx % RES.MACRO) % RES.MICRO) / RES.NANO);
     const naY = Math.floor(((dy % RES.MACRO) % RES.MICRO) / RES.NANO);
-
     const piX = Math.floor((((dx % RES.MACRO) % RES.MICRO) % RES.NANO) / RES.PICO);
     const piY = Math.floor((((dy % RES.MACRO) % RES.MICRO) % RES.NANO) / RES.PICO);
 
-    // 3. Generar bloques de 2 caracteres (Base 30)
-    // Usamos Y*X para cada nivel para asegurar unicidad
     return {
-        macro: encode(maY * 10 + maX, 2),        // AJ
-        micro: encode(miY * 24 + miX, 2),        // VS
-        nano:  encode(naY * 25 + naX, 2),        // V2
-        pico:  encode(piY * 10 + piX, 2)         // LC
+        macro: encode(maY * 10 + maX, 2),
+        micro: encode(miY * 24 + miX, 2),
+        nano:  encode(naY * 25 + naX, 2),
+        pico:  encode(piY * 10 + piX, 2) 
     };
 }
 
@@ -156,8 +145,8 @@ function render() {
             }
         }
     };
-    if (z >= 10) drawGrid(PARAMS.RES_MACRO, layerMacro, 'label-macro', '#1a73e8', 1, 0.2);
-    if (z >= 14) drawGrid(PARAMS.RES_MICRO, layerMicro, 'label-micro', '#e67e22', 0.6, 0.2);
+    if (z >= 10) drawGrid(RES.MACRO, layerMacro, 'label-macro', '#1a73e8', 1, 0.2);
+    if (z >= 14) drawGrid(RES.MICRO, layerMicro, 'label-micro', '#e67e22', 0.6, 0.2);
 }
 
 function seleccionar(lat, lng) {
@@ -174,27 +163,20 @@ function seleccionar(lat, lng) {
     const res = getGridInfo(lat, lng);
     const props = results[0].feature.properties;
 
-    // ENSAMBLAJE JERÁRQUICO ÚNICO
+    // ENSAMBLAJE ÚNICO SEGÚN NIVEL DE DETALLE
     let cod = res.macro;
     if (z >= 13) cod += res.micro;
     if (z >= 16) cod += "-" + res.nano;
     if (z >= 18.5) cod += res.pico;
 
-    // DETERMINAR CUADRO A DIBUJAR
-    const RES_VALS = [0.143, 0.143/24, (0.143/24)/25, ((0.143/24)/25)/10];
-    let step = (z < 13) ? RES_VALS[0] : (z < 16) ? RES_VALS[1] : (z < 18.5) ? RES_VALS[2] : RES_VALS[3];
-
-    // Dibujar cuadro de selección
+    let step = (z < 13) ? RES.MACRO : (z < 16) ? RES.MICRO : (z < 18.5) ? RES.NANO : RES.PICO;
     const iX = Math.floor((lng - ORIGIN.lng) / step);
     const iY = Math.floor((ORIGIN.lat - lat) / step);
-    L.rectangle([
-        [ORIGIN.lat - iY * step, ORIGIN.lng + iX * step],
-        [ORIGIN.lat - (iY + 1) * step, ORIGIN.lng + (iX + 1) * step]
-    ], { color: '#e74c3c', weight: 2, fillOpacity: 0.25 }).addTo(selectionLayer);
+    L.rectangle([[ORIGIN.lat - iY*step, ORIGIN.lng + iX*step], [ORIGIN.lat - (iY+1)*step, ORIGIN.lng + (iX+1)*step]], { color: '#e74c3c', weight: 2, fillOpacity: 0.25 }).addTo(selectionLayer);
 
     const popupContent = `
         <div style="font-family: sans-serif;">
-            <div class="zona-postal-box">SISTEMA JERÁRQUICO</div>
+            <div class="zona-postal-box">SISTEMA POSTAL</div>
             <div class="zona-info">ZONA: <b>${props.VM_LEVEL2D}</b></div>
             <hr style="border:0; border-top:1px dashed #ccc; margin: 2px 0;">
             <span class="label-titulo">CÓDIGO ÚNICO</span>
@@ -210,52 +192,6 @@ function seleccionar(lat, lng) {
      .addTo(selectionLayer).bindPopup(popupContent, { offset: L.point(0, -20) }).openPopup();
 }
 
-    const props = results[0].feature.properties;
-    const vLev5 = props.VM_LEVEL;   
-    const vLev2 = props.VM_LEVEL2D; // RESTAURADO: Uso de VM_LEVEL2D
-    const res = getGridInfo(lat, lng);
-    
-    // RESTAURADO: Tamaños e información por nivel
-    let cod = (z < 13) ? vLev2 : (z < 16) ? `${vLev2}${res.macro}` : (z < 18.5) ? `${vLev2}${res.macro}-${res.micro}` : `${vLev2}${res.macro}-${res.micro}${res.nano}`;
-
-    let step = (z < 13) ? 0 : (z < 16) ? PARAMS.RES_MACRO : (z < 18.5) ? PARAMS.RES_MICRO : PARAMS.RES_NANO;
-    if (step > 0) {
-        const iX = Math.floor((lng - ORIGIN.lng) / step); const iY = Math.floor((ORIGIN.lat - lat) / step);
-        L.rectangle([[ORIGIN.lat - iY*step, ORIGIN.lng + iX*step], [ORIGIN.lat - (iY+1)*step, ORIGIN.lng + (iX+1)*step]], { color: '#e74c3c', weight: 2, fillOpacity: 0.25 }).addTo(selectionLayer);
-    }
-
-    const popupContent = `
-        <div style="font-family: sans-serif;">
-            <div class="zona-postal-box">ZONA POSTAL</div>
-            <div class="zona-info">${vLev5} = <b>${vLev2}</b></div>
-            <hr style="border:0; border-top:1px dashed #ccc; margin: 2px 0;">
-            <span class="label-titulo">CÓDIGO POSTAL</span>
-            <div class="codigo-final">${cod}</div>
-            <div class="btn-container">
-                <a href="https://wa.me/?text=Mi+Dirección+Postal:+${cod}" target="_blank" class="btn-ws">WHATSAPP</a>
-                <a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" class="btn-maps">G. MAPS</a>
-                <button onclick="buscarEstafetaCercana(${lat}, ${lng})" class="btn-cercana">📍 BUSCAR ESTAFETA CERCANA</button>
-            </div>
-        </div>
-    `;
-
-    L.marker([lat, lng], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [16, 26], iconAnchor: [8, 26] }) })
-     .addTo(selectionLayer).bindPopup(popupContent, { offset: L.point(0, -20) }).openPopup();
-
-    if (z >= 18.5) {
-        const mX = Math.floor((lng - ORIGIN.lng) / PARAMS.RES_MICRO); 
-        const mY = Math.floor((ORIGIN.lat - lat) / PARAMS.RES_MICRO);
-        for(let i=0; i<30; i++) { 
-            for(let j=0; j<30; j++) {
-                const latN = ORIGIN.lat - (mY * PARAMS.RES_MICRO + i * R_3M);
-                const lonN = ORIGIN.lng + (mX * PARAMS.RES_MICRO + j * R_3M);
-                L.rectangle([[latN, lonN], [latN - R_3M, lonN + R_3M]], { color: '#2c3e50', weight: 0.4, fill: false, opacity: 0.1 }).addTo(layerLocalNano);
-            }
-        }
-    }
-}
-
-// RESTAURADO: Función de búsqueda de estafeta con detección de capas anidadas
 function buscarEstafetaCercana(lat, lng) {
     distanceLayer.clearLayers();
     const userPt = L.latLng(lat, lng);
@@ -281,6 +217,7 @@ function buscarEstafetaCercana(lat, lng) {
 }
 
 function findMe() { mymap.locate({setView: true, maxZoom: 18, enableHighAccuracy: true}); }
+
 mymap.on('locationfound', (e) => {
     layerMiUbicacion.clearLayers();
     L.circleMarker(e.latlng, { radius: 7, color: 'white', fillColor: '#1a73e8', fillOpacity: 1, weight: 2 }).addTo(layerMiUbicacion);
@@ -296,80 +233,31 @@ function buscarCodigo() {
         try {
             const decode = (s) => {
                 let n = 0;
-                for (let i = 0; i < s.length; i++) {
-                    n = n * 30 + ALFA.indexOf(s[i]);
-                }
+                for (let i = 0; i < s.length; i++) { n = n * 30 + ALFA.indexOf(s[i]); }
                 return n;
             };
 
-            // 1. DEFINICIÓN DE RESOLUCIONES (Según tu reingeniería)
-            const RES_MACRO = 0.143;
-            const RES_MICRO = RES_MACRO / 24;  // ~0.005958
-            const RES_NANO  = RES_MICRO / 25;  // ~0.000238
-            const RES_PICO  = RES_NANO / 10;   // Ajuste para llegar a los ~3m
+            const idMacro = decode(val.substring(0, 2));
+            const idMicro = decode(val.substring(2, 4));
+            const idNano  = decode(val.substring(4, 6));
+            const idPico  = decode(val.substring(6, 8));
 
-            // 2. DECODIFICACIÓN POR PARES (Base 30)
-            const idMacro = decode(val.substring(0, 2)); // AJ
-            const idMicro = decode(val.substring(2, 4)); // VS
-            const idNano  = decode(val.substring(4, 6)); // V2
-            const idPico  = decode(val.substring(6, 8)); // LC
+            const maY = Math.floor(idMacro / 10), maX = idMacro % 10;
+            const miY = Math.floor(idMicro / 24), miX = idMicro % 24;
+            const naY = Math.floor(idNano / 25), naX = idNano % 25;
+            const piY = Math.floor(idPico / 10), piX = idPico % 10;
 
-            if (idMacro !== -1 && idMicro !== -1 && idNano !== -1) {
-                
-                // 3. CÁLCULO DE COORDENADAS JERÁRQUICAS
-                // Macro: Dividimos Panamá en una rejilla grande (ej. 10x10 macros)
-                const maY = Math.floor(idMacro / 10), maX = idMacro % 10;
-                
-                // Micro: 24x24 dentro de cada Macro
-                const miY = Math.floor(idMicro / 24), miX = idMicro % 24;
-                
-                // Nano: 25x25 dentro de cada Micro
-                const naY = Math.floor(idNano / 25), naX = idNano % 25;
-                
-                // Pico: Subdivisión final para los 3 metros
-                const piY = Math.floor(idPico / 30), piX = idPico % 30;
+            const lon = ORIGIN.lng + (maX * RES.MACRO) + (miX * RES.MICRO) + (naX * RES.NANO) + (piX * RES.PICO);
+            const lat = ORIGIN.lat - (maY * RES.MACRO) - (miY * RES.MICRO) - (naY * RES.NANO) - (piY * RES.PICO);
 
-                // 4. SUMA TOTAL DESDE EL ORIGEN (-83, 10)
-                const lon = ORIGIN.lng + 
-                            (maX * RES_MACRO) + 
-                            (miX * RES_MICRO) + 
-                            (naX * RES_NANO) + 
-                            (piX * RES_PICO);
-
-                const lat = ORIGIN.lat - 
-                            (maY * RES_MACRO) - 
-                            (miY * RES_MICRO) - 
-                            (naY * RES_NANO) - 
-                            (piY * RES_PICO);
-
-                // 5. POSICIONAMIENTO
-                if (!isNaN(lat) && !isNaN(lon)) {
-                    mymap.flyTo([lat, lon], 19);
-                    
-                    mymap.once('moveend', () => {
-                        selectionLayer.clearLayers();
-                        
-                        // Dibujamos el punto exacto
-                        L.marker([lat, lon], {
-                            icon: L.icon({
-                                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
-                                iconSize: [20, 32], iconAnchor: [10, 32]
-                            })
-                        }).addTo(selectionLayer).bindPopup(`<b>Código: ${inputRaw}</b><br>Nivel: Pico (3m)`).openPopup();
-
-                        // Cuadro de 3x3 metros aproximado
-                        L.rectangle([
-                            [lat - 0.000015, lon - 0.000015],
-                            [lat + 0.000015, lon + 0.000015]
-                        ], {color: "#e74c3c", weight: 1, fillOpacity: 0.2}).addTo(selectionLayer);
-                    });
-                    enc = true;
-                }
+            if (!isNaN(lat) && !isNaN(lon)) {
+                mymap.flyTo([lat, lon], 19);
+                mymap.once('moveend', () => seleccionar(lat, lon));
+                enc = true;
             }
-        } catch (e) { console.error("Error en reingeniería:", e); }
+        } catch (e) { console.error(e); }
     }
-
-    if (!enc) alert("FORMATO DE CÓDIGO NO VÁLIDO PARA 4 NIVELES");
+    if (!enc) alert("CÓDIGO NO VÁLIDO");
 }
 
 mymap.on('click', (e) => seleccionar(e.latlng.lat, e.latlng.lng));
@@ -381,7 +269,6 @@ L.control.layers(null, {
     "🛣️ Rutas": layerRutas,
     "🟦 Macro": layerMacro, 
     "🟧 Micro": layerMicro,
-    "⬛ Grid 3m": layerLocalNano,
     "📍 Estafetas": layerEstafetas,
     "🔵 Ubicación": layerMiUbicacion
 }, { collapsed: true, position: 'topright' }).addTo(mymap);
@@ -390,20 +277,3 @@ render();
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
