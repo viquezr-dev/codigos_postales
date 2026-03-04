@@ -233,63 +233,60 @@ function buscarCodigo() {
     let val = input.replace(/-/g, ""); // Quitamos guiones
     let enc = false;
 
-    // Si el código tiene longitud de punto exacto (ej. 10 caracteres: AB 7PD 23S 7G)
+    // CASO: CÓDIGO DE PUNTO EXACTO (Ej: AB7PD23S7G -> 10 caracteres)
     if (val.length >= 10) {
         try {
-            // 1. Ignoramos los primeros 2 dígitos (Zona) y tomamos los 8 de ubicación
+            // 1. Ignoramos los primeros 2 dígitos (Zona/VM_LEVEL2D)
             let parteGrid = val.substring(2); 
             
-            // Función interna para revertir el encode (Base 30)
             const decode = (s) => {
                 let n = 0;
                 for (let i = 0; i < s.length; i++) {
-                    let charIndex = ALFA.indexOf(s[i]);
-                    if (charIndex === -1) return -1;
-                    n = n * 30 + charIndex;
+                    let idx = ALFA.indexOf(s[i]);
+                    if (idx === -1) return -1;
+                    n = n * 30 + idx;
                 }
                 return n;
             };
 
-            // 2. Extraemos los índices originales (Macro 3, Micro 3, Nano 2)
+            // 2. Extraemos los bloques (Macro 3, Micro 3, Nano 2)
             let nMacro = decode(parteGrid.substring(0, 3));
             let nMicro = decode(parteGrid.substring(3, 6));
             let nNano  = decode(parteGrid.substring(6, 8));
 
             if (nMacro !== -1 && nMicro !== -1 && nNano !== -1) {
-                // 3. Reconstruimos GX y GY siguiendo la lógica inversa de tu getGridInfo
-                // Macro: (gy/900 * 2000) + (gx/900)
-                let macroY = Math.floor(nMacro / 2000);
-                let macroX = nMacro % 2000;
+                // 3. RECONSTRUCCIÓN GX / GY (Inversa exacta de tu getGridInfo)
+                
+                // Del Macro sacamos los bloques de 900x900
+                let mY = Math.floor(nMacro / 2000);
+                let mX = nMacro % 2000;
 
-                // Micro: (y_rem/30 * 30) + (x_rem/30) -> Nota: tu fórmula original usa 30*30
-                let microY = Math.floor(nMicro / 30);
-                let microX = nMicro % 30;
+                // Del Micro sacamos la posición dentro del bloque Macro (pasos de 30)
+                let miY = Math.floor(nMicro / 30);
+                let miX = nMicro % 30;
 
-                // Nano: (y_local * 30) + x_local
-                let nanoY = Math.floor(nNano / 30);
-                let nanoX = nNano % 30;
+                // Del Nano sacamos la posición final (pasos de 1)
+                let nY = Math.floor(nNano / 30);
+                let nX = nNano % 30;
 
-                // 4. Sumamos todas las jerarquías para obtener los "pasos" totales desde el origen
-                let totalGX = (macroX * 900) + (microX * 30) + nanoX;
-                let totalGY = (macroY * 900) + (microY * 30) + nanoY;
+                // Sumamos todo para obtener los pasos totales desde el ORIGIN
+                let gx = (mX * 900) + (miX * 30) + nX;
+                let gy = (mY * 900) + (miY * 30) + nY;
 
-                // 5. Convertimos pasos a coordenadas geográficas
-                // Usamos +0.5 para caer en el centro del cuadrito de 3m
-                let lon = ORIGIN.lng + ((totalGX + 0.5) * PARAMS.RES_NANO);
-                let lat = ORIGIN.lat - ((totalGY + 0.5) * PARAMS.RES_NANO);
+                // 4. Convertir a Lat/Lng usando tu R_3M (0.000027)
+                let lon = ORIGIN.lng + (gx * PARAMS.RES_NANO) + (PARAMS.RES_NANO / 2);
+                let lat = ORIGIN.lat - (gy * PARAMS.RES_NANO) - (PARAMS.RES_NANO / 2);
 
                 if (!isNaN(lat) && !isNaN(lon)) {
                     mymap.setView([lat, lon], 19);
-                    seleccionar(lat, lon); // Esto abrirá el popup y dibujará el cuadro
+                    seleccionar(lat, lon); // Esto activa el popup y el cuadro rojo
                     enc = true;
                 }
             }
-        } catch (e) {
-            console.error("Error en decodificación:", e);
-        }
+        } catch (e) { console.error(e); }
     }
 
-    // Si no es un código largo o la decodificación falló, busca por nombre de zona
+    // CASO: BÚSQUEDA POR NOMBRE DE ZONA (Si lo anterior falla o es corto)
     if (!enc) {
         layerZonas.eachLayer(l => {
             if (l.feature.properties.VM_LEVEL === input || l.feature.properties.VM_LEVEL2D === input) {
@@ -322,5 +319,6 @@ render();
 </script>
 </body>
 </html>
+
 
 
