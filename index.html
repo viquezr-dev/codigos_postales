@@ -233,7 +233,7 @@ function buscarCodigo() {
     let val = inputRaw.replace(/-/g, "").replace(/\s/g, ""); 
     let enc = false;
 
-    // 1. PRIMERO BUSCAMOS LA ZONA (Los primeros 2 dígitos: Ej: "AJ")
+    // 1. Buscamos la zona primero (Indispensable para el anclaje)
     let zonaEncontrada = null;
     let prefijoZona = val.substring(0, 2);
 
@@ -243,7 +243,6 @@ function buscarCodigo() {
         }
     });
 
-    // 2. SI ES UN CÓDIGO COMPLETO (10 caracteres) Y ENCONTRAMOS LA ZONA
     if (val.length === 10 && zonaEncontrada) {
         try {
             const decode = (s) => {
@@ -254,35 +253,62 @@ function buscarCodigo() {
                 return n;
             };
 
-            // Extraemos los bloques relativos
+            // Decodificamos los bloques exactos
             const nMacro = decode(val.substring(2, 5));  
             const nMicro = decode(val.substring(5, 8));  
             const nNano  = decode(val.substring(8, 10)); 
 
-            // Usamos el CENTRO de la Zona encontrada como punto de referencia (Anchor)
-            // Esto evita que el cálculo se vaya a nivel nacional y se pierda
-            const centroZona = zonaEncontrada.getBounds().getCenter();
-            
-            // Reconstruimos la posición relativa dentro de la cuadrícula de la zona
+            // IMPORTANTE: Usamos la reversa exacta de tu getGridInfo original
+            const mY = Math.floor(nMacro / 2000), mX = nMacro % 2000;
             const miY = Math.floor(nMicro / 30), miX = nMicro % 30;
             const nY = Math.floor(nNano / 30), nX = nNano % 30;
 
-            // Calculamos el desplazamiento final
-            // Nota: Aquí ajustamos para que el código sea único usando la zona como base
-            const lat = centroZona.lat - (miY * PARAMS.RES_MICRO) - (nY * PARAMS.RES_NANO);
-            const lon = centroZona.lng + (miX * PARAMS.RES_MICRO) + (nX * PARAMS.RES_NANO);
+            const totalGX = (mX * 900) + (miX * 30) + nX;
+            const totalGY = (mY * 900) + (miY * 30) + nY;
+
+            // Coordenadas exactas del centro del cuadrito de 3m
+            const lon = ORIGIN.lng + (totalGX * PARAMS.RES_NANO) + (PARAMS.RES_NANO / 2);
+            const lat = ORIGIN.lat - (totalGY * PARAMS.RES_NANO) - (PARAMS.RES_NANO / 2);
 
             if (!isNaN(lat) && !isNaN(lon)) {
-                mymap.flyTo([lat, lon], 19);
+                mymap.flyTo([lat, lon], 20); // Zoom más profundo para notar la precisión
+                
                 mymap.once('moveend', () => {
-                    setTimeout(() => seleccionar(lat, lon), 300);
+                    // Limpiamos capas previas
+                    selectionLayer.clearLayers();
+                    layerLocalNano.clearLayers();
+                    
+                    // Dibujamos el cuadro rojo exactamente donde dice el código
+                    L.rectangle([
+                        [ORIGIN.lat - totalGY * PARAMS.RES_NANO, ORIGIN.lng + totalGX * PARAMS.RES_NANO],
+                        [ORIGIN.lat - (totalGY + 1) * PARAMS.RES_NANO, ORIGIN.lng + (totalGX + 1) * PARAMS.RES_NANO]
+                    ], { color: '#e74c3c', weight: 2, fillOpacity: 0.4 }).addTo(selectionLayer);
+
+                    // Forzamos el popup con el código original buscado
+                    const props = zonaEncontrada.feature.properties;
+                    const popupContent = `
+                        <div style="font-family: sans-serif;">
+                            <div class="zona-postal-box">ZONA POSTAL</div>
+                            <div class="zona-info">${props.VM_LEVEL} = <b>${props.VM_LEVEL2D}</b></div>
+                            <hr style="border:0; border-top:1px dashed #ccc; margin: 2px 0;">
+                            <span class="label-titulo">CÓDIGO POSTAL</span>
+                            <div class="codigo-final">${inputRaw}</div>
+                            <div class="btn-container">
+                                <a href="https://wa.me/?text=Mi+Dirección+Postal:+${inputRaw}" target="_blank" class="btn-ws">WHATSAPP</a>
+                                <a href="http://maps.google.com/?q=${lat},${lon}" target="_blank" class="btn-maps">G. MAPS</a>
+                                <button onclick="buscarEstafetaCercana(${lat}, ${lon})" class="btn-cercana">📍 BUSCAR ESTAFETA CERCANA</button>
+                            </div>
+                        </div>
+                    `;
+
+                    L.marker([lat, lon], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [16, 26], iconAnchor: [8, 26] }) })
+                     .addTo(selectionLayer).bindPopup(popupContent, { offset: L.point(0, -20) }).openPopup();
                 });
                 enc = true;
             }
-        } catch (e) { console.error("Error en dirección exacta:", e); }
+        } catch (e) { console.error(e); }
     }
 
-    // 3. SI SOLO SE BUSCÓ LA ZONA O EL CÓDIGO FALLÓ, IR AL CENTRO DE LA ZONA
     if (!enc && zonaEncontrada) {
         const c = zonaEncontrada.getBounds().getCenter();
         mymap.setView(c, 14);
@@ -290,7 +316,7 @@ function buscarCodigo() {
         enc = true;
     }
 
-    if (!enc) alert("CÓDIGO O ZONA NO ENCONTRADA");
+    if (!enc) alert("CÓDIGO NO ENCONTRADO");
 }
 
 mymap.on('click', (e) => seleccionar(e.latlng.lat, e.latlng.lng));
@@ -311,6 +337,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
