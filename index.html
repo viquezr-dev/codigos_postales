@@ -216,6 +216,44 @@ function seleccionar(lat, lng) {
     }
 }
 
+    // --- VENTANA INFORMATIVA CON TÍTULOS ESPECÍFICOS ---
+    const popupContent = `
+        <div style="min-width:200px; font-family: sans-serif;">
+            <div class="zona-postal-box">ZONA POSTAL</div>
+            <div style="text-align:center; padding: 5px 0;">
+                <div class="zona-info">${vLev5} = <b>${vLev2}</b></div>
+            </div>
+            
+            <hr style="border:0; border-top:1px dashed #ccc;">
+            
+            <span class="label-titulo">CÓDIGO POSTAL</span>
+            <div class="codigo-final">${cod}</div>
+            
+            <div class="btn-container">
+                <a href="https://wa.me/?text=Mi+Dirección+Postal:+${cod}" target="_blank" class="btn-ws">WHATSAPP</a>
+                <a href="https://www.google.com/maps/search/?api=1&query=${lat},${lng}" target="_blank" class="btn-maps">GOOGLE MAPS</a>
+                <button onclick="buscarEstafetaCercana(${lat}, ${lng})" class="btn-cercana">📍 BUSCAR ESTAFETA CERCANA</button>
+            </div>
+        </div>
+    `;
+
+    L.marker([lat, lng], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [20, 32], iconAnchor: [10, 32] }) })
+     .addTo(selectionLayer).bindPopup(popupContent, { offset: L.point(0, -30) }).openPopup();
+
+    // Dibujar grid 3m si el zoom es alto
+    if (z >= 18.5) {
+        const mX = Math.floor((lng - ORIGIN.lng) / PARAMS.RES_MICRO); 
+        const mY = Math.floor((ORIGIN.lat - lat) / PARAMS.RES_MICRO);
+        for(let i=0; i<30; i++) { 
+            for(let j=0; j<30; j++) {
+                const latN = ORIGIN.lat - (mY * PARAMS.RES_MICRO + i * R_3M);
+                const lonN = ORIGIN.lng + (mX * PARAMS.RES_MICRO + j * R_3M);
+                L.rectangle([[latN, lonN], [latN - R_3M, lonN + R_3M]], { color: '#2c3e50', weight: 0.5, fill: false, opacity: 0.1, interactive: false }).addTo(layerLocalNano);
+            }
+        }
+    }
+}
+
     // --- Ventana Informativa Actualizada ---
     const popupContent = `
         <div class="zona-postal-box">ZONA POSTAL</div>
@@ -278,4 +316,5 @@ render();
 </script>
 </body>
 </html>
+
 
