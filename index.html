@@ -230,11 +230,10 @@ mymap.on('locationfound', (e) => {
 
 function buscarCodigo() {
     const inputRaw = document.getElementById('search-input').value.toUpperCase().trim();
-    // Limpiamos guiones y espacios para procesar los 10 caracteres
     let val = inputRaw.replace(/-/g, "").replace(/\s/g, ""); 
     let enc = false;
 
-    // CASO: PUNTO EXACTO (Ej: AB7PD23S7G)
+    // CASO: CÓDIGO DE 10 CARACTERES (EJ: AJVSV2LCCL)
     if (val.length === 10) {
         try {
             const decode = (s) => {
@@ -247,27 +246,19 @@ function buscarCodigo() {
                 return n;
             };
 
-            // Separación de bloques: ZONA(2) | MACRO(3) | MICRO(3) | NANO(2)
-            const idM = decode(val.substring(2, 5));  
-            const idMi = decode(val.substring(5, 8)); 
-            const idN = decode(val.substring(8, 10)); 
+            // 1. Decodificación de los 3 niveles de la rejilla 30x30
+            const idM = decode(val.substring(2, 5));  // Macro (VSV)
+            const idMi = decode(val.substring(5, 8)); // Micro (2LC)
+            const idN = decode(val.substring(8, 10)); // Nano (CL)
 
             if (idM !== -1 && idMi !== -1 && idN !== -1) {
-                // Lógica de rejilla basada en tu fragmento de referencia
-                // Macro
-                const my = Math.floor(idM / 2000);
-                const mx = idM % 2000;
+                // 2. Cálculo de índices X, Y (Estructura 30x30 anidada)
+                const my = Math.floor(idM / 30), mx = idM % 30;
+                const miy = Math.floor(idMi / 30), mix = idMi % 30;
+                const nay = Math.floor(idN / 30), nax = idN % 30;
 
-                // Micro (Usando el divisor 24 de tu código)
-                const miy = Math.floor(idMi / 24);
-                const mix = idMi % 24;
-
-                // Nano (Usando el divisor 25 de tu código)
-                const nay = Math.floor(idN / 25);
-                const nax = idN % 25;
-
-                // CÁLCULO FINAL DE COORDENADAS (Suma jerárquica)
-                // Cada nivel se desplaza desde el ORIGIN según su propia resolución
+                // 3. Suma de desplazamientos usando tus constantes PARAMS
+                // Cada nivel se multiplica por su resolución correspondiente
                 const lng = ORIGIN.lng + 
                             (mx * PARAMS.RES_MACRO) + 
                             (mix * PARAMS.RES_MICRO) + 
@@ -280,8 +271,8 @@ function buscarCodigo() {
                             (nay * PARAMS.RES_NANO) - 
                             (PARAMS.RES_NANO / 2);
 
+                // 4. Ejecutar el movimiento y la selección
                 if (!isNaN(lat) && !isNaN(lng)) {
-                    // Si el punto está en el rango de Panamá, volamos allí
                     mymap.flyTo([lat, lng], 19);
                     mymap.once('moveend', () => {
                         setTimeout(() => seleccionar(lat, lng), 300);
@@ -289,16 +280,13 @@ function buscarCodigo() {
                     enc = true;
                 }
             }
-        } catch (e) {
-            console.error("Error en decodificación:", e);
-        }
+        } catch (e) { console.error("Error decodificando:", e); }
     }
 
-    // BÚSQUEDA POR ZONA (Si no es código exacto o falló la ubicación)
+    // BÚSQUEDA POR NOMBRE DE ZONA (Si no es código exacto o falló la ubicación)
     if (!enc) {
         layerZonas.eachLayer(l => {
             const p = l.feature.properties;
-            // Buscamos en los campos de zona sin modificar nada del código original
             if (p.VM_LEVEL === inputRaw || p.VM_LEVEL2D === inputRaw) {
                 const center = l.getBounds().getCenter(); 
                 mymap.setView(center, 14); 
@@ -329,6 +317,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
