@@ -229,14 +229,64 @@ mymap.on('locationfound', (e) => {
 });
 
 function buscarCodigo() {
-    const val = document.getElementById('search-input').value.toUpperCase().trim();
+    let val = document.getElementById('search-input').value.toUpperCase().trim().replace(/-/g, "");
     let enc = false;
-    layerZonas.eachLayer(l => {
-        if (l.feature.properties.VM_LEVEL === val || l.feature.properties.VM_LEVEL2D === val) {
-            const c = l.getBounds().getCenter(); mymap.setView(c, 14); seleccionar(c.lat, c.lng); enc = true;
+
+    // CASO 1: Es un código de punto exacto (Ej: AB7PD23S7G -> 10 caracteres o similar)
+    // Según tu lógica: quitamos los primeros 2 (zona) y usamos los 8 restantes (Macro+Micro+Nano)
+    if (val.length >= 8) {
+        try {
+            // Extraemos los bloques según tu algoritmo de codificación
+            // Si el código es Z1M1M2M3m1n1n2 (ej: AB 7PD 23S 7G)
+            // Tomamos los caracteres que representan la posición en el Grid
+            let parteGrid = val.substring(2); // Quitamos los 2 de la zona (VM_LEVEL2D)
+            
+            // Decodificador inverso del ALFA "23456789ABCDEFGHJKLMNPQRSTVWXYZ"
+            const decode = (s) => {
+                let n = 0;
+                for (let i = 0; i < s.length; i++) {
+                    n = n * 30 + ALFA.indexOf(s[i]);
+                }
+                return n;
+            };
+
+            // Reconstruimos los índices GX y GY (basados en tu getGridInfo)
+            // Esto asume que el código tiene la estructura: MACRO(3) MICRO(3) NANO(2)
+            let iMacro = decode(parteGrid.substring(0, 3));
+            let iMicro = decode(parteGrid.substring(3, 6));
+            let iNano  = decode(parteGrid.substring(6, 8));
+
+            // Cálculo de coordenadas inversas
+            // Recomponemos GX y GY sumando las jerarquías
+            let gx = (Math.floor(iMacro % 2000) * 900) + (Math.floor(iMicro % 30)) + (iNano % 30);
+            let gy = (Math.floor(iMacro / 2000) * 900) + (Math.floor(iMicro / 30)) + (Math.floor(iNano / 30));
+
+            let lon = ORIGIN.lng + (gx * PARAMS.RES_NANO) + (PARAMS.RES_NANO / 2);
+            let lat = ORIGIN.lat - (gy * PARAMS.RES_NANO) - (PARAMS.RES_NANO / 2);
+
+            if (!isNaN(lat) && !isNaN(lon)) {
+                mymap.setView([lat, lon], 19);
+                seleccionar(lat, lon);
+                enc = true;
+            }
+        } catch (e) {
+            console.error("Error decodificando punto:", e);
         }
-    });
-    if(!enc) alert("CÓDIGO NO ENCONTRADO");
+    }
+
+    // CASO 2: Si no fue punto exacto o falló, buscamos por nombre de ZONA (VM_LEVEL)
+    if (!enc) {
+        layerZonas.eachLayer(l => {
+            if (l.feature.properties.VM_LEVEL === val || l.feature.properties.VM_LEVEL2D === val) {
+                const c = l.getBounds().getCenter(); 
+                mymap.setView(c, 14); 
+                seleccionar(c.lat, c.lng); 
+                enc = true;
+            }
+        });
+    }
+
+    if (!enc) alert("CÓDIGO O ZONA NO ENCONTRADA");
 }
 
 mymap.on('click', (e) => seleccionar(e.latlng.lat, e.latlng.lng));
@@ -257,3 +307,4 @@ render();
 </script>
 </body>
 </html>
+
