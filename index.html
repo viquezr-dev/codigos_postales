@@ -100,14 +100,38 @@ function encode(num, len) {
 }
 
 function getGridInfo(lat, lng) {
-    const gx = Math.floor((lng - ORIGIN.lng) / PARAMS.RES_NANO);
-    const gy = Math.floor((ORIGIN.lat - lat) / PARAMS.RES_NANO);
-    const localX = ((gx % 30) + 30) % 30;
-    const localY = ((gy % 30) + 30) % 30;
+    // RESOLUCIONES DEFINIDAS POR REINGENIERÍA
+    const RES = {
+        MACRO: 0.143,
+        MICRO: 0.143 / 24,
+        NANO: (0.143 / 24) / 25,
+        PICO: ((0.143 / 24) / 25) / 10 // Aproximadamente 2.6m - 3m
+    };
+
+    // 1. Pasos totales desde el origen
+    let dx = (lng - ORIGIN.lng);
+    let dy = (ORIGIN.lat - lat);
+
+    // 2. Extraer índices por nivel (Jerarquía)
+    const maX = Math.floor(dx / RES.MACRO);
+    const maY = Math.floor(dy / RES.MACRO);
+
+    const miX = Math.floor((dx % RES.MACRO) / RES.MICRO);
+    const miY = Math.floor((dy % RES.MACRO) / RES.MICRO);
+
+    const naX = Math.floor(((dx % RES.MACRO) % RES.MICRO) / RES.NANO);
+    const naY = Math.floor(((dy % RES.MACRO) % RES.MICRO) / RES.NANO);
+
+    const piX = Math.floor((((dx % RES.MACRO) % RES.MICRO) % RES.NANO) / RES.PICO);
+    const piY = Math.floor((((dy % RES.MACRO) % RES.MICRO) % RES.NANO) / RES.PICO);
+
+    // 3. Generar bloques de 2 caracteres (Base 30)
+    // Usamos Y*X para cada nivel para asegurar unicidad
     return {
-        macro: encode((Math.floor(gy / 900) * 2000) + Math.floor(gx / 900), 3),
-        micro: encode((Math.floor((gy % 900) / 30) * 30) + Math.floor((gx % 900) / 30), 3),
-        nano: encode((localY * 30) + localX, 2)
+        macro: encode(maY * 10 + maX, 2),        // AJ
+        micro: encode(miY * 24 + miX, 2),        // VS
+        nano:  encode(naY * 25 + naX, 2),        // V2
+        pico:  encode(piY * 10 + piX, 2)         // LC
     };
 }
 
@@ -141,15 +165,50 @@ function seleccionar(lat, lng) {
     const z = mymap.getZoom();
     const results = leafletPip.pointInLayer([lng, lat], layerZonas, true);
 
-    // RESTAURADO: Alerta de Fuera de Cobertura
     if (results.length === 0) {
         L.marker([lat, lng], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', iconSize: [16, 26], iconAnchor: [8, 26] }) })
-        .addTo(selectionLayer).bindPopup(`
-            <div class="zona-postal-box" style="background:black">⚠️ ÁREA NO DEFINIDA</div>
-            <div style="text-align:center; padding:8px; font-size:10px;">Centro de cuadrícula fuera de límites territoriales o zona no mapeada.</div>
-        `).openPopup();
+        .addTo(selectionLayer).bindPopup(`<div class="zona-postal-box" style="background:black">⚠️ FUERA DE ÁREA</div>`).openPopup();
         return;
     }
+
+    const res = getGridInfo(lat, lng);
+    const props = results[0].feature.properties;
+
+    // ENSAMBLAJE JERÁRQUICO ÚNICO
+    let cod = res.macro;
+    if (z >= 13) cod += res.micro;
+    if (z >= 16) cod += "-" + res.nano;
+    if (z >= 18.5) cod += res.pico;
+
+    // DETERMINAR CUADRO A DIBUJAR
+    const RES_VALS = [0.143, 0.143/24, (0.143/24)/25, ((0.143/24)/25)/10];
+    let step = (z < 13) ? RES_VALS[0] : (z < 16) ? RES_VALS[1] : (z < 18.5) ? RES_VALS[2] : RES_VALS[3];
+
+    // Dibujar cuadro de selección
+    const iX = Math.floor((lng - ORIGIN.lng) / step);
+    const iY = Math.floor((ORIGIN.lat - lat) / step);
+    L.rectangle([
+        [ORIGIN.lat - iY * step, ORIGIN.lng + iX * step],
+        [ORIGIN.lat - (iY + 1) * step, ORIGIN.lng + (iX + 1) * step]
+    ], { color: '#e74c3c', weight: 2, fillOpacity: 0.25 }).addTo(selectionLayer);
+
+    const popupContent = `
+        <div style="font-family: sans-serif;">
+            <div class="zona-postal-box">SISTEMA JERÁRQUICO</div>
+            <div class="zona-info">ZONA: <b>${props.VM_LEVEL2D}</b></div>
+            <hr style="border:0; border-top:1px dashed #ccc; margin: 2px 0;">
+            <span class="label-titulo">CÓDIGO ÚNICO</span>
+            <div class="codigo-final">${cod}</div>
+            <div class="btn-container">
+                <a href="https://wa.me/?text=Ubicación:+${cod}" target="_blank" class="btn-ws">WHATSAPP</a>
+                <a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" class="btn-maps">G. MAPS</a>
+                <button onclick="buscarEstafetaCercana(${lat}, ${lng})" class="btn-cercana">📍 BUSCAR ESTAFETA</button>
+            </div>
+        </div>`;
+
+    L.marker([lat, lng], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [16, 26], iconAnchor: [8, 26] }) })
+     .addTo(selectionLayer).bindPopup(popupContent, { offset: L.point(0, -20) }).openPopup();
+}
 
     const props = results[0].feature.properties;
     const vLev5 = props.VM_LEVEL;   
@@ -331,6 +390,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
