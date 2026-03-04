@@ -9,37 +9,36 @@
     <script src="https://unpkg.com/@mapbox/leaflet-pip@1.1.0/leaflet-pip.js"></script>
     <style>
         body, html, #mapid { width: 100%; height: 100%; margin: 0; padding: 0; background: #ddd; }
-        .search-container { position: absolute; top: 10px; right: 10px; z-index: 5000; display: flex; gap: 5px; background: white; padding: 5px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); width: 280px; }
-        #search-input { flex: 1; border: 1px solid #ccc; padding: 5px; outline: none; font-family: monospace; font-size: 14px; text-transform: uppercase; border-radius: 4px; }
-        #search-btn { background: #27ae60; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; }
-        .leaflet-top.leaflet-right { margin-top: 70px !important; }
+        .search-container { position: absolute; top: 10px; right: 10px; z-index: 5000; display: flex; gap: 5px; background: white; padding: 5px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); width: 260px; }
+        #search-input { flex: 1; border: 1px solid #ccc; padding: 4px; outline: none; font-family: monospace; font-size: 13px; text-transform: uppercase; border-radius: 4px; }
+        #search-btn { background: #27ae60; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px; }
+        .leaflet-top.leaflet-right { margin-top: 60px !important; }
         
-        /* Estilos Ventana Informativa */
-        .zona-postal-box { background: #2c3e50; color: white; padding: 5px; text-align: center; font-weight: bold; font-size: 11px; text-transform: uppercase; border-radius: 4px 4px 0 0; }
-        .label-titulo { display: block; font-size: 10px; color: #7f8c8d; font-weight: bold; margin-top: 8px; text-transform: uppercase; text-align: center; }
-        .zona-info { font-size: 15px; color: #2c3e50; text-align: center; padding: 5px 0; }
+        /* POPUP COMPACTO */
+        .leaflet-popup-content-wrapper { border-radius: 6px; padding: 0; overflow: hidden; }
+        .leaflet-popup-content { margin: 0 !important; width: 180px !important; }
+        .zona-postal-box { background: #2c3e50; color: white; padding: 3px; text-align: center; font-weight: bold; font-size: 9px; text-transform: uppercase; }
+        .label-titulo { display: block; font-size: 9px; color: #7f8c8d; font-weight: bold; margin-top: 4px; text-transform: uppercase; text-align: center; }
+        .zona-info { font-size: 13px; color: #2c3e50; text-align: center; padding: 2px 0; }
         .zona-info b { color: #e67e22; }
-        .codigo-final { background: #1a2a6c; color: white; padding: 12px; border-radius: 6px; font-size: 19px; font-weight: bold; text-align: center; margin: 5px 0 10px 0; border: 2px solid #f1c40f; font-family: monospace; letter-spacing: 1px; }
+        .codigo-final { background: #1a2a6c; color: white; padding: 6px; border-radius: 4px; font-size: 16px; font-weight: bold; text-align: center; margin: 3px 8px 6px 8px; border: 1.5px solid #f1c40f; font-family: monospace; letter-spacing: 0.5px; }
+        .btn-container { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 0 8px 8px 8px; }
+        .btn-ws { background: #25D366; color: white !important; padding: 5px; border-radius: 3px; text-decoration: none; font-size: 9px; font-weight: bold; text-align: center; }
+        .btn-maps { background: #4285F4; color: white !important; padding: 5px; border-radius: 3px; text-decoration: none; font-size: 9px; font-weight: bold; text-align: center; }
+        .btn-cercana { background: #003366; color: white; border: none; padding: 5px; border-radius: 3px; cursor: pointer; font-size: 9px; font-weight: bold; grid-column: span 2; }
         
-        .btn-container { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
-        .btn-ws { background: #25D366; color: white !important; padding: 8px; border-radius: 4px; text-decoration: none; font-size: 10px; font-weight: bold; text-align: center; }
-        .btn-maps { background: #4285F4; color: white !important; padding: 8px; border-radius: 4px; text-decoration: none; font-size: 10px; font-weight: bold; text-align: center; }
-        .btn-cercana { background: #003366; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 10px; font-weight: bold; grid-column: span 2; margin-top: 5px; }
-        
-        .locate-button { position: absolute; bottom: 30px; left: 10px; z-index: 1000; background: white; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.3); border: 2px solid #1a73e8; display: flex; align-items: center; justify-content: center; font-size: 22px; transition: transform 0.2s; }
-        .locate-button:active { transform: scale(0.9); }
-        
-        .map-title { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; text-align: center; pointer-events: none; width: 100%; }
-        .map-title h1 { margin: 0; font-size: 20px; color: #1a2a6c; text-transform: uppercase; font-weight: 900; letter-spacing: 1px; text-shadow: 2px 2px 0px #fff; }
+        .locate-button { position: absolute; bottom: 20px; left: 10px; z-index: 1000; background: white; width: 38px; height: 38px; border-radius: 50%; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 2px solid #1a73e8; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+        .map-title { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 1000; text-align: center; pointer-events: none; width: 100%; }
+        .map-title h1 { margin: 0; font-size: 16px; color: #1a2a6c; text-transform: uppercase; font-weight: 900; text-shadow: 1px 1px 0px #fff; }
         .inv { background: none; border: none; }
-        .watermark-tooltip { background: transparent!important; border: none!important; box-shadow: none!important; color: rgba(0,0,0,0.4); font-weight: bold; font-family: monospace; text-shadow: 1px 1px 0px white; }
+        .watermark-tooltip { background: transparent!important; border: none!important; box-shadow: none!important; color: rgba(0,0,0,0.4); font-size: 9px; font-weight: bold; font-family: monospace; }
     </style>
 </head>
 <body>
 
 <div class="map-title">
     <h1>SISTEMAS POSTALES DE PANAMÁ</h1>
-    <span style="font-weight: bold; color: #333; text-shadow: 1px 1px 0px #fff;">COTEL - PANAMA</span>
+    <span style="font-weight: bold; color: #333; text-shadow: 1px 1px 0px #fff; font-size: 11px;">COTEL - PANAMA</span>
 </div>
 
 <div class="search-container">
@@ -51,7 +50,6 @@
 <div id="mapid"></div>
 
 <script>
-// --- CONFIGURACIÓN BASE ---
 const ORIGIN = { lat: 10.0, lng: -83.0 };
 const ALFA = "23456789ABCDEFGHJKLMNPQRSTVWXYZ";
 const R_3M = 0.000027; 
@@ -61,7 +59,7 @@ const mymap = L.map('mapid', { zoomSnap: 0.1, zoomControl: false, maxZoom: 22 })
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 22, maxNativeZoom: 19 }).addTo(mymap);
 L.control.zoom({ position: 'bottomright' }).addTo(mymap);
 
-// --- CAPAS ---
+// CAPAS
 const layerZonas = L.geoJSON(null, { 
     style: { color: "#333", weight: 1.5, fillOpacity: 0.1, fillColor: "#3498db" },
     onEachFeature: (f, l) => {
@@ -78,23 +76,22 @@ const layerMicro = L.layerGroup().addTo(mymap);
 const layerLocalNano = L.layerGroup().addTo(mymap);
 const layerRutas = L.layerGroup().addTo(mymap);
 const layerEstafetas = L.layerGroup().addTo(mymap);
-const layerMiUbicacion = L.layerGroup().addTo(mymap); // Capa para el círculo azul
+const layerMiUbicacion = L.layerGroup().addTo(mymap);
 const selectionLayer = L.layerGroup().addTo(mymap);
 const distanceLayer = L.layerGroup().addTo(mymap);
 
-// --- CARGA DE DATOS ---
+// CARGAS GEOJSON
 fetch('estafetas.geojson').then(r => r.json()).then(data => layerZonas.addData(data)).catch(()=>{});
 fetch('estafetasl.geojson').then(r => r.json()).then(data => {
     L.geoJSON(data, { style: { color: 'red', weight: 2.5, opacity: 0.5 }, onEachFeature: (f,l) => l.bindPopup(`RUTA: ${f.properties.RUTA}`) }).addTo(layerRutas);
 }).catch(()=>{});
 fetch('estafetasp.geojson').then(r => r.json()).then(data => {
     L.geoJSON(data, {
-        pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 6, fillColor: '#27ae60', color: '#fff', weight: 2, fillOpacity: 1 }),
-        onEachFeature: (f, l) => { l.bindPopup(`<b>ESTAFETA:</b> ${f.properties.ESTAF_NAME || 'N/A'}`); }
+        pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 5, fillColor: '#27ae60', color: '#fff', weight: 2, fillOpacity: 1 }),
+        onEachFeature: (f, l) => { l.bindPopup(`<small><b>ESTAFETA:</b> ${f.properties.ESTAF_NAME || 'N/A'}</small>`); }
     }).addTo(layerEstafetas);
 }).catch(()=>{});
 
-// --- MOTOR ---
 function encode(num, len) {
     let s = ""; let n = Math.abs(Math.floor(num));
     for (let i = 0; i < len; i++) { s = ALFA[n % 30] + s; n = Math.floor(n / 30); }
@@ -106,11 +103,10 @@ function getGridInfo(lat, lng) {
     const gy = Math.floor((ORIGIN.lat - lat) / PARAMS.RES_NANO);
     const localX = ((gx % 30) + 30) % 30;
     const localY = ((gy % 30) + 30) % 30;
-    const nanoIndex = (localY * 30) + localX;
     return {
         macro: encode((Math.floor(gy / 900) * 2000) + Math.floor(gx / 900), 3),
         micro: encode((Math.floor((gy % 900) / 30) * 30) + Math.floor((gx % 900) / 30), 3),
-        nano: encode(nanoIndex, 2)
+        nano: encode((localY * 30) + localX, 2)
     };
 }
 
@@ -140,16 +136,13 @@ function render() {
 }
 
 function seleccionar(lat, lng) {
-    selectionLayer.clearLayers(); 
-    layerLocalNano.clearLayers(); 
-    distanceLayer.clearLayers();
+    selectionLayer.clearLayers(); layerLocalNano.clearLayers(); distanceLayer.clearLayers();
     const z = mymap.getZoom();
-
     const results = leafletPip.pointInLayer([lng, lat], layerZonas, true);
 
     if (results.length === 0) {
-        L.marker([lat, lng], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', iconSize: [20, 32], iconAnchor: [10, 32] }) })
-        .addTo(selectionLayer).bindPopup('<div style="text-align:center;"><b style="color:red;">⚠️ FUERA DE COBERTURA</b><br><small>Punto fuera de zona postal.</small></div>').openPopup();
+        L.marker([lat, lng], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', iconSize: [16, 26], iconAnchor: [8, 26] }) })
+        .addTo(selectionLayer).bindPopup('<div style="text-align:center; padding:5px;"><b style="color:red; font-size:10px;">⚠️ FUERA DE COBERTURA</b></div>').openPopup();
         return;
     }
 
@@ -163,26 +156,26 @@ function seleccionar(lat, lng) {
     let step = (z < 13) ? 0 : (z < 16) ? PARAMS.RES_MACRO : (z < 18.5) ? PARAMS.RES_MICRO : PARAMS.RES_NANO;
     if (step > 0) {
         const iX = Math.floor((lng - ORIGIN.lng) / step); const iY = Math.floor((ORIGIN.lat - lat) / step);
-        L.rectangle([[ORIGIN.lat - iY*step, ORIGIN.lng + iX*step], [ORIGIN.lat - (iY+1)*step, ORIGIN.lng + (iX+1)*step]], { color: '#e74c3c', weight: 3, fillOpacity: 0.3 }).addTo(selectionLayer);
+        L.rectangle([[ORIGIN.lat - iY*step, ORIGIN.lng + iX*step], [ORIGIN.lat - (iY+1)*step, ORIGIN.lng + (iX+1)*step]], { color: '#e74c3c', weight: 2, fillOpacity: 0.25 }).addTo(selectionLayer);
     }
 
     const popupContent = `
-        <div style="min-width:210px; font-family: sans-serif;">
+        <div style="font-family: sans-serif;">
             <div class="zona-postal-box">ZONA POSTAL</div>
             <div class="zona-info">${vLev5} = <b>${vLev2}</b></div>
-            <hr style="border:0; border-top:1px dashed #ccc; margin: 5px 0;">
+            <hr style="border:0; border-top:1px dashed #ccc; margin: 2px 0;">
             <span class="label-titulo">CÓDIGO POSTAL</span>
             <div class="codigo-final">${cod}</div>
             <div class="btn-container">
                 <a href="https://wa.me/?text=Mi+Dirección+Postal:+${cod}" target="_blank" class="btn-ws">WHATSAPP</a>
-                <a href="http://maps.google.com/maps?q=${lat},${lng}" target="_blank" class="btn-maps">GOOGLE MAPS</a>
+                <a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" class="btn-maps">G. MAPS</a>
                 <button onclick="buscarEstafetaCercana(${lat}, ${lng})" class="btn-cercana">📍 BUSCAR ESTAFETA CERCANA</button>
             </div>
         </div>
     `;
 
-    L.marker([lat, lng], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [20, 32], iconAnchor: [10, 32] }) })
-     .addTo(selectionLayer).bindPopup(popupContent, { offset: L.point(0, -30) }).openPopup();
+    L.marker([lat, lng], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [16, 26], iconAnchor: [8, 26] }) })
+     .addTo(selectionLayer).bindPopup(popupContent, { offset: L.point(0, -20) }).openPopup();
 
     if (z >= 18.5) {
         const mX = Math.floor((lng - ORIGIN.lng) / PARAMS.RES_MICRO); 
@@ -191,49 +184,28 @@ function seleccionar(lat, lng) {
             for(let j=0; j<30; j++) {
                 const latN = ORIGIN.lat - (mY * PARAMS.RES_MICRO + i * R_3M);
                 const lonN = ORIGIN.lng + (mX * PARAMS.RES_MICRO + j * R_3M);
-                L.rectangle([[latN, lonN], [latN - R_3M, lonN + R_3M]], { color: '#2c3e50', weight: 0.5, fill: false, opacity: 0.1, interactive: false }).addTo(layerLocalNano);
+                L.rectangle([[latN, lonN], [latN - R_3M, lonN + R_3M]], { color: '#2c3e50', weight: 0.4, fill: false, opacity: 0.1 }).addTo(layerLocalNano);
             }
         }
     }
 }
 
-// --- FUNCIONES DE UBICACIÓN Y BÚSQUEDA ---
-function findMe() { 
-    mymap.locate({setView: true, maxZoom: 18, enableHighAccuracy: true}); 
-}
-
+function findMe() { mymap.locate({setView: true, maxZoom: 18, enableHighAccuracy: true}); }
 mymap.on('locationfound', (e) => {
     layerMiUbicacion.clearLayers();
-    // Dibujamos el círculo azul con sombra blanca para que resalte
-    L.circleMarker(e.latlng, {
-        radius: 9,
-        color: 'white',
-        fillColor: '#1a73e8',
-        fillOpacity: 1,
-        weight: 3,
-        className: 'pulse-marker' // Podemos usar CSS para animarlo
-    }).addTo(layerMiUbicacion);
-    
-    // Ejecutamos la selección automáticamente al encontrarte
+    L.circleMarker(e.latlng, { radius: 7, color: 'white', fillColor: '#1a73e8', fillOpacity: 1, weight: 2 }).addTo(layerMiUbicacion);
     seleccionar(e.latlng.lat, e.latlng.lng);
-});
-
-mymap.on('locationerror', (e) => {
-    alert("No se pudo obtener tu ubicación. Por favor, activa el GPS.");
 });
 
 function buscarCodigo() {
     const val = document.getElementById('search-input').value.toUpperCase().trim();
-    let encontrado = false;
+    let enc = false;
     layerZonas.eachLayer(l => {
         if (l.feature.properties.VM_LEVEL === val || l.feature.properties.VM_LEVEL2D === val) {
-            const centro = l.getBounds().getCenter();
-            mymap.setView(centro, 14);
-            seleccionar(centro.lat, centro.lng);
-            encontrado = true;
+            const c = l.getBounds().getCenter(); mymap.setView(c, 14); seleccionar(c.lat, c.lng); enc = true;
         }
     });
-    if(!encontrado) alert("CÓDIGO NO ENCONTRADO");
+    if(!enc) alert("CÓDIGO NO ENCONTRADO");
 }
 
 function buscarEstafetaCercana(lat, lng) {
@@ -244,7 +216,7 @@ function buscarEstafetaCercana(lat, lng) {
         if (d < dMin) { dMin = d; cercana = l; }
     });
     if (cercana) {
-        L.polyline([userPt, cercana.getLatLng()], { color: '#c0392b', weight: 3, dashArray: '5,5' }).addTo(distanceLayer);
+        L.polyline([userPt, cercana.getLatLng()], { color: '#c0392b', weight: 2, dashArray: '4,4' }).addTo(distanceLayer);
         cercana.openPopup();
     }
 }
@@ -253,9 +225,16 @@ mymap.on('click', (e) => seleccionar(e.latlng.lat, e.latlng.lng));
 mymap.on('moveend', render);
 mymap.on('zoomend', render);
 
+// AUDITORÍA DE SELECTORES COMPLETADA
 L.control.layers(null, { 
-    "🔲 Zonas": layerZonas, "🛣️ Rutas": layerRutas, "🟦 Macro": layerMacro, "🟧 Micro": layerMicro, "⬛ Grid 3m": layerLocalNano, "📍 Estafetas": layerEstafetas,"🔵 Mi Ubicación": layerMiUbicacion
-}, { collapsed: false }).addTo(mymap);
+    "🔲 Zonas": layerZonas, 
+    "🛣️ Rutas": layerRutas,
+    "🟦 Macro": layerMacro, 
+    "🟧 Micro": layerMicro,
+    "⬛ Grid 3m": layerLocalNano,
+    "📍 Estafetas": layerEstafetas,
+    "🔵 Ubicación": layerMiUbicacion
+}, { collapsed: true, position: 'topright' }).addTo(mymap);
 
 render();
 </script>
