@@ -13,11 +13,13 @@
         #search-btn { background: #27ae60; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; }
         .leaflet-top.leaflet-right { margin-top: 70px !important; }
         
-        /* --- ESTILO MENSAJE COMPACTO --- */
+        /* --- AJUSTE PARA ACHICAR EL MENSAJE --- */
         .leaflet-popup-content-wrapper { border-radius: 6px; padding: 0; overflow: hidden; }
-        .leaflet-popup-content { margin: 0 !important; width: 180px !important; }
-        .popup-header { background: #2c3e50; color: white; padding: 4px; text-align: center; font-weight: bold; font-size: 9px; text-transform: uppercase; display: block; }
+        .leaflet-popup-content { margin: 0 !important; width: 185px !important; }
+        
+        .popup-header { background: #2c3e50; color: white; padding: 4px; text-align: center; font-weight: bold; font-size: 10px; text-transform: uppercase; display: block; }
         .codigo-final { background: #1a2a6c; color: white; padding: 8px; border-radius: 4px; font-size: 16px; font-weight: bold; text-align: center; margin: 5px 8px; border: 1.5px solid #f1c40f; font-family: monospace; }
+        
         .btn-container { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 0 8px 8px 8px; }
         .btn-ws { background: #25D366; color: white !important; padding: 6px; border-radius: 3px; text-decoration: none; font-size: 9px; font-weight: bold; text-align: center; }
         .btn-maps { background: #4285F4; color: white !important; padding: 6px; border-radius: 3px; text-decoration: none; font-size: 9px; font-weight: bold; text-align: center; }
@@ -46,6 +48,7 @@
 <div id="mapid"></div>
 
 <script>
+// --- CONFIGURACIÓN (IGUAL AL ORIGINAL) ---
 const ORIGIN = { lat: 10.0, lng: -83.0 };
 const ALFA = "23456789ABCDEFGHJKLMNPQRSTVWXYZ";
 const R_3M = 0.000027; 
@@ -55,7 +58,7 @@ const mymap = L.map('mapid', { zoomSnap: 0.1, zoomControl: false, maxZoom: 22 })
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 22, maxNativeZoom: 19 }).addTo(mymap);
 L.control.zoom({ position: 'bottomright' }).addTo(mymap);
 
-// CAPAS
+// --- CAPAS (IGUAL AL ORIGINAL) ---
 const layerZonas = L.geoJSON(null, { 
     style: { color: "#333", weight: 1.5, fillOpacity: 0.1, fillColor: "#3498db" },
     onEachFeature: (f, l) => {
@@ -143,86 +146,11 @@ function seleccionar(lat, lng, forcedZonaID = null) {
 
     if (!zonaID) {
         L.marker([lat, lng], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', iconSize: [16, 26], iconAnchor: [8, 26] }) })
-        .addTo(selectionLayer).bindPopup('<b style="color:red; font-size:10px;">⚠️ ÁREA NO DEFINIDA</b>').openPopup();
+        .addTo(selectionLayer)
+        .bindPopup('<b style="color:red; font-size:10px;">⚠️ ÁREA NO DEFINIDA</b>').openPopup();
         return;
     }
 
     const res = getGridInfo(lat, lng);
     let step = (z < 13) ? 0 : (z < 16) ? PARAMS.RES_MACRO : (z < 18.5) ? PARAMS.RES_MICRO : PARAMS.RES_NANO;
-    let zonaLimpia = zonaID.toString().charAt(0) + zonaID.toString().substring(3);
-    let cod = (z < 13) ? zonaID : (z < 16) ? `${zonaID}-${res.macro}` : (z < 18.5) ? `${zonaID}-${res.macro}-${res.micro}` : `${zonaLimpia}${res.macro}-${res.micro}${res.nano}`;
-
-    if (step > 0) {
-        const iX = Math.floor((lng - ORIGIN.lng) / step); const iY = Math.floor((ORIGIN.lat - lat) / step);
-        L.rectangle([[ORIGIN.lat - iY*step, ORIGIN.lng + iX*step], [ORIGIN.lat - (iY+1)*step, ORIGIN.lng + (iX+1)*step]], { color: '#e74c3c', weight: 2, fillOpacity: 0.25 }).addTo(selectionLayer);
-    }
-
-    if (z >= 18.5) {
-        const mX = Math.floor((lng - ORIGIN.lng) / PARAMS.RES_MICRO); const mY = Math.floor((ORIGIN.lat - lat) / PARAMS.RES_MICRO);
-        for(let i=0; i<30; i++) { for(let j=0; j<30; j++) {
-            L.rectangle([[ORIGIN.lat - (mY*PARAMS.RES_MICRO + i*R_3M), ORIGIN.lng + (mX*PARAMS.RES_MICRO + j*R_3M)], [ORIGIN.lat - (mY*PARAMS.RES_MICRO + (i+1)*R_3M), ORIGIN.lng + (mX*PARAMS.RES_MICRO + (j+1)*R_3M)]], { color: '#2c3e50', weight: 0.4, fill: false, opacity: 0.1 }).addTo(layerLocalNano);
-        }}
-    }
-
-    L.marker([lat, lng], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [16, 26], iconAnchor: [8, 26] }) })
-     .addTo(selectionLayer).bindPopup(`
-        <span class="popup-header">CÓDIGO POSTAL</span>
-        <div class="codigo-final">${cod}</div>
-        <div class="btn-container">
-            <a href="https://wa.me/?text=Mi+Dirección+Postal:+${cod}" target="_blank" class="btn-ws">WHATSAPP</a>
-            <a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" class="btn-maps">G. MAPS</a>
-            <button onclick="buscarEstafetaCercana(${lat}, ${lng})" class="btn-cercana">📍 BUSCAR ESTAFETA CERCANA</button>
-        </div>
-     `, { offset: L.point(0, -20) }).openPopup();
-}
-
-// RESTAURADO: Buscador original sobre layerEstafetas
-function buscarCodigo() {
-    const val = document.getElementById('search-input').value.toUpperCase();
-    let encontrado = false;
-    layerEstafetas.eachLayer(l => {
-        if (l.feature && l.feature.properties.VM_LEVEL === val) {
-            mymap.setView(l.getLatLng(), 18);
-            seleccionar(l.getLatLng().lat, l.getLatLng().lng, val);
-            encontrado = true;
-        }
-    });
-    if(!encontrado) alert("CÓDIGO NO ENCONTRADO O ÁREA FUERA DE SERVICIO");
-}
-
-// RESTAURADO: Función original estafeta cercana
-function buscarEstafetaCercana(lat, lng) {
-    distanceLayer.clearLayers();
-    const userPt = L.latLng(lat, lng); let cercana = null; let dMin = Infinity;
-    layerEstafetas.eachLayer(l => {
-        const d = userPt.distanceTo(l.getLatLng());
-        if (d < dMin) { dMin = d; cercana = l; }
-    });
-    if (cercana) {
-        L.polyline([userPt, cercana.getLatLng()], { color: '#c0392b', weight: 3, dashArray: '5,5' }).addTo(distanceLayer);
-        cercana.openPopup();
-    }
-}
-
-function findMe() { 
-    mymap.locate({setView: true, maxZoom: 18, enableHighAccuracy: true}); 
-}
-
-mymap.on('locationfound', (e) => {
-    layerMiUbicacion.clearLayers();
-    L.circleMarker(e.latlng, {radius: 8, color: 'white', fillColor: '#1a73e8', fillOpacity: 1, weight: 3}).addTo(layerMiUbicacion);
-    seleccionar(e.latlng.lat, e.latlng.lng);
-});
-
-mymap.on('click', (e) => seleccionar(e.latlng.lat, e.latlng.lng));
-mymap.on('moveend', render);
-mymap.on('zoomend', render);
-
-L.control.layers(null, { 
-    "🔵 Mi Ubicación": layerMiUbicacion, "🔲 Zonas": layerZonas, "🛣️ Rutas": layerRutas, "🟦 Macro": layerMacro, "🟧 Micro": layerMicro, "⬛ Grid 3m": layerLocalNano, "📍 Estafetas": layerEstafetas
-}, { collapsed: false }).addTo(mymap);
-
-render();
-</script>
-</body>
-</html>
+    let zonaLimpia = zonaID.toString().charAt(0) + zonaID
