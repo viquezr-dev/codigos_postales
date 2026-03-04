@@ -13,16 +13,22 @@
         #search-input { flex: 1; border: 1px solid #ccc; padding: 5px; outline: none; font-family: monospace; font-size: 14px; text-transform: uppercase; border-radius: 4px; }
         #search-btn { background: #27ae60; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; }
         .leaflet-top.leaflet-right { margin-top: 70px !important; }
+        
+        /* Estilos Ventana Informativa */
         .zona-postal-box { background: #2c3e50; color: white; padding: 5px; text-align: center; font-weight: bold; font-size: 11px; text-transform: uppercase; border-radius: 4px 4px 0 0; }
         .label-titulo { display: block; font-size: 10px; color: #7f8c8d; font-weight: bold; margin-top: 8px; text-transform: uppercase; text-align: center; }
         .zona-info { font-size: 15px; color: #2c3e50; text-align: center; padding: 5px 0; }
         .zona-info b { color: #e67e22; }
         .codigo-final { background: #1a2a6c; color: white; padding: 12px; border-radius: 6px; font-size: 19px; font-weight: bold; text-align: center; margin: 5px 0 10px 0; border: 2px solid #f1c40f; font-family: monospace; letter-spacing: 1px; }
+        
         .btn-container { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
         .btn-ws { background: #25D366; color: white !important; padding: 8px; border-radius: 4px; text-decoration: none; font-size: 10px; font-weight: bold; text-align: center; }
         .btn-maps { background: #4285F4; color: white !important; padding: 8px; border-radius: 4px; text-decoration: none; font-size: 10px; font-weight: bold; text-align: center; }
         .btn-cercana { background: #003366; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 10px; font-weight: bold; grid-column: span 2; margin-top: 5px; }
-        .locate-button { position: absolute; bottom: 30px; left: 10px; z-index: 1000; background: white; width: 40px; height: 40px; border-radius: 4px; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: none; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+        
+        .locate-button { position: absolute; bottom: 30px; left: 10px; z-index: 1000; background: white; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.3); border: 2px solid #1a73e8; display: flex; align-items: center; justify-content: center; font-size: 22px; transition: transform 0.2s; }
+        .locate-button:active { transform: scale(0.9); }
+        
         .map-title { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; text-align: center; pointer-events: none; width: 100%; }
         .map-title h1 { margin: 0; font-size: 20px; color: #1a2a6c; text-transform: uppercase; font-weight: 900; letter-spacing: 1px; text-shadow: 2px 2px 0px #fff; }
         .inv { background: none; border: none; }
@@ -41,10 +47,11 @@
     <button id="search-btn" onclick="buscarCodigo()">IR</button>
 </div>
 
-<button class="locate-button" onclick="findMe()">🧭</button>
+<button class="locate-button" title="Mi Ubicación" onclick="findMe()">🎯</button>
 <div id="mapid"></div>
 
 <script>
+// --- CONFIGURACIÓN BASE ---
 const ORIGIN = { lat: 10.0, lng: -83.0 };
 const ALFA = "23456789ABCDEFGHJKLMNPQRSTVWXYZ";
 const R_3M = 0.000027; 
@@ -54,21 +61,14 @@ const mymap = L.map('mapid', { zoomSnap: 0.1, zoomControl: false, maxZoom: 22 })
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 22, maxNativeZoom: 19 }).addTo(mymap);
 L.control.zoom({ position: 'bottomright' }).addTo(mymap);
 
-// --- CAPA DE ZONAS CON RESALTADO RESTAURADO ---
+// --- CAPAS ---
 const layerZonas = L.geoJSON(null, { 
     style: { color: "#333", weight: 1.5, fillOpacity: 0.1, fillColor: "#3498db" },
     onEachFeature: (f, l) => {
         l.on({
-            mouseover: (e) => { 
-                e.target.setStyle({ weight: 3, color: '#f1c40f', fillOpacity: 0.3 }); 
-            },
-            mouseout: (e) => { 
-                layerZonas.resetStyle(e.target); 
-            },
-            click: (e) => { 
-                seleccionar(e.latlng.lat, e.latlng.lng); 
-                L.DomEvent.stopPropagation(e); 
-            }
+            mouseover: (e) => { e.target.setStyle({ weight: 3, color: '#f1c40f', fillOpacity: 0.3 }); },
+            mouseout: (e) => { layerZonas.resetStyle(e.target); },
+            click: (e) => { seleccionar(e.latlng.lat, e.latlng.lng); L.DomEvent.stopPropagation(e); }
         });
     }
 }).addTo(mymap);
@@ -78,10 +78,11 @@ const layerMicro = L.layerGroup().addTo(mymap);
 const layerLocalNano = L.layerGroup().addTo(mymap);
 const layerRutas = L.layerGroup().addTo(mymap);
 const layerEstafetas = L.layerGroup().addTo(mymap);
-const layerMiUbicacion = L.layerGroup().addTo(mymap);
+const layerMiUbicacion = L.layerGroup().addTo(mymap); // Capa para el círculo azul
 const selectionLayer = L.layerGroup().addTo(mymap);
 const distanceLayer = L.layerGroup().addTo(mymap);
 
+// --- CARGA DE DATOS ---
 fetch('estafetas.geojson').then(r => r.json()).then(data => layerZonas.addData(data)).catch(()=>{});
 fetch('estafetasl.geojson').then(r => r.json()).then(data => {
     L.geoJSON(data, { style: { color: 'red', weight: 2.5, opacity: 0.5 }, onEachFeature: (f,l) => l.bindPopup(`RUTA: ${f.properties.RUTA}`) }).addTo(layerRutas);
@@ -93,6 +94,7 @@ fetch('estafetasp.geojson').then(r => r.json()).then(data => {
     }).addTo(layerEstafetas);
 }).catch(()=>{});
 
+// --- MOTOR ---
 function encode(num, len) {
     let s = ""; let n = Math.abs(Math.floor(num));
     for (let i = 0; i < len; i++) { s = ALFA[n % 30] + s; n = Math.floor(n / 30); }
@@ -143,20 +145,11 @@ function seleccionar(lat, lng) {
     distanceLayer.clearLayers();
     const z = mymap.getZoom();
 
-    // Verificación espacial estricta
     const results = leafletPip.pointInLayer([lng, lat], layerZonas, true);
 
     if (results.length === 0) {
-        L.marker([lat, lng], { 
-            icon: L.icon({ 
-                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', 
-                iconSize: [20, 32], 
-                iconAnchor: [10, 32] 
-            }) 
-        })
-        .addTo(selectionLayer)
-        .bindPopup('<div style="text-align:center;"><b style="color:red;">⚠️ FUERA DE COBERTURA</b><br><small>Punto fuera de zona postal.</small></div>')
-        .openPopup();
+        L.marker([lat, lng], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', iconSize: [20, 32], iconAnchor: [10, 32] }) })
+        .addTo(selectionLayer).bindPopup('<div style="text-align:center;"><b style="color:red;">⚠️ FUERA DE COBERTURA</b><br><small>Punto fuera de zona postal.</small></div>').openPopup();
         return;
     }
 
@@ -204,6 +197,31 @@ function seleccionar(lat, lng) {
     }
 }
 
+// --- FUNCIONES DE UBICACIÓN Y BÚSQUEDA ---
+function findMe() { 
+    mymap.locate({setView: true, maxZoom: 18, enableHighAccuracy: true}); 
+}
+
+mymap.on('locationfound', (e) => {
+    layerMiUbicacion.clearLayers();
+    // Dibujamos el círculo azul con sombra blanca para que resalte
+    L.circleMarker(e.latlng, {
+        radius: 9,
+        color: 'white',
+        fillColor: '#1a73e8',
+        fillOpacity: 1,
+        weight: 3,
+        className: 'pulse-marker' // Podemos usar CSS para animarlo
+    }).addTo(layerMiUbicacion);
+    
+    // Ejecutamos la selección automáticamente al encontrarte
+    seleccionar(e.latlng.lat, e.latlng.lng);
+});
+
+mymap.on('locationerror', (e) => {
+    alert("No se pudo obtener tu ubicación. Por favor, activa el GPS.");
+});
+
 function buscarCodigo() {
     const val = document.getElementById('search-input').value.toUpperCase().trim();
     let encontrado = false;
@@ -231,21 +249,12 @@ function buscarEstafetaCercana(lat, lng) {
     }
 }
 
-function findMe() { mymap.locate({setView: true, maxZoom: 18}); }
-mymap.on('locationfound', (e) => {
-    layerMiUbicacion.clearLayers();
-    L.circleMarker(e.latlng, {radius: 8, color: 'white', fillColor: '#1a73e8', fillOpacity: 1, weight: 3}).addTo(layerMiUbicacion);
-    seleccionar(e.latlng.lat, e.latlng.lng);
-});
-
-// Al hacer clic en el mapa base, se llama a seleccionar. 
-// onEachFeature se encarga de los clics dentro de polígonos.
 mymap.on('click', (e) => seleccionar(e.latlng.lat, e.latlng.lng));
 mymap.on('moveend', render);
 mymap.on('zoomend', render);
 
 L.control.layers(null, { 
-    "🔲 Zonas": layerZonas, "🛣️ Rutas": layerRutas, "🟦 Macro": layerMacro, "🟧 Micro": layerMicro, "⬛ Grid 3m": layerLocalNano, "📍 Estafetas": layerEstafetas
+    "🔲 Zonas": layerZonas, "🛣️ Rutas": layerRutas, "🟦 Macro": layerMacro, "🟧 Micro": layerMicro, "⬛ Grid 3m": layerLocalNano, "📍 Estafetas": layerEstafetas,"🔵 Mi Ubicación": layerMiUbicacion
 }, { collapsed: false }).addTo(mymap);
 
 render();
