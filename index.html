@@ -188,15 +188,60 @@ function render() {
 }
 
 function seleccionar(lat, lng) {
-    selectionLayer.clearLayers(); layerLocalNano.clearLayers(); distanceLayer.clearLayers();
+    selectionLayer.clearLayers(); 
+    distanceLayer.clearLayers();
+    // No limpiamos layerLocalNano aquí para que el grid de fondo persista
+    
     const z = mymap.getZoom();
     const results = leafletPip.pointInLayer([lng, lat], layerZonas, true);
 
     if (results.length === 0) {
         L.marker([lat, lng], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', iconSize: [16, 26], iconAnchor: [8, 26] }) })
-        .addTo(selectionLayer).bindPopup(`<div class="zona-postal-box" style="background:black">⚠️ FUERA DE ÁREA</div>`).openPopup();
+        .addTo(selectionLayer).bindPopup("FUERA DE ÁREA").openPopup();
         return;
     }
+
+    const props = results[0].feature.properties;
+    const res = getGridInfo(lat, lng);
+    const vLev2 = props.VM_LEVEL2D;
+
+    // Construcción del código con el ancla VM_LEVEL2D
+    let cod = vLev2 + res.macro;
+    if (z >= 13) cod += res.micro;
+    if (z >= 16) cod += "-" + res.nano;
+    if (z >= 18.5) cod += res.pico;
+
+    // Dibujamos el cuadro de selección (Highlight)
+    let step = (z < 13) ? RES.MACRO : (z < 16) ? RES.MICRO : (z < 18.5) ? RES.NANO : RES.PICO;
+    const iX = Math.floor((lng - ORIGIN.lng) / step);
+    const iY = Math.floor((ORIGIN.lat - lat) / step);
+    
+    L.rectangle([
+        [ORIGIN.lat - iY * step, ORIGIN.lng + iX * step],
+        [ORIGIN.lat - (iY + 1) * step, ORIGIN.lng + (iX + 1) * step]
+    ], { color: '#e74c3c', weight: 3, fillOpacity: 0.3, dashArray: '5,5' }).addTo(selectionLayer);
+
+    const popupContent = `
+        <div style="font-family: sans-serif; min-width:160px;">
+            <div class="zona-postal-box">SISTEMA POSTAL</div>
+            <div class="zona-info">ZONA: <b>${vLev2}</b></div>
+            <hr style="border:0; border-top:1px dashed #ccc; margin: 4px 0;">
+            <span class="label-titulo">CÓDIGO ÚNICO (3m)</span>
+            <div class="codigo-final">${cod}</div>
+            <div class="btn-container">
+                <a href="https://wa.me/?text=Ubicación:+${cod}" target="_blank" class="btn-ws">WHATSAPP</a>
+                <a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" class="btn-maps">G. MAPS</a>
+                <button onclick="buscarEstafetaCercana(${lat}, ${lng})" class="btn-cercana">📍 BUSCAR ESTAFETA</button>
+            </div>
+        </div>`;
+
+    L.marker([lat, lng], { 
+        icon: L.icon({ 
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', 
+            iconSize: [20, 32], iconAnchor: [10, 32] 
+        }) 
+    }).addTo(selectionLayer).bindPopup(popupContent, { offset: L.point(0, -20) }).openPopup();
+}
 
     const res = getGridInfo(lat, lng);
     const props = results[0].feature.properties;
@@ -265,49 +310,49 @@ mymap.on('locationfound', (e) => {
 function buscarCodigo() {
     const inputRaw = document.getElementById('search-input').value.toUpperCase().trim();
     let val = inputRaw.replace(/-/g, "").replace(/\s/g, ""); 
-    let enc = false;
-
-    // Aceptamos códigos de 8 (AJVSV2LC) o 10 caracteres (si incluyes zona postal)
-    if (val.length >= 8) {
-        try {
-            const decode = (s) => {
-                let n = 0;
-                for (let i = 0; i < s.length; i++) { 
-                    let idx = ALFA.indexOf(s[i]);
-                    if (idx === -1) return -1;
-                    n = n * 30 + idx; 
-                }
-                return n;
-            };
-
-            // Si el código es largo (ej: 08AJVSV2LC), ignoramos los primeros 2 dígitos de zona
-            let offset = (val.length > 8) ? 2 : 0;
-            
-            const idMacro = decode(val.substring(offset, offset + 2));
-            const idMicro = decode(val.substring(offset + 2, offset + 4));
-            const idNano  = decode(val.substring(offset + 4, offset + 6));
-            const idPico  = decode(val.substring(offset + 6, offset + 8));
-
-            if (idMacro !== -1 && idMicro !== -1 && idNano !== -1) {
-                // Desglose de coordenadas por rejilla jerárquica
-                const maY = Math.floor(idMacro / 10), maX = idMacro % 10;
-                const miY = Math.floor(idMicro / 24), miX = idMicro % 24;
-                const naY = Math.floor(idNano / 25), naX = idNano % 25;
-                const piY = Math.floor(idPico / 10), piX = idPico % 10;
-
-                // Cálculo de posición final sumando desplazamientos
-                const lon = ORIGIN.lng + (maX * RES.MACRO) + (miX * RES.MICRO) + (naX * RES.NANO) + (piX * RES.PICO) + (RES.PICO / 2);
-                const lat = ORIGIN.lat - (maY * RES.MACRO) - (miY * RES.MICRO) - (naY * RES.NANO) - (piY * RES.PICO) - (RES.PICO / 2);
-
-                if (!isNaN(lat) && !isNaN(lon)) {
-                    mymap.flyTo([lat, lon], 20); // Zoom máximo para ver el cuadro de 3m
-                    mymap.once('moveend', () => seleccionar(lat, lon));
-                    enc = true;
-                }
-            }
-        } catch (e) { console.error("Error decodificando:", e); }
+    
+    if (val.length < 10) {
+        alert("Ingrese Zona + 8 caracteres (Ej: 08AJVSV2LC)");
+        return;
     }
-    if (!enc) alert("CÓDIGO NO VÁLIDO O FORMATO INCORRECTO");
+
+    const decode = (s) => {
+        let n = 0;
+        for (let i = 0; i < s.length; i++) { 
+            let idx = ALFA.indexOf(s[i]);
+            if (idx === -1) return -1;
+            n = n * 30 + idx; 
+        }
+        return n;
+    };
+
+    const zonaInput = val.substring(0, 2); 
+    const idMacro = decode(val.substring(2, 4));
+    const idMicro = decode(val.substring(4, 6));
+    const idNano  = decode(val.substring(6, 8));
+    const idPico  = decode(val.substring(8, 10));
+
+    // Desplazamiento matemático
+    const maY = Math.floor(idMacro / 10), maX = idMacro % 10;
+    const miY = Math.floor(idMicro / 24), miX = idMicro % 24;
+    const naY = Math.floor(idNano / 25), naX = idNano % 25;
+    const piY = Math.floor(idPico / 10), piX = idPico % 10;
+
+    const lon = ORIGIN.lng + (maX * RES.MACRO) + (miX * RES.MICRO) + (naX * RES.NANO) + (piX * RES.PICO) + (RES.PICO / 2);
+    const lat = ORIGIN.lat - (maY * RES.MACRO) - (miY * RES.MICRO) - (naY * RES.NANO) - (piY * RES.PICO) - (RES.PICO / 2);
+
+    const pts = leafletPip.pointInLayer([lon, lat], layerZonas, true);
+    
+    if (pts.length > 0 && pts[0].feature.properties.VM_LEVEL2D === zonaInput) {
+        mymap.flyTo([lat, lon], 20);
+        // Esperamos a que termine el vuelo para marcar y redibujar el grid
+        mymap.once('moveend', () => {
+            render(); 
+            seleccionar(lat, lon);
+        });
+    } else {
+        alert("Código no coincide con la Zona Postal o está fuera de límites.");
+    }
 }
 
 mymap.on('click', (e) => seleccionar(e.latlng.lat, e.latlng.lng));
@@ -327,4 +372,5 @@ render();
 </script>
 </body>
 </html>
+
 
