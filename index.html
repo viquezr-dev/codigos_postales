@@ -233,70 +233,61 @@ function buscarCodigo() {
     let val = inputRaw.replace(/-/g, "").replace(/\s/g, ""); 
     let enc = false;
 
-    // CASO: CÓDIGO DE 10 CARACTERES (EJ: AJVSV2LCCL)
-    if (val.length === 10) {
+    // 1. PRIMERO BUSCAMOS LA ZONA (Los primeros 2 dígitos: Ej: "AJ")
+    let zonaEncontrada = null;
+    let prefijoZona = val.substring(0, 2);
+
+    layerZonas.eachLayer(l => {
+        if (l.feature.properties.VM_LEVEL2D === prefijoZona || l.feature.properties.VM_LEVEL === inputRaw) {
+            zonaEncontrada = l;
+        }
+    });
+
+    // 2. SI ES UN CÓDIGO COMPLETO (10 caracteres) Y ENCONTRAMOS LA ZONA
+    if (val.length === 10 && zonaEncontrada) {
         try {
-            // Decodificador basado en tu ALFA de 31 caracteres
             const decode = (s) => {
                 let n = 0;
                 for (let i = 0; i < s.length; i++) {
-                    n = n * 30 + ALFA.indexOf(s[i]); // Usamos 30 como base según tu encode
+                    n = n * 30 + ALFA.indexOf(s[i]);
                 }
                 return n;
             };
 
-            // 1. Extraemos los bloques originales
-            const nMacro = decode(val.substring(2, 5));  // VSV
-            const nMicro = decode(val.substring(5, 8));  // 2LC
-            const nNano  = decode(val.substring(8, 10)); // CL
+            // Extraemos los bloques relativos
+            const nMacro = decode(val.substring(2, 5));  
+            const nMicro = decode(val.substring(5, 8));  
+            const nNano  = decode(val.substring(8, 10)); 
 
-            if (nMacro !== -1 && nMicro !== -1 && nNano !== -1) {
-                // 2. REVERSA EXACTA DE TU getGridInfo
-                
-                // De nMacro: (Math.floor(gy / 900) * 2000) + Math.floor(gx / 900)
-                const mY = Math.floor(nMacro / 2000);
-                const mX = nMacro % 2000;
+            // Usamos el CENTRO de la Zona encontrada como punto de referencia (Anchor)
+            // Esto evita que el cálculo se vaya a nivel nacional y se pierda
+            const centroZona = zonaEncontrada.getBounds().getCenter();
+            
+            // Reconstruimos la posición relativa dentro de la cuadrícula de la zona
+            const miY = Math.floor(nMicro / 30), miX = nMicro % 30;
+            const nY = Math.floor(nNano / 30), nX = nNano % 30;
 
-                // De nMicro: (Math.floor((gy % 900) / 30) * 30) + Math.floor((gx % 900) / 30)
-                const miY = Math.floor(nMicro / 30);
-                const miX = nMicro % 30;
+            // Calculamos el desplazamiento final
+            // Nota: Aquí ajustamos para que el código sea único usando la zona como base
+            const lat = centroZona.lat - (miY * PARAMS.RES_MICRO) - (nY * PARAMS.RES_NANO);
+            const lon = centroZona.lng + (miX * PARAMS.RES_MICRO) + (nX * PARAMS.RES_NANO);
 
-                // De nNano: (localY * 30) + localX
-                const nY = Math.floor(nNano / 30);
-                const nX = nNano % 30;
-
-                // 3. ENSAMBLAJE DE PASOS TOTALES (GX y GY)
-                const totalGX = (mX * 900) + (miX * 30) + nX;
-                const totalGY = (mY * 900) + (miY * 30) + nY;
-
-                // 4. CONVERSIÓN A COORDENADAS (Usando tu R_3M exacto)
-                const lon = ORIGIN.lng + (totalGX * PARAMS.RES_NANO) + (PARAMS.RES_NANO / 2);
-                const lat = ORIGIN.lat - (totalGY * PARAMS.RES_NANO) - (PARAMS.RES_NANO / 2);
-
-                // 5. VALIDACIÓN Y MOVIMIENTO
-                if (!isNaN(lat) && !isNaN(lon)) {
-                    mymap.flyTo([lat, lon], 19);
-                    mymap.once('moveend', () => {
-                        setTimeout(() => seleccionar(lat, lon), 300);
-                    });
-                    enc = true;
-                }
-            }
-        } catch (e) { console.error("Error:", e); }
-    }
-
-    // BÚSQUEDA POR ZONA (Si lo anterior no aplica o falló)
-    if (!enc) {
-        layerZonas.eachLayer(l => {
-            const p = l.feature.properties;
-            // Buscamos en VM_LEVEL (8001) o VM_LEVEL2D (AJ)
-            if (p.VM_LEVEL === inputRaw || p.VM_LEVEL2D === inputRaw || p.VM_LEVEL === val || p.VM_LEVEL2D === val) {
-                const center = l.getBounds().getCenter(); 
-                mymap.setView(center, 14); 
-                seleccionar(center.lat, center.lng); 
+            if (!isNaN(lat) && !isNaN(lon)) {
+                mymap.flyTo([lat, lon], 19);
+                mymap.once('moveend', () => {
+                    setTimeout(() => seleccionar(lat, lon), 300);
+                });
                 enc = true;
             }
-        });
+        } catch (e) { console.error("Error en dirección exacta:", e); }
+    }
+
+    // 3. SI SOLO SE BUSCÓ LA ZONA O EL CÓDIGO FALLÓ, IR AL CENTRO DE LA ZONA
+    if (!enc && zonaEncontrada) {
+        const c = zonaEncontrada.getBounds().getCenter();
+        mymap.setView(c, 14);
+        seleccionar(c.lat, c.lng);
+        enc = true;
     }
 
     if (!enc) alert("CÓDIGO O ZONA NO ENCONTRADA");
@@ -320,6 +311,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
