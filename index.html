@@ -236,64 +236,61 @@ function buscarCodigo() {
     // CASO: CÓDIGO DE 10 CARACTERES (EJ: AJVSV2LCCL)
     if (val.length === 10) {
         try {
-            // Función de decodificación en Base 31 (longitud de tu ALFA)
+            // Decodificador basado en tu ALFA de 31 caracteres
             const decode = (s) => {
                 let n = 0;
                 for (let i = 0; i < s.length; i++) {
-                    let idx = ALFA.indexOf(s[i]);
-                    if (idx === -1) return -1;
-                    n = n * 31 + idx; // Base 31 porque tu ALFA tiene 31 caracteres
+                    n = n * 30 + ALFA.indexOf(s[i]); // Usamos 30 como base según tu encode
                 }
                 return n;
             };
 
-            // 1. Decodificación de los bloques de 3, 3 y 2
-            const idM  = decode(val.substring(2, 5));  // Macro (VSV)
-            const idMi = decode(val.substring(5, 8));  // Micro (2LC)
-            const idN  = decode(val.substring(8, 10)); // Nano (CL)
+            // 1. Extraemos los bloques originales
+            const nMacro = decode(val.substring(2, 5));  // VSV
+            const nMicro = decode(val.substring(5, 8));  // 2LC
+            const nNano  = decode(val.substring(8, 10)); // CL
 
-            if (idM !== -1 && idMi !== -1 && idN !== -1) {
+            if (nMacro !== -1 && nMicro !== -1 && nNano !== -1) {
+                // 2. REVERSA EXACTA DE TU getGridInfo
                 
-                // 2. RECONSTRUCCIÓN DE PASOS (Estructura de cuadrícula)
-                // Para Panamá Centro, el divisor del Macro suele ser 1000 o 2000 
-                // para mantener la Longitud dentro del rango -79°
-                const my = Math.floor(idM / 2000), mx = idM % 2000;
-                
-                // Para el Micro y Nano, usamos la estructura de bloque cuadrado (Base 30 o 31)
-                const miy = Math.floor(idMi / 31), mix = idMi % 31;
-                const nay = Math.floor(idN / 31), nax = idN % 31;
+                // De nMacro: (Math.floor(gy / 900) * 2000) + Math.floor(gx / 900)
+                const mY = Math.floor(nMacro / 2000);
+                const mX = nMacro % 2000;
 
-                // 3. CÁLCULO DE COORDENADAS (Suma de desplazamientos)
-                // Usamos tus constantes PARAMS originales para no alterar la escala
-                const lng = ORIGIN.lng + 
-                            (mx * PARAMS.RES_MACRO) + 
-                            (mix * PARAMS.RES_MICRO) + 
-                            (nax * PARAMS.RES_NANO) + 
-                            (PARAMS.RES_NANO / 2);
+                // De nMicro: (Math.floor((gy % 900) / 30) * 30) + Math.floor((gx % 900) / 30)
+                const miY = Math.floor(nMicro / 30);
+                const miX = nMicro % 30;
 
-                const lat = ORIGIN.lat - 
-                            (my * PARAMS.RES_MACRO) - 
-                            (miy * PARAMS.RES_MICRO) - 
-                            (nay * PARAMS.RES_NANO) - 
-                            (PARAMS.RES_NANO / 2);
+                // De nNano: (localY * 30) + localX
+                const nY = Math.floor(nNano / 30);
+                const nX = nNano % 30;
 
-                // 4. Verificación de seguridad para Panamá
-                if (!isNaN(lat) && !isNaN(lng) && lat > 8.8 && lat < 9.2) {
-                    mymap.flyTo([lat, lng], 19);
+                // 3. ENSAMBLAJE DE PASOS TOTALES (GX y GY)
+                const totalGX = (mX * 900) + (miX * 30) + nX;
+                const totalGY = (mY * 900) + (miY * 30) + nY;
+
+                // 4. CONVERSIÓN A COORDENADAS (Usando tu R_3M exacto)
+                const lon = ORIGIN.lng + (totalGX * PARAMS.RES_NANO) + (PARAMS.RES_NANO / 2);
+                const lat = ORIGIN.lat - (totalGY * PARAMS.RES_NANO) - (PARAMS.RES_NANO / 2);
+
+                // 5. VALIDACIÓN Y MOVIMIENTO
+                if (!isNaN(lat) && !isNaN(lon)) {
+                    mymap.flyTo([lat, lon], 19);
                     mymap.once('moveend', () => {
-                        setTimeout(() => seleccionar(lat, lng), 300);
+                        setTimeout(() => seleccionar(lat, lon), 300);
                     });
                     enc = true;
                 }
             }
-        } catch (e) { console.error("Error crítico:", e); }
+        } catch (e) { console.error("Error:", e); }
     }
 
-    // BÚSQUEDA POR ZONA (Si el código exacto falla o no es de 10 caracteres)
+    // BÚSQUEDA POR ZONA (Si lo anterior no aplica o falló)
     if (!enc) {
         layerZonas.eachLayer(l => {
             const p = l.feature.properties;
-            if (p.VM_LEVEL === inputRaw || p.VM_LEVEL2D === inputRaw) {
+            // Buscamos en VM_LEVEL (8001) o VM_LEVEL2D (AJ)
+            if (p.VM_LEVEL === inputRaw || p.VM_LEVEL2D === inputRaw || p.VM_LEVEL === val || p.VM_LEVEL2D === val) {
                 const center = l.getBounds().getCenter(); 
                 mymap.setView(center, 14); 
                 seleccionar(center.lat, center.lng); 
@@ -302,7 +299,7 @@ function buscarCodigo() {
         });
     }
 
-    if (!enc) alert("CÓDIGO NO LOCALIZADO EN ESTA ZONA");
+    if (!enc) alert("CÓDIGO O ZONA NO ENCONTRADA");
 }
 
 mymap.on('click', (e) => seleccionar(e.latlng.lat, e.latlng.lng));
@@ -323,6 +320,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
