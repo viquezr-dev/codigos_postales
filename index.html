@@ -201,64 +201,43 @@ function buscarCodigo() {
     let val = document.getElementById('search-input').value.toUpperCase().trim();
     if (!val) return;
 
-    // 1. Limpiamos el código de guiones si el usuario los puso
+    // Limpiamos guiones
     val = val.replace(/-/g, "");
 
     let encontrado = false;
     
-    // 2. Lógica de extracción:
-    // Si el código es largo (ej: VSV2KJRH), los primeros 3 caracteres son la zona Macro (VSV)
-    // Pero en tu GeoJSON la zona se identifica por VM_LEVEL2D (ej: H9, D1, VSV)
-    let zonaABuscar = val;
-    if (val.length > 3) {
-        // Intentamos buscar por los primeros 3 caracteres (Nivel Macro)
-        zonaABuscar = val.substring(0, 3);
-    }
+    // Intentamos buscar la zona. 
+    // Si el código es largo (ej: VSV2KJRH), probamos con los primeros 3 caracteres (VSV)
+    // Si no, probamos con los primeros 2 (ej: H9)
+    let prefijo3 = val.substring(0, 3);
+    let prefijo2 = val.substring(0, 2);
 
     layerZonas.eachLayer(l => {
-        const p = l.feature.properties;
-        // Comparamos contra el nombre completo o el código corto (VM_LEVEL2D)
-        if (p.VM_LEVEL === val || p.VM_LEVEL2D === zonaABuscar || p.VM_LEVEL2D === val) {
+        let p = l.feature.properties;
+        // Buscamos coincidencia exacta o por prefijos de zona
+        if (p.VM_LEVEL2D === val || p.VM_LEVEL2D === prefijo3 || p.VM_LEVEL2D === prefijo2 || p.VM_LEVEL === val) {
             const centro = l.getBounds().getCenter();
-            
-            // Si el código era largo, intentamos centrar más cerca (Zoom 16)
-            const zoomNivel = (val.length > 3) ? 17 : 14;
-            
-            mymap.setView(centro, zoomNivel);
+            mymap.setView(centro, 14);
             seleccionar(centro.lat, centro.lng);
             encontrado = true;
+            return false; // Detener el bucle de Leaflet
         }
     });
-
-    if (!encontrado) {
-        // Segundo intento: si no encontró la zona de 3 letras, intentamos con 2 (por si es H9, etc)
-        const zonaCorta = val.substring(0, 2);
-        layerZonas.eachLayer(l => {
-            if (l.feature.properties.VM_LEVEL2D === zonaCorta) {
-                const centro = l.getBounds().getCenter();
-                mymap.setView(centro, 17);
-                seleccionar(centro.lat, centro.lng);
-                encontrado = true;
-            }
-        });
-    }
 
     if (!encontrado) alert("CÓDIGO O ZONA NO ENCONTRADA");
 }
 
 function buscarEstafetaCercana(lat, lng) {
-    // 1. Limpiamos rastros de búsquedas anteriores
     distanceLayer.clearLayers();
-    
     const userPt = L.latLng(lat, lng);
     let cercana = null;
     let dMin = Infinity;
 
-    // 2. Buscamos en la capa de estafetas (puntos)
-    layerEstafetas.eachLayer(l => {
-        // Verificamos que sea un punto válido
+    // Recorremos los marcadores de las estafetas
+    layerEstafetas.eachLayer(function(l) {
+        // Verificamos si es un punto (marker)
         if (l.getLatLng) {
-            const d = userPt.distanceTo(l.getLatLng());
+            let d = userPt.distanceTo(l.getLatLng());
             if (d < dMin) {
                 dMin = d;
                 cercana = l;
@@ -266,33 +245,22 @@ function buscarEstafetaCercana(lat, lng) {
         }
     });
 
-    // 3. Si encontramos la más cercana, trazamos la ruta visual
     if (cercana) {
-        const estafetaPt = cercana.getLatLng();
-        const distKm = (dMin / 1000).toFixed(2);
-        
-        // Trazamos línea punteada entre el clic y la estafeta
-        L.polyline([userPt, estafetaPt], {
-            color: '#c0392b',
-            weight: 2,
-            dashArray: '5, 8',
-            opacity: 0.7
+        // Dibujamos la línea de conexión
+        L.polyline([userPt, cercana.getLatLng()], { 
+            color: '#c0392b', 
+            weight: 3, 
+            dashArray: '7, 7' 
         }).addTo(distanceLayer);
 
-        // Ajustamos el mapa para ver ambos puntos si están lejos
-        const bounds = L.latLngBounds([userPt, estafetaPt]);
-        mymap.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+        // Zoom para ver ambos puntos
+        const bounds = L.latLngBounds([userPt, cercana.getLatLng()]);
+        mymap.fitBounds(bounds, { padding: [50, 50] });
 
-        // Abrimos el popup de la estafeta con la distancia calculada
-        const nombre = cercana.feature.properties.ESTAF_NAME || "Estafeta";
-        cercana.bindPopup(`
-            <div style="text-align:center; font-size:11px;">
-                <b>${nombre}</b><br>
-                Distancia: <span style="color:red;">${distKm} km</span>
-            </div>
-        `).openPopup();
+        // Abrimos el popup de la estafeta
+        cercana.openPopup();
     } else {
-        alert("No se cargaron las estafetas aún o no hay ninguna en el mapa.");
+        alert("No se encontraron estafetas cargadas en el mapa.");
     }
 }
 
@@ -315,4 +283,5 @@ render();
 </script>
 </body>
 </html>
+
 
