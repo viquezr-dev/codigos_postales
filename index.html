@@ -54,9 +54,23 @@ const mymap = L.map('mapid', { zoomSnap: 0.1, zoomControl: false, maxZoom: 22 })
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 22, maxNativeZoom: 19 }).addTo(mymap);
 L.control.zoom({ position: 'bottomright' }).addTo(mymap);
 
-// Capas
+// --- CAPA DE ZONAS CON RESALTADO RESTAURADO ---
 const layerZonas = L.geoJSON(null, { 
-    style: { color: "#333", weight: 1.5, fillOpacity: 0.1, fillColor: "#3498db" }
+    style: { color: "#333", weight: 1.5, fillOpacity: 0.1, fillColor: "#3498db" },
+    onEachFeature: (f, l) => {
+        l.on({
+            mouseover: (e) => { 
+                e.target.setStyle({ weight: 3, color: '#f1c40f', fillOpacity: 0.3 }); 
+            },
+            mouseout: (e) => { 
+                layerZonas.resetStyle(e.target); 
+            },
+            click: (e) => { 
+                seleccionar(e.latlng.lat, e.latlng.lng); 
+                L.DomEvent.stopPropagation(e); 
+            }
+        });
+    }
 }).addTo(mymap);
 
 const layerMacro = L.layerGroup().addTo(mymap);
@@ -123,19 +137,16 @@ function render() {
     if (z >= 14) drawGrid(PARAMS.RES_MICRO, layerMicro, 'label-micro', '#e67e22', 0.6, 0.2);
 }
 
-// --- FUNCIÓN SELECCIONAR CORREGIDA ---
 function seleccionar(lat, lng) {
     selectionLayer.clearLayers(); 
     layerLocalNano.clearLayers(); 
     distanceLayer.clearLayers();
     const z = mymap.getZoom();
 
-    // Verificación espacial real usando leaflet-pip
-    // Esto busca qué polígonos de 'layerZonas' contienen el punto [lng, lat]
+    // Verificación espacial estricta
     const results = leafletPip.pointInLayer([lng, lat], layerZonas, true);
 
     if (results.length === 0) {
-        // SI NO HAY RESULTADOS, ESTÁ FUERA
         L.marker([lat, lng], { 
             icon: L.icon({ 
                 iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', 
@@ -149,7 +160,6 @@ function seleccionar(lat, lng) {
         return;
     }
 
-    // Si hay resultados, tomamos las propiedades del polígono encontrado
     const props = results[0].feature.properties;
     const vLev5 = props.VM_LEVEL;   
     const vLev2 = props.VM_LEVEL2D; 
@@ -172,7 +182,7 @@ function seleccionar(lat, lng) {
             <div class="codigo-final">${cod}</div>
             <div class="btn-container">
                 <a href="https://wa.me/?text=Mi+Dirección+Postal:+${cod}" target="_blank" class="btn-ws">WHATSAPP</a>
-                <a href="https://www.google.com/maps/search/?api=1&query=${lat},${lng}" target="_blank" class="btn-maps">GOOGLE MAPS</a>
+                <a href="http://maps.google.com/maps?q=${lat},${lng}" target="_blank" class="btn-maps">GOOGLE MAPS</a>
                 <button onclick="buscarEstafetaCercana(${lat}, ${lng})" class="btn-cercana">📍 BUSCAR ESTAFETA CERCANA</button>
             </div>
         </div>
@@ -228,6 +238,8 @@ mymap.on('locationfound', (e) => {
     seleccionar(e.latlng.lat, e.latlng.lng);
 });
 
+// Al hacer clic en el mapa base, se llama a seleccionar. 
+// onEachFeature se encarga de los clics dentro de polígonos.
 mymap.on('click', (e) => seleccionar(e.latlng.lat, e.latlng.lng));
 mymap.on('moveend', render);
 mymap.on('zoomend', render);
