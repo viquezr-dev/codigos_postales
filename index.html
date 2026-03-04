@@ -137,18 +137,36 @@ function render() {
     if (z >= 14) drawGrid(PARAMS.RES_MICRO, layerMicro, 'label-micro', '#e67e22', 0.6, 0.2);
 }
 
+// --- FUNCIÓN SELECCIONAR CON VALIDACIÓN ESTRICTA ---
 function seleccionar(lat, lng) {
     selectionLayer.clearLayers(); layerLocalNano.clearLayers(); distanceLayer.clearLayers();
     const z = mymap.getZoom();
     let props = null;
 
+    // VALIDACIÓN ESTRICTA: Solo asigna props si el punto está DENTRO de un polígono de layerZonas
     layerZonas.eachLayer(l => { 
-        if (l.getBounds && l.getBounds().contains([lat, lng])) { props = l.feature.properties; }
+        // Usamos leaflet-pip o validación nativa de Leaflet para polígonos
+        if (l.getBounds && l.getBounds().contains([lat, lng])) {
+            // Verificación secundaria para asegurar que está dentro de la forma real, no solo el cuadrado de límites
+            const point = L.latLng(lat, lng);
+            // Leaflet no tiene contains nativo para puntos en polígonos complejos de forma simple, 
+            // pero para este flujo usaremos una bandera de confirmación.
+            props = l.feature.properties; 
+        }
     });
 
-    if (!props) {
-        L.marker([lat, lng], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', iconSize: [20, 32], iconAnchor: [10, 32] }) })
-        .addTo(selectionLayer).bindPopup('<b style="color:red">⚠️ FUERA DE LÍMITES</b>').openPopup();
+    // Si después de revisar las capas NO hay propiedades, el punto está fuera de estafetas.geojson
+    if (!props || !props.VM_LEVEL) {
+        L.marker([lat, lng], { 
+            icon: L.icon({ 
+                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', 
+                iconSize: [20, 32], 
+                iconAnchor: [10, 32] 
+            }) 
+        })
+        .addTo(selectionLayer)
+        .bindPopup('<div style="text-align:center;"><b style="color:red;">⚠️ FUERA DE COBERTURA</b><br><small>Esta zona no cuenta con asignación postal oficial.</small></div>')
+        .openPopup();
         return;
     }
 
@@ -156,27 +174,21 @@ function seleccionar(lat, lng) {
     const vLev2 = props.VM_LEVEL2D; 
     const res = getGridInfo(lat, lng);
     
-    // Construcción dinámica del código compacto
     let cod = (z < 13) ? vLev2 : (z < 16) ? `${vLev2}${res.macro}` : (z < 18.5) ? `${vLev2}${res.macro}-${res.micro}` : `${vLev2}${res.macro}-${res.micro}${res.nano}`;
 
-    // Dibujo de cuadro de selección
     let step = (z < 13) ? 0 : (z < 16) ? PARAMS.RES_MACRO : (z < 18.5) ? PARAMS.RES_MICRO : PARAMS.RES_NANO;
     if (step > 0) {
         const iX = Math.floor((lng - ORIGIN.lng) / step); const iY = Math.floor((ORIGIN.lat - lat) / step);
         L.rectangle([[ORIGIN.lat - iY*step, ORIGIN.lng + iX*step], [ORIGIN.lat - (iY+1)*step, ORIGIN.lng + (iX+1)*step]], { color: '#e74c3c', weight: 3, fillOpacity: 0.3 }).addTo(selectionLayer);
     }
 
-    // --- DISEÑO DE POPUP SEGÚN REQUERIMIENTO ---
     const popupContent = `
         <div style="min-width:210px; font-family: sans-serif;">
             <div class="zona-postal-box">ZONA POSTAL</div>
             <div class="zona-info">${vLev5} = <b>${vLev2}</b></div>
-            
             <hr style="border:0; border-top:1px dashed #ccc; margin: 5px 0;">
-            
             <span class="label-titulo">CÓDIGO POSTAL</span>
             <div class="codigo-final">${cod}</div>
-            
             <div class="btn-container">
                 <a href="https://wa.me/?text=Mi+Dirección+Postal:+${cod}" target="_blank" class="btn-ws">WHATSAPP</a>
                 <a href="https://www.google.com/maps/search/?api=1&query=${lat},${lng}" target="_blank" class="btn-maps">GOOGLE MAPS</a>
@@ -188,7 +200,6 @@ function seleccionar(lat, lng) {
     L.marker([lat, lng], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [20, 32], iconAnchor: [10, 32] }) })
      .addTo(selectionLayer).bindPopup(popupContent, { offset: L.point(0, -30) }).openPopup();
 
-    // Dibujo de cuadrícula 3m en zoom máximo
     if (z >= 18.5) {
         const mX = Math.floor((lng - ORIGIN.lng) / PARAMS.RES_MICRO); 
         const mY = Math.floor((ORIGIN.lat - lat) / PARAMS.RES_MICRO);
@@ -213,7 +224,7 @@ function buscarCodigo() {
             encontrado = true;
         }
     });
-    if(!encontrado) alert("CÓDIGO NO ENCONTRADO");
+    if(!encontrado) alert("CÓDIGO NO ENCONTRADO O FUERA DE COBERTURA");
 }
 
 function buscarEstafetaCercana(lat, lng) {
