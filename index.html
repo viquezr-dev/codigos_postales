@@ -178,13 +178,13 @@ function seleccionar(lat, lng, forcedZonaID = null) {
     } else {
         drawBox = true; 
         if (z < 16.5) {
-            titulo = "ÁREA MACRO/MICRO";
+            titulo = "ÁREA POSTAL";
             codigoFinal = `${zonaID}-${res.macro}${res.micro}`;
         } else if (z < 18) {
-            titulo = "CÓDIGO NANO (26m)";
+            titulo = "SITIO POSTAL";
             codigoFinal = `${zonaID}-${res.macro}${res.micro}${res.nano}`;
         } else {
-            titulo = "PUNTO EXACTO (3m)";
+            titulo = "CÓDIGO POSTAL";
             let zonaLimpia = zonaID.toString().charAt(0) + zonaID.toString().substring(3);
             codigoFinal = `${zonaLimpia}${res.macro}-${res.micro}${res.nano}${res.pico}`;
         }
@@ -288,3 +288,4 @@ render();
 </script>
 </body>
 </html>
+
