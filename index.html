@@ -165,6 +165,16 @@ function seleccionar(lat, lng, props = null) {
     const z = mymap.getZoom();
     const puntoClic = L.latLng(lat, lng);
 
+    // 1. AUTO-ZOOM: Si el usuario está lejos, lo acercamos y esperamos a que termine para re-ejecutar
+    if (z < 19) {
+        mymap.setView([lat, lng], 20);
+        mymap.once('moveend', () => {
+            seleccionar(lat, lng, props);
+        });
+        return; // Detenemos esta ejecución para esperar el aterrizaje del zoom
+    }
+
+    // 2. BUSCAR PROPIEDADES (Si no existen)
     if (!props) {
         layerZonas.eachLayer(layer => {
             if (layer.getBounds().contains(puntoClic)) {
@@ -175,6 +185,7 @@ function seleccionar(lat, lng, props = null) {
         });
     }
 
+    // 3. VALIDACIÓN DE ÁREA
     if (!props) {
         L.marker([lat, lng], { 
             icon: L.icon({ 
@@ -188,6 +199,7 @@ function seleccionar(lat, lng, props = null) {
         return;
     }
 
+    // 4. GENERACIÓN DE CÓDIGOS
     const res = getGridInfo(lat, lng);
     const VL1 = props.VM_LEVEL || "N/A";
     const VL2 = props.VM_LEVEL2D || "N/A";
@@ -209,52 +221,42 @@ function seleccionar(lat, lng, props = null) {
             let full = `${VL2}${res.macro}${res.micro}${res.nano}${res.pico}`;
             codigoFinal = full.substring(0, 5) + "-" + full.substring(5);
         }
+    } // <-- Aquí faltaba cerrar la lógica de títulos
+
     // --- DIBUJO DE REJILLA TÉCNICA (NIVEL PICO 8x8) ---
     const stepN = PARAMS.RES_NANO;
     const stepP = PARAMS.RES_PICO;
     
-    // 1. Encontrar la esquina de la celda Nano (26m)
     const xN = Math.floor(((lng - ORIGIN.lng) / stepN) + 0.00001);
     const yN = Math.floor(((ORIGIN.lat - lat) / stepN) + 0.00001);
     const sLngN = ORIGIN.lng + (xN * stepN);
     const sLatN = ORIGIN.lat - (yN * stepN);
     
-    // 2. Dibujar el borde de la celda Nano (Contenedor)
+    // Contenedor Nano (26m)
     L.rectangle([[sLatN, sLngN], [sLatN - stepN, sLngN + stepN]], {
         color: '#2c3e50', weight: 2, fill: false, interactive: false
     }).addTo(selectionLayer);
     
-    // 3. Forzar el dibujo de las 8x8 líneas Pico (3.3m)
+    // Rejilla 8x8 Pico (3.3m)
     for (let i = 0; i <= 8; i++) {
-        // Verticales
-        L.polyline([
-            [sLatN, sLngN + (i * stepP)], 
-            [sLatN - stepN, sLngN + (i * stepP)]
-        ], { color: '#e74c3c', weight: 1, opacity: 0.6 }).addTo(selectionLayer);
-        
-        // Horizontales
-        L.polyline([
-            [sLatN - (i * stepP), sLngN], 
-            [sLatN - (i * stepP), sLngN + stepN]
-        ], { color: '#e74c3c', weight: 1, opacity: 0.6 }).addTo(selectionLayer);
+        L.polyline([[sLatN, sLngN + (i * stepP)], [sLatN - stepN, sLngN + (i * stepP)]], 
+            { color: '#e74c3c', weight: 1, opacity: 0.5, interactive: false }).addTo(selectionLayer);
+        L.polyline([[sLatN - (i * stepP), sLngN], [sLatN - (i * stepP), sLngN + stepN]], 
+            { color: '#e74c3c', weight: 1, opacity: 0.5, interactive: false }).addTo(selectionLayer);
     }
     
-    // 4. Pintar el cuadro específico de 3m donde cayó el clic
+    // Cuadro Pico resaltado
     const xP = Math.floor(((lng - sLngN) / stepP) + 0.00001);
     const yP = Math.floor(((sLatN - lat) / stepP) + 0.00001);
-    const finalLat = sLatN - (yP * stepP);
-    const finalLng = sLngN + (xP * stepP);
+    const fLat = sLatN - (yP * stepP);
+    const fLng = sLngN + (xP * stepP);
     
-    L.rectangle([[finalLat, finalLng], [finalLat - stepP, finalLng + stepP]], {
-        color: '#e74c3c', weight: 1, fillOpacity: 0.5, fillColor: '#e74c3c'
+    L.rectangle([[fLat, fLng], [fLat - stepP, fLng + stepP]], {
+        color: '#e74c3c', weight: 1, fillOpacity: 0.4, fillColor: '#e74c3c', interactive: false
     }).addTo(selectionLayer);
-    
-    // 5. AUTO-ZOOM: Si el usuario está lejos, lo acercamos para ver la rejilla
-    if (mymap.getZoom() < 19) {
-        mymap.setView([lat, lng], 20);
-    }
 
-    const urlMaps = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+    // --- POPUP ---
+    const urlMaps = `https://www.google.com/maps?q=${lat},${lng}`;
 
     L.marker([lat, lng], { 
         icon: L.icon({ 
@@ -395,6 +397,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
