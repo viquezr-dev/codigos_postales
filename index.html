@@ -264,19 +264,49 @@ document.getElementById('search-btn').addEventListener('click', function() {
 function buscarEstafetaCercana(lat, lng) {
     distanceLayer.clearLayers();
     const userPt = L.latLng(lat, lng);
-    let cercana = null, dMin = Infinity;
-    layerEstafetas.eachLayer(layer => {
-        const pt = layer.getLatLng();
-        const d = userPt.distanceTo(pt);
-        if (d < dMin) { dMin = d; cercana = layer; }
+    let cercana = null;
+    let dMin = Infinity;
+
+    // Escaneamos la capa de estafetas de forma correcta
+    layerEstafetas.eachLayer(group => {
+        // Como es un GeoJSON, recorremos sus sub-layers (los puntos)
+        group.eachLayer(l => {
+            if (l.getLatLng) {
+                const pt = l.getLatLng();
+                const d = userPt.distanceTo(pt);
+                if (d < dMin) {
+                    dMin = d;
+                    cercana = l;
+                }
+            }
+        });
     });
+
     if (cercana) {
         const estPt = cercana.getLatLng();
-        const texto = dMin > 1000 ? (dMin/1000).toFixed(2) + " km" : Math.round(dMin) + " m";
-        const line = L.polyline([userPt, estPt], { color: '#c0392b', weight: 4, dashArray: '8, 8' }).addTo(distanceLayer);
-        L.marker(line.getCenter(), { icon: L.divIcon({ className: 'inv' }) }).bindTooltip(texto, { permanent: true, direction: 'center', className: 'distancia-label' }).addTo(distanceLayer);
+        const texto = dMin > 1000 ? (dMin / 1000).toFixed(2) + " km" : Math.round(dMin) + " m";
+        
+        // Dibujamos la línea punteada
+        const line = L.polyline([userPt, estPt], { 
+            color: '#c0392b', 
+            weight: 4, 
+            dashArray: '8, 8',
+            opacity: 0.7 
+        }).addTo(distanceLayer);
+
+        // Etiqueta de distancia en el centro de la línea
+        L.marker(line.getCenter(), { 
+            icon: L.divIcon({ 
+                className: 'inv',
+                html: `<div class="distancia-label">${texto}</div>` 
+            }) 
+        }).addTo(distanceLayer);
+
+        // Ajustamos el mapa para ver ambos puntos y abrimos la info de la estafeta
         mymap.fitBounds(line.getBounds(), { padding: [100, 100] });
         cercana.openPopup();
+    } else {
+        alert("No se encontraron estafetas cargadas en el mapa.");
     }
 }
 
@@ -326,3 +356,4 @@ render();
 </script>
 </body>
 </html>
+
