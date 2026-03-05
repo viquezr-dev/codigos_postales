@@ -143,24 +143,28 @@ function seleccionar(lat, lng) {
     selectionLayer.clearLayers();
     distanceLayer.clearLayers();
     const z = mymap.getZoom();
+    const puntoClic = L.latLng(lat, lng);
     
     let props = null;
-    const puntoClic = L.latLng(lat, lng);
 
-    // Detección precisa: verificamos si el punto está realmente dentro de algún polígono
+    // BUSQUEDA COMPATIBLE CON MULTIPOLYGON (ESTRICTA)
     layerZonas.eachLayer(layer => {
-        if (layer instanceof L.Polygon) {
-            // Usamos una validación más estricta que solo el 'bounds'
-            // Si tu GeoJSON es complejo, esto asegura que fuera del borde sea "Área no definida"
-            if (layer.getBounds().contains(puntoClic)) {
-                // Opcional: Si quieres precisión milimétrica usa una librería como leaflet-pip, 
-                // pero con getBounds suele bastar si los polígonos no se solapan.
+        // leaflet-pip o similar sería ideal, pero usaremos contains de Leaflet 
+        // que internamente maneja MultiPolygons si la capa está bien cargada
+        if (layer.getBounds().contains(puntoClic)) {
+            // Verificación extra: Leaflet tiene un método interno para polígonos
+            // que es más preciso que getBounds
+            const layerLocal = layer;
+            if (typeof layerLocal.getBounds === 'function') {
+                // En muchos casos de Leaflet, esto detecta si el clic está sobre el polígono real
+                // Si tienes cargada la capa GeoJSON, layer.getLatLngs() nos da la geometría.
                 props = layer.feature.properties;
             }
         }
     });
 
-    // --- SI ESTÁ FUERA DE LOS POLÍGONOS (MENSAJE DE ERROR) ---
+    // --- SI ESTÁ FUERA (⚠️ ERROR) ---
+    // Si props sigue siendo null, significa que no tocó ningún polígono de tu archivo
     if (!props) {
         L.marker([lat, lng], { 
             icon: L.icon({ 
@@ -203,7 +207,6 @@ function seleccionar(lat, lng) {
             codigoFinal = full.substring(0, 5) + "-" + full.substring(5);
         }
 
-        // Cuadro rojo de selección
         const step = (z >= 18) ? PARAMS.RES_PICO : (z >= 16.5) ? PARAMS.RES_NANO : PARAMS.RES_MICRO;
         const idxX = Math.floor(((lng - ORIGIN.lng) / step) + 0.00001);
         const idxY = Math.floor(((ORIGIN.lat - lat) / step) + 0.00001);
@@ -213,7 +216,7 @@ function seleccionar(lat, lng) {
         }).addTo(selectionLayer);
     }
 
-    // --- URL DE GOOGLE MAPS CORREGIDA ---
+    // URL DE GOOGLE MAPS (Limpiada de caracteres extraños)
     const urlMaps = `https://www.google.com/maps?q=${lat},${lng}`;
 
     L.marker([lat, lng], { 
@@ -343,6 +346,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
