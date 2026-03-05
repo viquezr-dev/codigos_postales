@@ -257,11 +257,11 @@ function seleccionar(lat, lng, props = null) {
     const VL1 = props.VM_LEVEL || "N/A";
     const urlMaps = "https://www.google.com/maps?q=" + lat + "," + lng;
     
-    // Obtenemos info relacional del GeoJSON
+    // Obtenemos info relacional
     const infoExtra = obtenerInfoAdicional(props.VM_LEVEL2D || "");
     
-    // Contenido del QR con datos profesionales
-    const contenidoQR = `CP: ${codigoFinal}\nEstafeta: ${infoExtra.estafeta}\nProvincia: ${infoExtra.provincia}`;
+    // Contenido del QR: Datos limpios para lectura rápida en móvil
+    const contenidoQR = `CP: ${codigoFinal} | Estafeta: ${infoExtra.estafeta} | Prov: ${infoExtra.provincia}`;
     const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=" + encodeURIComponent(contenidoQR);
 
     L.marker([lat, lng], { 
@@ -274,7 +274,10 @@ function seleccionar(lat, lng, props = null) {
     .bindPopup(`
         <span class="popup-header">CODIGO POSTAL</span>
         <div class="codigo-final">${codigoFinal}</div>
-        <div style="font-size:10px; margin-top:5px; color:#333; border-bottom:1px solid #eee; padding-bottom:5px; margin-bottom:5px;">
+        <div style="text-align:center; font-size:10px; color:#555; margin-bottom:5px; border-bottom:1px solid #eee; padding-bottom:3px;">
+            ${VL1} = ${VL2}
+        </div>
+        <div style="font-size:10px; margin-bottom:5px; color:#333;">
             <b>Estafeta:</b> ${infoExtra.estafeta}<br>
             <b>Provincia:</b> ${infoExtra.provincia}
         </div>
@@ -284,12 +287,11 @@ function seleccionar(lat, lng, props = null) {
             <button onclick="buscarEstafetaCercana(${lat},${lng})" class="btn-cercana">📍 ESTAFETA CERCANA</button>
         </div>
         <div style="text-align:center; margin-top:10px;">
-            <img src="${qrUrl}" alt="QR Postal" style="width:100px; height:100px; border:2px solid #ddd; border-radius:5px;">
-            <p style="font-size:9px; color:#555; margin-top:2px;">Escanea este QR en la estafeta</p>
+            <img src="${qrUrl}" alt="QR Postal" style="width:110px; height:110px; border:2px solid #ddd; border-radius:5px;">
         </div>
     `, { 
         offset: offsetConfig,
-        minWidth: 180, // Aumenté el ancho para que los textos no se corten
+        minWidth: 190,
         closeButton: true,
         autoPan: true 
     })
@@ -459,6 +461,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
