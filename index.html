@@ -158,8 +158,6 @@ function seleccionar(lat, lng, props = null) {
             }
         });
     }
-
-    selectionLayer.clearLayers();
         .addTo(selectionLayer)
         .bindPopup(`
             <span class="popup-header">⚠️ ÁREA NO DEFINIDA</span>
@@ -401,6 +399,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
