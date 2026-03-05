@@ -145,6 +145,19 @@ function pointInPolygon(point, vs) {
     return inside;
 }
 
+function obtenerInfoAdicional(vmLevel2d) {
+    let info = { estafeta: "No asignada", provincia: "No disponible" };
+    
+    // Recorremos los features cargados en layerZonas
+    layerZonas.eachLayer(layer => {
+        if (layer.feature.properties.VM_LEVEL2D === vmLevel2d) {
+            info.estafeta = layer.feature.properties.ESTAF_NAME || "Sin estafeta";
+            info.provincia = layer.feature.properties.PROV_NOMB || "Sin provincia";
+        }
+    });
+    return info;
+}
+    
 function isPointInGeoJSON(latlng, feature) {
     const pt = [latlng.lng, latlng.lat];
     const coords = feature.geometry.coordinates;
@@ -241,7 +254,24 @@ function seleccionar(lat, lng, props = null) {
     const offsetConfig = L.point(100, -50); // Mueve el popup 100px a la derecha y 50px arriba
     const VL1 = props.VM_LEVEL || "N/A";
     const urlMaps = "https://www.google.com/maps?q=" + lat + "," + lng;
-    const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=" + encodeURIComponent(codigoFinal);;
+    const propsActuales = props || {}; 
+    const infoExtra = obtenerInfoAdicional(propsActuales.VM_LEVEL2D);
+    
+    // Construimos el título y el contenido del QR
+    const tituloQR = "CODIGO POSTAL";
+    const contenidoQR = `CP: ${codigoFinal}\nESTAFETA: ${infoExtra.estafeta}\nPROVINCIA: ${infoExtra.provincia}`;
+    
+    const offsetConfig = L.point(100, -50); 
+    const VL1 = props.VM_LEVEL || "N/A";
+    const urlMaps = "https://www.google.com/maps?q=" + lat + "," + lng;
+    
+    // Obtenemos info relacional del GeoJSON
+    const infoExtra = obtenerInfoAdicional(props.VM_LEVEL2D || "");
+    
+    // Contenido del QR con datos profesionales
+    const contenidoQR = `CP: ${codigoFinal}\nEstafeta: ${infoExtra.estafeta}\nProvincia: ${infoExtra.provincia}`;
+    const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=" + encodeURIComponent(contenidoQR);
+
     L.marker([lat, lng], { 
         icon: L.icon({ 
             iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', 
@@ -250,24 +280,24 @@ function seleccionar(lat, lng, props = null) {
     })
     .addTo(selectionLayer)
     .bindPopup(`
-        <span class="popup-header">${titulo}</span>
+        <span class="popup-header">CODIGO POSTAL</span>
         <div class="codigo-final">${codigoFinal}</div>
-        <div style="text-align:center; font-size:11px; margin-bottom:5px; border-top:1px solid #eee; padding-top:3px;">${VL1} = ${VL2}</div>
+        <div style="font-size:10px; margin-top:5px; color:#333; border-bottom:1px solid #eee; padding-bottom:5px; margin-bottom:5px;">
+            <b>Estafeta:</b> ${infoExtra.estafeta}<br>
+            <b>Provincia:</b> ${infoExtra.provincia}
+        </div>
         <div class="btn-container">
             <a href="${urlMaps}" target="_blank" class="btn-maps">📍 MAPS</a>
             <a href="https://wa.me/?text=Mi+Dirección:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
             <button onclick="buscarEstafetaCercana(${lat},${lng})" class="btn-cercana">📍 ESTAFETA CERCANA</button>
         </div>
         <div style="text-align:center; margin-top:10px;">
-            <img src="${qrUrl}" 
-                 alt="QR Postal" 
-                 style="width:100px; height:100px; border:2px solid #ddd; border-radius:5px;"
-                 onerror="this.style.display='none'; this.nextElementSibling.innerText='Error al generar QR'">
+            <img src="${qrUrl}" alt="QR Postal" style="width:100px; height:100px; border:2px solid #ddd; border-radius:5px;">
             <p style="font-size:9px; color:#555; margin-top:2px;">Escanea este QR en la estafeta</p>
         </div>
     `, { 
         offset: offsetConfig,
-        minWidth: 160,
+        minWidth: 180, // Aumenté el ancho para que los textos no se corten
         closeButton: true,
         autoPan: true 
     })
@@ -287,6 +317,7 @@ function dibujarCuadro(lat, lng, step, color) {
     }).addTo(selectionLayer);
 }
 
+    
 function dibujarRejillaPico(lat, lng) {
     const stepN = PARAMS.RES_NANO;
     const stepP = PARAMS.RES_PICO;
@@ -436,6 +467,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
