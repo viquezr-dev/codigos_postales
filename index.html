@@ -44,6 +44,19 @@
         .map-title { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 1000; text-align: center; pointer-events: none; width: 100%; }
         .map-title h1 { margin: 0; font-size: 18px; color: #1a2a6c; text-transform: uppercase; font-weight: 900; letter-spacing: 1px; text-shadow: 2px 2px 0px #fff; }
         .map-title span { font-size: 10px; color: #333; display: block; font-weight: bold; margin-top: -2px; }
+        
+        .leaflet-popup-content-wrapper {
+            background: rgba(255, 255, 255, 0.7) !important; 
+            backdrop-filter: blur(5px); 
+            border: 1px solid rgba(0, 0, 0, 0.2);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            border-radius: 8px; /* Opcional: le da esquinas redondeadas */
+        }
+    
+        .leaflet-popup-tip {
+            background: rgba(255, 255, 255, 0.7) !important;
+        }
+
     </style>
 </head>
 <body>
@@ -222,22 +235,36 @@ function seleccionar(lat, lng, props = null) {
         // Aquí activamos la Rejilla Quirúrgica que ya tenemos
         dibujarRejillaPico(lat, lng, res);
     }
-
+    const mapCenter = mymap.getCenter();
+    const offsetFinal = (lat < mapCenter.lat) ? L.point(0, -70) : L.point(0, -30);
     // --- LANZAR POPUP ---
+    const offsetConfig = L.point(100, -50); // Mueve el popup 100px a la derecha y 50px arriba
+
     const urlMaps = "https://www.google.com/maps?q=" + lat + "," + lng;
+
     L.marker([lat, lng], { 
         icon: L.icon({ 
             iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', 
             iconSize: [18, 28], iconAnchor: [9, 28] 
         }) 
-    }).addTo(selectionLayer).bindPopup(`
-        <span class="popup-header">`+titulo+`</span>
-        <div class="codigo-final">`+codigoFinal+`</div>
+    })
+    .addTo(selectionLayer)
+    .bindPopup(`
+        <span class="popup-header">` + titulo + `</span>
+        <div class="codigo-final">` + codigoFinal + `</div>
+        <div style="text-align:center; font-size:11px; margin-bottom:5px; border-top:1px solid #eee; padding-top:3px;">` + VL1 + ` = ` + VL2 + `</div>
         <div class="btn-container">
-            <a href="`+urlMaps+`" target="_blank" class="btn-maps">📍 MAPS</a>
-            <button onclick="buscarEstafetaCercana(`+lat+`,`+lng+`)" class="btn-cercana">🏢 ESTAFETA</button>
+            <a href="` + urlMaps + `" target="_blank" class="btn-maps">📍 MAPS</a>
+            <a href="https://wa.me/?text=Mi+Dirección:+` + codigoFinal + `" target="_blank" class="btn-ws">💬 WS</a>
+            <button onclick="buscarEstafetaCercana(` + lat + `,` + lng + `)" class="btn-cercana">📍 ESTAFETA CERCANA</button>
         </div>
-    `, { offset: L.point(0, -25) }).openPopup();
+    `, { 
+        offset: offsetConfig, // AQUÍ SE APLICA EL DESPLAZAMIENTO
+        minWidth: 160,
+        closeButton: true,
+        autoPan: true 
+    })
+    .openPopup();
 }
 
 // --- FUNCIONES DE APOYO PARA EL DIBUJO ---
@@ -402,6 +429,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
