@@ -239,7 +239,7 @@ function seleccionar(lat, lng, props = null) {
     const offsetFinal = (lat < mapCenter.lat) ? L.point(0, -70) : L.point(0, -30);
     // --- LANZAR POPUP ---
     const offsetConfig = L.point(100, -50); // Mueve el popup 100px a la derecha y 50px arriba
-
+    const VL1 = props.VM_LEVEL || "N/A";
     const urlMaps = "https://www.google.com/maps?q=" + lat + "," + lng;
 
     L.marker([lat, lng], { 
@@ -328,7 +328,7 @@ document.getElementById('search-btn').addEventListener('click', function() {
     if (code8.length === 8) {
         try {
             const coords = decodeToLatLng(code8);
-            (coords, 20);
+            mymap.setView(coords, 20);
             setTimeout(() => seleccionar(coords[0], coords[1]), 500);
         } catch(e) { alert("Formato incorrecto"); }
     } else { alert("Use 8 o 10 caracteres"); }
@@ -429,15 +429,4 @@ render();
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
 
