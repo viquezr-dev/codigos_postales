@@ -148,16 +148,14 @@ function seleccionar(lat, lng, props = null) {
     const z = mymap.getZoom();
 
     // --- VALIDACIÓN DE ÁREA ---
-    if (!props) {
-        const punto = L.latLng(lat, lng);
-        layerZonas.eachLayer(layer => {
-            if (layer.getBounds().contains(punto)) {
-                if (isPointInGeoJSON(punto, layer.toGeoJSON())) {
-                    props = layer.feature.properties;
-                }
-            }
-        });
-    }
+    if (!props) {10:55 a. m. 05/mar./2026
+        L.marker([lat, lng], { 
+            icon: L.icon({ 
+                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', 
+                iconSize: [18, 28], 
+                iconAnchor: [9, 28] 
+            }) 
+        })
         .addTo(selectionLayer)
         .bindPopup(`
             <span class="popup-header">⚠️ ÁREA NO DEFINIDA</span>
@@ -399,14 +397,4 @@ render();
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
 
