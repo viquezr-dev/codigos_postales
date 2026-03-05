@@ -165,8 +165,8 @@ function seleccionar(lat, lng, props = null) {
     const z = mymap.getZoom();
     const puntoClic = L.latLng(lat, lng);
 
-    // 1. AUTO-ZOOM: Si está lejos, mover y re-ejecutar al terminar
-    if (z < 19) {
+    // 1. NAVEGACIÓN INTELIGENTE: Si está a media distancia, acercar al detalle
+    if (z >= 17 && z < 19) {
         mymap.setView([lat, lng], 20);
         mymap.once('moveend', function() {
             seleccionar(lat, lng, props);
@@ -223,38 +223,49 @@ function seleccionar(lat, lng, props = null) {
         }
     }
 
-    // 5. DIBUJO DE REJILLA PICO (8x8)
-    const stepN = PARAMS.RES_NANO;
-    const stepP = PARAMS.RES_PICO;
-    const xN = Math.floor(((lng - ORIGIN.lng) / stepN) + 0.00001);
-    const yN = Math.floor(((ORIGIN.lat - lat) / stepN) + 0.00001);
-    const sLngN = ORIGIN.lng + (xN * stepN);
-    const sLatN = ORIGIN.lat - (yN * stepN);
-    
-    // Cuadro Nano
-    L.rectangle([[sLatN, sLngN], [sLatN - stepN, sLngN + stepN]], {
-        color: '#2c3e50', weight: 2, fill: false, interactive: false
-    }).addTo(selectionLayer);
-    
-    // Líneas Pico
-    for (let i = 0; i <= 8; i++) {
-        L.polyline([[sLatN, sLngN + (i * stepP)], [sLatN - stepN, sLngN + (i * stepP)]], 
-            { color: '#e74c3c', weight: 1, opacity: 0.5, interactive: false }).addTo(selectionLayer);
-        L.polyline([[sLatN - (i * stepP), sLngN], [sLatN - (i * stepP), sLngN + stepN]], 
-            { color: '#e74c3c', weight: 1, opacity: 0.5, interactive: false }).addTo(selectionLayer);
-    }
-    
-    // Cuadro Pico Final
-    const xP = Math.floor(((lng - sLngN) / stepP) + 0.00001);
-    const yP = Math.floor(((sLatN - lat) / stepP) + 0.00001);
-    const fLat = sLatN - (yP * stepP);
-    const fLng = sLngN + (xP * stepP);
-    
-    L.rectangle([[fLat, fLng], [fLat - stepP, fLng + stepP]], {
-        color: '#e74c3c', weight: 1, fillOpacity: 0.4, fillColor: '#e74c3c', interactive: false
-    }).addTo(selectionLayer);
+    // 5. DIBUJO GEOMÉTRICO CONDICIONAL
+    if (z >= 19) {
+        // --- MODO PICO: REJILLA TÉCNICA 8x8 ---
+        const stepN = PARAMS.RES_NANO;
+        const stepP = PARAMS.RES_PICO;
+        const xN = Math.floor(((lng - ORIGIN.lng) / stepN) + 0.00001);
+        const yN = Math.floor(((ORIGIN.lat - lat) / stepN) + 0.00001);
+        const sLngN = ORIGIN.lng + (xN * stepN);
+        const sLatN = ORIGIN.lat - (yN * stepN);
+        
+        L.rectangle([[sLatN, sLngN], [sLatN - stepN, sLngN + stepN]], {
+            color: '#2c3e50', weight: 2, fill: false, interactive: false
+        }).addTo(selectionLayer);
+        
+        for (let i = 0; i <= 8; i++) {
+            L.polyline([[sLatN, sLngN + (i * stepP)], [sLatN - stepN, sLngN + (i * stepP)]], 
+                { color: '#e74c3c', weight: 1, opacity: 0.5, interactive: false }).addTo(selectionLayer);
+            L.polyline([[sLatN - (i * stepP), sLngN], [sLatN - (i * stepP), sLngN + stepN]], 
+                { color: '#e74c3c', weight: 1, opacity: 0.5, interactive: false }).addTo(selectionLayer);
+        }
+        
+        const xP = Math.floor(((lng - sLngN) / stepP) + 0.00001);
+        const yP = Math.floor(((sLatN - lat) / stepP) + 0.00001);
+        const fLat = sLatN - (yP * stepP);
+        const fLng = sLngN + (xP * stepP);
+        
+        L.rectangle([[fLat, fLng], [fLat - stepP, fLng + stepP]], {
+            color: '#e74c3c', weight: 1, fillOpacity: 0.4, fillColor: '#e74c3c', interactive: false
+        }).addTo(selectionLayer);
+    } else {
+        // --- MODO EXPLORACIÓN: CUADRO SIMPLE (Basado en resolución actual) ---
+        const step = (z >= 16.5) ? PARAMS.RES_NANO : PARAMS.RES_MICRO;
+        const xS = Math.floor(((lng - ORIGIN.lng) / step) + 0.00001);
+        const yS = Math.floor(((ORIGIN.lat - lat) / step) + 0.00001);
+        const snapLng = ORIGIN.lng + (xS * step);
+        const snapLat = ORIGIN.lat - (yS * step);
 
-    // 6. POPUP
+        L.rectangle([[snapLat, snapLng], [snapLat - step, snapLng + step]], {
+            color: '#e74c3c', weight: 2, fillOpacity: 0.3, fillColor: '#e74c3c', interactive: false
+        }).addTo(selectionLayer);
+    }
+
+    // 6. POPUP INFORMATIVO
     const urlMaps = "https://www.google.com/maps?q=" + lat + "," + lng;
 
     L.marker([lat, lng], { 
@@ -295,7 +306,7 @@ document.getElementById('search-btn').addEventListener('click', function() {
     if (code8.length === 8) {
         try {
             const coords = decodeToLatLng(code8);
-            mymap.setView(coords, 20);
+            (coords, 20);
             setTimeout(() => seleccionar(coords[0], coords[1]), 500);
         } catch(e) { alert("Formato incorrecto"); }
     } else { alert("Use 8 o 10 caracteres"); }
@@ -396,6 +407,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
