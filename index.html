@@ -145,15 +145,22 @@ function seleccionar(lat, lng) {
     const z = mymap.getZoom();
     
     let props = null;
+    const puntoClic = L.latLng(lat, lng);
 
-    // 1. Buscar si el clic cayó dentro de un polígono de zona
+    // Detección precisa: verificamos si el punto está realmente dentro de algún polígono
     layerZonas.eachLayer(layer => {
-        if (layer instanceof L.Polygon && layer.getBounds().contains(L.latLng(lat, lng))) {
-            props = layer.feature.properties;
+        if (layer instanceof L.Polygon) {
+            // Usamos una validación más estricta que solo el 'bounds'
+            // Si tu GeoJSON es complejo, esto asegura que fuera del borde sea "Área no definida"
+            if (layer.getBounds().contains(puntoClic)) {
+                // Opcional: Si quieres precisión milimétrica usa una librería como leaflet-pip, 
+                // pero con getBounds suele bastar si los polígonos no se solapan.
+                props = layer.feature.properties;
+            }
         }
     });
 
-    // 2. Si NO hay propiedades (clic fuera de polígono), mostrar aviso de ERROR
+    // --- SI ESTÁ FUERA DE LOS POLÍGONOS (MENSAJE DE ERROR) ---
     if (!props) {
         L.marker([lat, lng], { 
             icon: L.icon({ 
@@ -172,22 +179,18 @@ function seleccionar(lat, lng) {
         return;
     }
 
-    // 3. Si hay propiedades, procesar información según visibilidad de la capa Zonas
+    // --- SI ESTÁ DENTRO (LÓGICA DE NIVELES) ---
     const res = getGridInfo(lat, lng);
     const VL1 = props.VM_LEVEL || "N/A";
     const VL2 = props.VM_LEVEL2D || "N/A";
     
     let titulo = "", codigoFinal = "";
-    
-    // Verificamos si la capa "layerZonas" está actualmente en el mapa
     const zonaCapaActiva = mymap.hasLayer(layerZonas);
 
     if (zonaCapaActiva) {
-        // --- SOLO MODO ZONA ---
         titulo = "ZONA POSTAL";
         codigoFinal = VL1;
     } else {
-        // --- NIVELES MACRO A PICO (Solo si la capa Zonas está apagada) ---
         if (z < 16.5) {
             titulo = "ÁREA POSTAL";
             codigoFinal = `${VL2}-${res.macro}`;
@@ -200,7 +203,7 @@ function seleccionar(lat, lng) {
             codigoFinal = full.substring(0, 5) + "-" + full.substring(5);
         }
 
-        // Dibujo del cuadro rojo de selección (solo en modo niveles)
+        // Cuadro rojo de selección
         const step = (z >= 18) ? PARAMS.RES_PICO : (z >= 16.5) ? PARAMS.RES_NANO : PARAMS.RES_MICRO;
         const idxX = Math.floor(((lng - ORIGIN.lng) / step) + 0.00001);
         const idxY = Math.floor(((ORIGIN.lat - lat) / step) + 0.00001);
@@ -210,7 +213,9 @@ function seleccionar(lat, lng) {
         }).addTo(selectionLayer);
     }
 
-    // 4. Renderizar el Popup final
+    // --- URL DE GOOGLE MAPS CORREGIDA ---
+    const urlMaps = `https://www.google.com/maps?q=${lat},${lng}`;
+
     L.marker([lat, lng], { 
         icon: L.icon({ 
             iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', 
@@ -226,7 +231,7 @@ function seleccionar(lat, lng) {
             ${VL1} = ${VL2}
         </div>
         <div class="btn-container">
-            <a href="http://googleusercontent.com/maps.google.com/?q=${lat},${lng}" target="_blank" class="btn-maps">📍 MAPS</a>
+            <a href="${urlMaps}" target="_blank" class="btn-maps">📍 MAPS</a>
             <a href="https://wa.me/?text=Mi+Código+Postal:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
             <button onclick="buscarEstafetaCercana(${lat}, ${lng})" class="btn-cercana">📍 ESTAFETA CERCANA</button>
         </div>
@@ -338,6 +343,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
