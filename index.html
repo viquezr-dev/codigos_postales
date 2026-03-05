@@ -203,32 +203,6 @@ function seleccionar(lat, lng, forcedProps = null) {
      `, { offset: L.point(0, -25), minWidth: 150 }).openPopup();
 }
 
-    // Dibujo de cuadro (se mantiene igual que tu original)
-    if (z >= 13) {
-        const step = (z >= 18) ? PARAMS.RES_PICO : (z >= 16.5) ? PARAMS.RES_NANO : PARAMS.RES_MICRO;
-        const idxX = Math.floor(((lng - ORIGIN.lng) / step) + 0.00001);
-        const idxY = Math.floor(((ORIGIN.lat - lat) / step) + 0.00001);
-        const snapLng = ORIGIN.lng + (idxX * step), snapLat = ORIGIN.lat - (idxY * step);
-        L.rectangle([[snapLat, snapLng], [snapLat - step, snapLng + step]], { color: '#e74c3c', weight: 2, fillOpacity: 0.3, interactive: false }).addTo(selectionLayer);
-    }
-
-    L.marker([lat, lng], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [18, 28], iconAnchor: [9, 28] }) })
-     .addTo(selectionLayer)
-     .bindPopup(`
-        <span class="popup-header">${titulo}</span>
-        <div class="codigo-final">${codigoFinal}</div>
-        <div class="vm-info">
-            <b>VM_LEVEL:</b> ${vLevel}<br>
-            <b>VM_LEVEL2D:</b> ${vLevel2D}
-        </div>
-        <div class="btn-container">
-            <a href="http://maps.google.com/?q=${lat},${lng}" target="_blank" class="btn-maps">📍 MAPS</a>
-            <a href="https://wa.me/?text=Mi+Código+Postal:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
-            <button onclick="buscarEstafetaCercana(${lat}, ${lng})" class="btn-cercana">📍 ESTAFETA CERCANA</button>
-        </div>
-     `, { offset: L.point(0, -25) }).openPopup();
-}
-
 // El buscador ahora utiliza la nueva propiedad VM_LEVEL2D para encontrar la zona
 function decodeToLatLng(code8) {
     // code8 ej: B8HJFRH4 (8 caracteres)
