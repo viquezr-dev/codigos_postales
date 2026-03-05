@@ -241,7 +241,7 @@ function seleccionar(lat, lng, props = null) {
     const offsetConfig = L.point(100, -50); // Mueve el popup 100px a la derecha y 50px arriba
     const VL1 = props.VM_LEVEL || "N/A";
     const urlMaps = "https://www.google.com/maps?q=" + lat + "," + lng;
-
+    const qrUrl = "https://chart.googleapis.com/chart?chs=150x150&cht=qr&chl=" + encodeURIComponent(codigoFinal);
     L.marker([lat, lng], { 
         icon: L.icon({ 
             iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', 
@@ -257,6 +257,10 @@ function seleccionar(lat, lng, props = null) {
             <a href="` + urlMaps + `" target="_blank" class="btn-maps">📍 MAPS</a>
             <a href="https://wa.me/?text=Mi+Dirección:+` + codigoFinal + `" target="_blank" class="btn-ws">💬 WS</a>
             <button onclick="buscarEstafetaCercana(` + lat + `,` + lng + `)" class="btn-cercana">📍 ESTAFETA CERCANA</button>
+        </div>
+        <div style="text-align:center; margin-top:10px;">
+            <img src="${qrUrl}" alt="Código QR Postal" style="width:100px; height:100px; border:2px solid #fff; border-radius:5px;">
+            <p style="font-size:9px; color:#555; margin-top:2px;">Escanea este QR en la estafeta</p>
         </div>
     `, { 
         offset: offsetConfig, // AQUÍ SE APLICA EL DESPLAZAMIENTO
@@ -429,4 +433,5 @@ render();
 </script>
 </body>
 </html>
+
 
