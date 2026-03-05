@@ -263,7 +263,8 @@ function seleccionar(lat, lng, props = null) {
     // Contenido del QR: Datos limpios para lectura rápida en móvil
     const contenidoQR = `CP: ${codigoFinal} | Estafeta: ${infoExtra.estafeta} | Prov: ${infoExtra.provincia}`;
     const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=" + encodeURIComponent(contenidoQR);
-
+    console.log("URL generada para el QR:", qrUrl); // ESTO TE MOSTRARÁ LA URL EN TU CONSOLA (F12)
+    
     L.marker([lat, lng], { 
         icon: L.icon({ 
             iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', 
@@ -461,6 +462,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
