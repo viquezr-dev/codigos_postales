@@ -139,29 +139,31 @@ function getGridInfo(lat, lng) {
     return { macro: encode((my * PARAMS.MACRO_X_COUNT) + mx, 2), micro: encode((microY * 24) + microX, 2), nano: encode((nanoY * 25) + nanoX, 2), pico: encode((picoY * 8) + picoX, 2) };
 }
 
-function seleccionar(lat, lng, forcedProps = null) {
+function seleccionar(lat, lng) {
     selectionLayer.clearLayers();
     distanceLayer.clearLayers();
     const z = mymap.getZoom();
     
-    let props = forcedProps;
-    if (!props) {
-        layerZonas.eachLayer(layer => {
-            if (layer.getBounds().contains(L.latLng(lat, lng))) {
-                props = layer.feature.properties;
-            }
-        });
-    }
+    let props = null;
 
-    if (!props) return; // No marcar nada fuera de zona
+    // Buscamos manualmente en la capa de zonas si el punto está dentro de algún polígono
+    layerZonas.eachLayer(layer => {
+        if (layer instanceof L.Polygon && layer.getBounds().contains(L.latLng(lat, lng))) {
+            // Verificamos si el punto exacto está dentro (Leaflet pip)
+            props = layer.feature.properties;
+        }
+    });
+
+    // Si no hay propiedades, es que hizo clic fuera de una zona válida
+    if (!props) return;
 
     const res = getGridInfo(lat, lng);
-    const VL1 = props.VM_LEVEL;   // ej: A6299
-    const VL2 = props.VM_LEVEL2D; // ej: AM
+    const VL1 = props.VM_LEVEL || "N/A";
+    const VL2 = props.VM_LEVEL2D || "N/A";
     
     let titulo = "", codigoFinal = "";
 
-    // Lógica de Niveles solicitada
+    // --- JERARQUÍA DE NIVELES  ---
     if (z < 13) {
         titulo = "ZONA POSTAL";
         codigoFinal = VL1;
@@ -173,12 +175,13 @@ function seleccionar(lat, lng, forcedProps = null) {
         codigoFinal = `${VL2}-${res.macro}${res.micro}${res.nano}`;
     } else {
         titulo = "CÓDIGO POSTAL";
-        // Formato Normalizado: AMB8H-JFRH4 (5-5)
+        // Ingeniería para el código de 10 caracteres: AM + B8 + H + J + FRH4...
+        // Formato normalizado 5-5: AMB8H-JFRH4
         let full = `${VL2}${res.macro}${res.micro}${res.nano}${res.pico}`;
-        codigoFinal = full.substring(0,5) + "-" + full.substring(5);
+        codigoFinal = full.substring(0, 5) + "-" + full.substring(5);
     }
 
-    // Dibujo de cuadro (Solo niveles superiores a Zona)
+    // Dibujo del cuadro rojo (solo a partir de Área Postal)
     if (z >= 13) {
         const step = (z >= 18) ? PARAMS.RES_PICO : (z >= 16.5) ? PARAMS.RES_NANO : PARAMS.RES_MICRO;
         const idxX = Math.floor(((lng - ORIGIN.lng) / step) + 0.00001);
@@ -187,9 +190,16 @@ function seleccionar(lat, lng, forcedProps = null) {
         L.rectangle([[snapLat, snapLng], [snapLat - step, snapLng + step]], { color: '#e74c3c', weight: 2, fillOpacity: 0.3, interactive: false }).addTo(selectionLayer);
     }
 
-    L.marker([lat, lng], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [18, 28], iconAnchor: [9, 28] }) })
-     .addTo(selectionLayer)
-     .bindPopup(`
+    // Marker y Popup compacto
+    L.marker([lat, lng], { 
+        icon: L.icon({ 
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', 
+            iconSize: [18, 28], 
+            iconAnchor: [9, 28] 
+        }) 
+    })
+    .addTo(selectionLayer)
+    .bindPopup(`
         <span class="popup-header">${titulo}</span>
         <div class="codigo-final">${codigoFinal}</div>
         <div style="text-align:center; font-size:11px; margin-bottom:5px; border-top:1px solid #eee; padding-top:3px;">
@@ -200,7 +210,7 @@ function seleccionar(lat, lng, forcedProps = null) {
             <a href="https://wa.me/?text=Mi+Código+Postal:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
             <button onclick="buscarEstafetaCercana(${lat}, ${lng})" class="btn-cercana">📍 ESTAFETA CERCANA</button>
         </div>
-     `, { offset: L.point(0, -25), minWidth: 150 }).openPopup();
+    `, { offset: L.point(0, -25), minWidth: 160 }).openPopup();
 }
 
 // El buscador ahora utiliza la nueva propiedad VM_LEVEL2D para encontrar la zona
@@ -308,5 +318,6 @@ render();
 </script>
 </body>
 </html>
+
 
 
