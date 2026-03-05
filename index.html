@@ -250,19 +250,20 @@ function seleccionar(lat, lng, props = null) {
     })
     .addTo(selectionLayer)
     .bindPopup(`
-        <span class="popup-header">` + titulo + `</span>
-        <div class="codigo-final">` + codigoFinal + `</div>
-        <div style="text-align:center; font-size:11px; margin-bottom:5px; border-top:1px solid #eee; padding-top:3px;">` + VL1 + ` = ` + VL2 + `</div>
+        <span class="popup-header">${titulo}</span>
+        <div class="codigo-final">${codigoFinal}</div>
+        <div style="text-align:center; font-size:11px; margin-bottom:5px; border-top:1px solid #eee; padding-top:3px;">${VL1} = ${VL2}</div>
         <div class="btn-container">
-            <a href="` + urlMaps + `" target="_blank" class="btn-maps">📍 MAPS</a>
-            <a href="https://wa.me/?text=Mi+Dirección:+` + codigoFinal + `" target="_blank" class="btn-ws">💬 WS</a>
-            <button onclick="buscarEstafetaCercana(` + lat + `,` + lng + `)" class="btn-cercana">📍 ESTAFETA CERCANA</button>
+            <a href="${urlMaps}" target="_blank" class="btn-maps">📍 MAPS</a>
+            <a href="https://wa.me/?text=Mi+Dirección:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
+            <button onclick="buscarEstafetaCercana(${lat},${lng})" class="btn-cercana">📍 ESTAFETA CERCANA</button>
+        </div>
         <div style="text-align:center; margin-top:10px;">
-            <img src="${qrUrl}" alt="Código QR Postal" style="width:100px; height:100px; border:2px solid #fff; border-radius:5px;">
+            <img src="${qrUrl}" alt="Código QR Postal" style="width:100px; height:100px; border:2px solid #ddd; border-radius:5px;">
             <p style="font-size:9px; color:#555; margin-top:2px;">Escanea este QR en la estafeta</p>
         </div>
     `, { 
-        offset: offsetConfig, // AQUÍ SE APLICA EL DESPLAZAMIENTO
+        offset: offsetConfig,
         minWidth: 160,
         closeButton: true,
         autoPan: true 
@@ -432,6 +433,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
