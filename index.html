@@ -58,12 +58,15 @@
         }
 
         .qr-code-estilo {
-            width: 120px !important; 
-            height: 120px !important;
-            border: 2px solid #ddd;
-            border-radius: 5px;
-            image-rendering: pixelated; /* ESTO ES LA CLAVE PARA QR NÍTIDOS */
-            image-rendering: -moz-crisp-edges;
+            width: 150px !important; 
+            height: 150px !important;
+            background-color: white !important; 
+            border: 5px solid white !important; 
+            border-radius: 0px !important;      
+            image-rendering: pixelated;         
+            image-rendering: crisp-edges;
+            display: block;
+            margin: 0 auto;
         }
     </style>
 </head>
@@ -270,7 +273,7 @@ function seleccionar(lat, lng, props = null) {
     
     // Contenido del QR: Datos limpios para lectura rápida en móvil
     const contenidoQR = `CP:${codigoFinal};EST:${infoExtra.estafeta};PROV:${infoExtra.provincia}`;
-    const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=" + encodeURIComponent(contenidoQR);
+    const qrUrl = "https://chart.googleapis.com/chart?chs=200x200&cht=qr&chl=" + encodeURIComponent(contenidoQR) + "&chld=Q|1";
     console.log("URL generada para el QR:", qrUrl); 
     
     L.marker([lat, lng], { 
@@ -473,6 +476,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
