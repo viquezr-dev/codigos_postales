@@ -223,7 +223,7 @@ function seleccionar(lat, lng, props = null) {
         }
     }
 
-    // 5. DIBUJO GEOMÉTRICO CONDICIONAL
+    // 5. DIBUJO GEOMÉTRICO CONDICIONAL (Escalable por nivel de Zoom)
     if (z >= 19) {
         // --- MODO PICO: REJILLA TÉCNICA 8x8 ---
         const stepN = PARAMS.RES_NANO;
@@ -252,16 +252,34 @@ function seleccionar(lat, lng, props = null) {
         L.rectangle([[fLat, fLng], [fLat - stepP, fLng + stepP]], {
             color: '#e74c3c', weight: 1, fillOpacity: 0.4, fillColor: '#e74c3c', interactive: false
         }).addTo(selectionLayer);
-    } else {
-        // --- MODO EXPLORACIÓN: CUADRO SIMPLE (Basado en resolución actual) ---
-        const step = (z >= 16.5) ? PARAMS.RES_NANO : PARAMS.RES_MICRO;
-        const xS = Math.floor(((lng - ORIGIN.lng) / step) + 0.00001);
-        const yS = Math.floor(((ORIGIN.lat - lat) / step) + 0.00001);
-        const snapLng = ORIGIN.lng + (xS * step);
-        const snapLat = ORIGIN.lat - (yS * step);
 
-        L.rectangle([[snapLat, snapLng], [snapLat - step, snapLng + step]], {
-            color: '#e74c3c', weight: 2, fillOpacity: 0.3, fillColor: '#e74c3c', interactive: false
+    } else {
+        // --- MODO ESCALABLE: Macro, Micro o Nano según el Zoom ---
+        let currentStep;
+        let colorCuadro = '#e74c3c'; // Rojo por defecto
+
+        if (z < 14.5) {
+            currentStep = PARAMS.RES_MACRO;
+            colorCuadro = '#3498db'; // Azul para Macro
+        } else if (z < 17) {
+            currentStep = PARAMS.RES_MICRO;
+            colorCuadro = '#f1c40f'; // Amarillo para Micro
+        } else {
+            currentStep = PARAMS.RES_NANO;
+            colorCuadro = '#e67e22'; // Naranja para Nano
+        }
+
+        const xS = Math.floor(((lng - ORIGIN.lng) / currentStep) + 0.00001);
+        const yS = Math.floor(((ORIGIN.lat - lat) / currentStep) + 0.00001);
+        const snapLng = ORIGIN.lng + (xS * currentStep);
+        const snapLat = ORIGIN.lat - (yS * currentStep);
+
+        L.rectangle([[snapLat, snapLng], [snapLat - currentStep, snapLng + currentStep]], {
+            color: colorCuadro, 
+            weight: 3, 
+            fillOpacity: 0.2, 
+            fillColor: colorCuadro, 
+            interactive: false
         }).addTo(selectionLayer);
     }
 
@@ -407,6 +425,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
