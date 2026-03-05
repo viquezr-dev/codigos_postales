@@ -209,58 +209,50 @@ function seleccionar(lat, lng, props = null) {
             let full = `${VL2}${res.macro}${res.micro}${res.nano}${res.pico}`;
             codigoFinal = full.substring(0, 5) + "-" + full.substring(5);
         }
-    // --- DIBUJO DE PRECISIÓN DINÁMICA ---
-    // --- NUEVO DIBUJO DE REJILLA QUIRÚRGICA (Nivel Pico) ---
-        const stepNano = PARAMS.RES_NANO;
-        const stepPico = PARAMS.RES_PICO;
-
-        // Calculamos el cuadro Nano (26m) que contiene el punto
-        const idxNanoX = Math.floor(((lng - ORIGIN.lng) / stepNano) + 0.00001);
-        const idxNanoY = Math.floor(((ORIGIN.lat - lat) / stepNano) + 0.00001);
-        const snapNanoLng = ORIGIN.lng + (idxNanoX * stepNano);
-        const snapNanoLat = ORIGIN.lat - (idxNanoY * stepNano);
-
-        // Activamos la rejilla Pico si el zoom es suficiente (>= 17)
-        if (z >= 17) {
-            // 1. Fondo del área Nano para resaltar donde estamos
-            L.rectangle([[snapNanoLat, snapNanoLng], [snapNanoLat - stepNano, snapNanoLng + stepNano]], {
-                color: '#2c3e50', weight: 2, fillOpacity: 0.05, interactive: false
-            }).addTo(selectionLayer);
-
-            // 2. Dibujamos la rejilla interna 8x8 (Líneas de 3.3m)
-            for (let i = 0; i <= 8; i++) {
-                // Líneas Verticales internas
-                L.polyline([
-                    [snapNanoLat, snapNanoLng + (i * stepPico)], 
-                    [snapNanoLat - stepNano, snapNanoLng + (i * stepPico)]
-                ], { color: '#e74c3c', weight: 0.8, opacity: 0.4, interactive: false }).addTo(selectionLayer);
-                
-                // Líneas Horizontales internas
-                L.polyline([
-                    [snapNanoLat - (i * stepPico), snapNanoLng], 
-                    [snapNanoLat - (i * stepPico), snapNanoLng + stepNano]
-                ], { color: '#e74c3c', weight: 0.8, opacity: 0.4, interactive: false }).addTo(selectionLayer);
-            }
-
-            // 3. Resaltamos el cuadro PICO específico del clic
-            const idxPicoX = Math.floor(((lng - snapNanoLng) / stepPico) + 0.00001);
-            const idxPicoY = Math.floor(((snapNanoLat - lat) / stepPico) + 0.00001);
-            const finalLat = snapNanoLat - (idxPicoY * stepPico);
-            const finalLng = snapNanoLng + (idxPicoX * stepPico);
-
-            L.rectangle([[finalLat, finalLng], [finalLat - stepPico, finalLng + stepPico]], {
-                color: '#e74c3c', weight: 2, fillOpacity: 0.5, fillColor: '#e74c3c', interactive: false
-            }).addTo(selectionLayer);
-
-        } else {
-            // Si el zoom es bajo, solo mostramos el cuadro de la resolución actual
-            const step = (z >= 16.5) ? PARAMS.RES_NANO : PARAMS.RES_MICRO;
-            const snapLng = ORIGIN.lng + (Math.floor(((lng - ORIGIN.lng) / step) + 0.00001) * step);
-            const snapLat = ORIGIN.lat - (Math.floor(((ORIGIN.lat - lat) / step) + 0.00001) * step);
-            L.rectangle([[snapLat, snapLng], [snapLat - step, snapLng + step]], { 
-                color: '#e74c3c', weight: 2, fillOpacity: 0.3, interactive: false 
-            }).addTo(selectionLayer);
-        }
+    // --- DIBUJO DE REJILLA TÉCNICA (NIVEL PICO 8x8) ---
+    const stepN = PARAMS.RES_NANO;
+    const stepP = PARAMS.RES_PICO;
+    
+    // 1. Encontrar la esquina de la celda Nano (26m)
+    const xN = Math.floor(((lng - ORIGIN.lng) / stepN) + 0.00001);
+    const yN = Math.floor(((ORIGIN.lat - lat) / stepN) + 0.00001);
+    const sLngN = ORIGIN.lng + (xN * stepN);
+    const sLatN = ORIGIN.lat - (yN * stepN);
+    
+    // 2. Dibujar el borde de la celda Nano (Contenedor)
+    L.rectangle([[sLatN, sLngN], [sLatN - stepN, sLngN + stepN]], {
+        color: '#2c3e50', weight: 2, fill: false, interactive: false
+    }).addTo(selectionLayer);
+    
+    // 3. Forzar el dibujo de las 8x8 líneas Pico (3.3m)
+    for (let i = 0; i <= 8; i++) {
+        // Verticales
+        L.polyline([
+            [sLatN, sLngN + (i * stepP)], 
+            [sLatN - stepN, sLngN + (i * stepP)]
+        ], { color: '#e74c3c', weight: 1, opacity: 0.6 }).addTo(selectionLayer);
+        
+        // Horizontales
+        L.polyline([
+            [sLatN - (i * stepP), sLngN], 
+            [sLatN - (i * stepP), sLngN + stepN]
+        ], { color: '#e74c3c', weight: 1, opacity: 0.6 }).addTo(selectionLayer);
+    }
+    
+    // 4. Pintar el cuadro específico de 3m donde cayó el clic
+    const xP = Math.floor(((lng - sLngN) / stepP) + 0.00001);
+    const yP = Math.floor(((sLatN - lat) / stepP) + 0.00001);
+    const finalLat = sLatN - (yP * stepP);
+    const finalLng = sLngN + (xP * stepP);
+    
+    L.rectangle([[finalLat, finalLng], [finalLat - stepP, finalLng + stepP]], {
+        color: '#e74c3c', weight: 1, fillOpacity: 0.5, fillColor: '#e74c3c'
+    }).addTo(selectionLayer);
+    
+    // 5. AUTO-ZOOM: Si el usuario está lejos, lo acercamos para ver la rejilla
+    if (mymap.getZoom() < 19) {
+        mymap.setView([lat, lng], 20);
+    }
 
     const urlMaps = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
 
@@ -302,8 +294,8 @@ document.getElementById('search-btn').addEventListener('click', function() {
     if (code8.length === 8) {
         try {
             const coords = decodeToLatLng(code8);
-            mymap.setView(coords, 19);
-            setTimeout(() => seleccionar(coords[0], coords[1]), 400);
+            mymap.setView(coords, 20);
+            setTimeout(() => seleccionar(coords[0], coords[1]), 500);
         } catch(e) { alert("Formato incorrecto"); }
     } else { alert("Use 8 o 10 caracteres"); }
 });
@@ -403,6 +395,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
