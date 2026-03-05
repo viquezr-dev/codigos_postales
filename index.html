@@ -91,10 +91,9 @@ const layerZonas = L.geoJSON(null, {
         l.on({
             mouseover: (e) => { if(mymap.hasLayer(layerZonas)) e.target.setStyle({ weight: 3, color: '#f1c40f', fillOpacity: 0.3 }); },
             mouseout: (e) => { layerZonas.resetStyle(e.target); },
-            click: (e) => { 
-                // Al hacer clic en el polígono, siempre enviamos las propiedades
-                seleccionar(e.latlng.lat, e.latlng.lng, f.properties); 
-                L.DomEvent.stopPropagation(e); 
+            click: (e) => {
+                // Dejamos que el evento del mapa (mymap.on('click')) maneje la lógica
+                // para que la validación sea uniforme siempre.
             }
         });
     }
@@ -204,7 +203,7 @@ function seleccionar(lat, lng, props = null) {
     }
 
     // Enlace de Google Maps universal
-    const urlMaps = `https://www.google.com/maps?q=${lat},${lng}`;
+    const urlMaps = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
 
     L.marker([lat, lng], { 
         icon: L.icon({ 
@@ -318,16 +317,51 @@ mymap.on('locationfound', (e) => {
 });
 
 mymap.on('click', (e) => {
-    // Intentamos buscar la zona manualmente incluso si la capa está oculta
     let zonaEncontrada = null;
+    const punto = e.latlng;
+
     layerZonas.eachLayer(layer => {
-        if (layer.getBounds().contains(e.latlng)) {
-            zonaEncontrada = layer.feature.properties;
+        // 1. Verificación rápida por recuadro
+        if (layer.getBounds().contains(punto)) {
+            // 2. Verificación exacta por geometría (soporta MultiPolygons de estafetas.geojson)
+            const geojson = layer.toGeoJSON();
+            if (isPointInGeoJSON(punto, geojson)) {
+                zonaEncontrada = layer.feature.properties;
+            }
         }
     });
-    // Si zonaEncontrada sigue siendo null, entonces sí es ÁREA NO DEFINIDA
-    seleccionar(e.latlng.lat, e.latlng.lng, zonaEncontrada); 
+
+    // Si después de revisar todos los polígonos no hubo match real -> ERROR
+    seleccionar(punto.lat, punto.lng, zonaEncontrada);
 });
+
+// FUNCIÓN MATEMÁTICA DE PRECISIÓN PARA MULTIPOLYGONS
+function isPointInGeoJSON(latlng, feature) {
+    const pt = [latlng.lng, latlng.lat]; // GeoJSON usa [lng, lat]
+    const coords = feature.geometry.coordinates;
+    const type = feature.geometry.type;
+
+    if (type === "Polygon") {
+        return pointInPolygon(pt, coords);
+    } else if (type === "MultiPolygon") {
+        return coords.some(poly => pointInPolygon(pt, poly));
+    }
+    return false;
+}
+
+function pointInPolygon(point, vs) {
+    // vs[0] es el anillo exterior del polígono
+    const polygon = vs[0];
+    let x = point[0], y = point[1];
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        let xi = polygon[i][0], yi = polygon[i][1];
+        let xj = polygon[j][0], yj = polygon[j][1];
+        let intersect = ((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+    }
+    return inside;
+}
     
 mymap.on('moveend', render);
 
@@ -344,6 +378,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
