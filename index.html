@@ -139,51 +139,46 @@ function getGridInfo(lat, lng) {
     return { macro: encode((my * PARAMS.MACRO_X_COUNT) + mx, 2), micro: encode((microY * 24) + microX, 2), nano: encode((nanoY * 25) + nanoX, 2), pico: encode((picoY * 8) + picoX, 2) };
 }
 
-function seleccionar(lat, lng, forcedZonaID = null) {
+function seleccionar(lat, lng, properties = null) {
     selectionLayer.clearLayers();
     distanceLayer.clearLayers();
     const z = mymap.getZoom();
     
-    let zonaID = forcedZonaID;
-    if (!zonaID) {
+    let infoVarios = properties;
+    
+    // Si no vienen propiedades (clic manual), las buscamos en la capa
+    if (!infoVarios) {
         layerZonas.eachLayer(layer => {
             if (layer instanceof L.Polygon && layer.getBounds().contains(L.latLng(lat, lng))) {
-                // MODIFICACIÓN: Se usa VM_LEVEL2D
-                zonaID = layer.feature.properties.VM_LEVEL2D;
+                infoVarios = layer.feature.properties;
             }
         });
     }
 
-    if (!zonaID) {
+    if (!infoVarios) {
         L.marker([lat, lng], { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', iconSize: [15, 24] }) })
-        .addTo(selectionLayer)
-        .bindPopup(`<span class="popup-header">⚠️ NO DEFINIDA</span>`).openPopup();
+        .addTo(selectionLayer).bindPopup("ÁREA NO DEFINIDA").openPopup();
         return;
     }
 
     const res = getGridInfo(lat, lng);
-    let titulo = "", codigoFinal = "", drawBox = false;
+    const vLevel = infoVarios.VM_LEVEL || "N/A";
+    const vLevel2D = infoVarios.VM_LEVEL2D || "N/A";
+    
+    let titulo = "", codigoFinal = "";
 
-    // Jerarquía y asignación de códigos
-    if (z < 13) {
-        titulo = "ZONA POSTAL";
-        codigoFinal = zonaID;
-    } else {
-        drawBox = true; 
-        if (z < 16.5) {
-            titulo = "ÁREA MACRO/MICRO";
-            codigoFinal = `${zonaID}-${res.macro}${res.micro}`;
-        } else if (z < 18) {
-            titulo = "CÓDIGO NANO (26m)";
-            codigoFinal = `${zonaID}-${res.macro}${res.micro}${res.nano}`;
-        } else {
-            titulo = "PUNTO EXACTO (3m)";
-            let zonaLimpia = zonaID.toString().charAt(0) + zonaID.toString().substring(3);
-            codigoFinal = `${zonaLimpia}${res.macro}-${res.micro}${res.nano}${res.pico}`;
-        }
+    // Lógica de títulos según Zoom
+    if (z < 13) { titulo = "ZONA POSTAL"; codigoFinal = vLevel; }
+    else if (z < 16.5) { titulo = "ÁREA MACRO/MICRO"; codigoFinal = `${vLevel}-${res.macro}${res.micro}`; }
+    else if (z < 18) { titulo = "CÓDIGO NANO (26m)"; codigoFinal = `${vLevel}-${res.macro}${res.micro}${res.nano}`; }
+    else {
+        titulo = "PUNTO EXACTO (3m)";
+        let zonaLimpia = vLevel.toString().charAt(0) + vLevel.toString().substring(3);
+        codigoFinal = `${zonaLimpia}${res.macro}-${res.micro}${res.nano}${res.pico}`;
     }
 
-    if (drawBox) {
+    // Dibujo de cuadro (se mantiene igual que tu original)
+    if (z >= 13) {
         const step = (z >= 18) ? PARAMS.RES_PICO : (z >= 16.5) ? PARAMS.RES_NANO : PARAMS.RES_MICRO;
         const idxX = Math.floor(((lng - ORIGIN.lng) / step) + 0.00001);
         const idxY = Math.floor(((ORIGIN.lat - lat) / step) + 0.00001);
@@ -196,10 +191,13 @@ function seleccionar(lat, lng, forcedZonaID = null) {
      .bindPopup(`
         <span class="popup-header">${titulo}</span>
         <div class="codigo-final">${codigoFinal}</div>
-        <span class="vm-info">VM_LEVEL = ${zonaID}</span>
+        <div class="vm-info">
+            <b>VM_LEVEL:</b> ${vLevel}<br>
+            <b>VM_LEVEL2D:</b> ${vLevel2D}
+        </div>
         <div class="btn-container">
-            <a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" class="btn-maps">📍 MAPS</a>
-            <a href="https://wa.me/?text=Mi+Dirección+Postal:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
+            <a href="http://maps.google.com/?q=${lat},${lng}" target="_blank" class="btn-maps">📍 MAPS</a>
+            <a href="https://wa.me/?text=Mi+Código+Postal:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
             <button onclick="buscarEstafetaCercana(${lat}, ${lng})" class="btn-cercana">📍 ESTAFETA CERCANA</button>
         </div>
      `, { offset: L.point(0, -25) }).openPopup();
@@ -208,25 +206,29 @@ function seleccionar(lat, lng, forcedZonaID = null) {
 // El buscador ahora utiliza la nueva propiedad VM_LEVEL2D para encontrar la zona
 document.getElementById('search-btn').addEventListener('click', function() {
     let inputVal = document.getElementById('search-input').value.toUpperCase().replace(/-/g, ""); // Quita guiones
+    
+    // Si el usuario puso el prefijo (ej. AMB8JKK23X), nos quedamos con los últimos 8
+    // Si puso solo el código de 8, lo usamos directo.
+    let codigoBusqueda = inputVal.length > 8 ? inputVal.substring(inputVal.length - 8) : inputVal;
 
-    if (inputVal.length > 8) {
-        inputVal = inputVal.substring(2);
+    if (codigoBusqueda.length !== 8) {
+        alert("El código debe tener 8 caracteres (ej: B8J-F7FQ3H)");
+        return;
     }
 
     let found = false;
     layerZonas.eachLayer(l => {
-        // Comparamos el valor limpio con la propiedad VM_LEVEL2D de la capa estafetas.geojson
-        if (l.feature.properties.VM_LEVEL2D === inputVal) {
+        // Buscamos coincidencia exacta en el campo VM_LEVEL2D
+        if (l.feature.properties.VM_LEVEL2D === codigoBusqueda) {
             const center = l.getBounds().getCenter();
-            mymap.setView(center, 19); // Zoom alto para ver el punto exacto
-            seleccionar(center.lat, center.lng, l.feature.properties.VM_LEVEL2D);
+            mymap.setView(center, 19); 
+            // Pasamos los datos del feature para que el popup los use
+            seleccionar(center.lat, center.lng, l.feature.properties);
             found = true;
         }
     });
 
-    if (!found) {
-        alert("Código de ubicación no encontrado. Verifique el formato.");
-    }
+    if (!found) alert("No se encontró la ubicación: " + codigoBusqueda);
 });
 
 function buscarEstafetaCercana(lat, lng) {
@@ -297,3 +299,4 @@ render();
 </script>
 </body>
 </html>
+
