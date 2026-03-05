@@ -91,7 +91,11 @@ const layerZonas = L.geoJSON(null, {
         l.on({
             mouseover: (e) => { e.target.setStyle({ weight: 3, color: '#f1c40f', fillOpacity: 0.3 }); },
             mouseout: (e) => { layerZonas.resetStyle(e.target); },
-            click: (e) => { seleccionar(e.latlng.lat, e.latlng.lng, f.properties.VM_LEVEL2D); L.DomEvent.stopPropagation(e); }
+            click: (e) => { 
+                // Si toca el polígono, enviamos las propiedades directamente
+                seleccionar(e.latlng.lat, e.latlng.lng, f.properties); 
+                L.DomEvent.stopPropagation(e); 
+            }
         });
     }
 }).addTo(mymap);
@@ -139,32 +143,12 @@ function getGridInfo(lat, lng) {
     return { macro: encode((my * PARAMS.MACRO_X_COUNT) + mx, 2), micro: encode((microY * 24) + microX, 2), nano: encode((nanoY * 25) + nanoX, 2), pico: encode((picoY * 8) + picoX, 2) };
 }
 
-function seleccionar(lat, lng) {
+function seleccionar(lat, lng, props = null) {
     selectionLayer.clearLayers();
     distanceLayer.clearLayers();
     const z = mymap.getZoom();
-    const puntoClic = L.latLng(lat, lng);
-    
-    let props = null;
 
-    // BUSQUEDA COMPATIBLE CON MULTIPOLYGON (ESTRICTA)
-    layerZonas.eachLayer(layer => {
-        // leaflet-pip o similar sería ideal, pero usaremos contains de Leaflet 
-        // que internamente maneja MultiPolygons si la capa está bien cargada
-        if (layer.getBounds().contains(puntoClic)) {
-            // Verificación extra: Leaflet tiene un método interno para polígonos
-            // que es más preciso que getBounds
-            const layerLocal = layer;
-            if (typeof layerLocal.getBounds === 'function') {
-                // En muchos casos de Leaflet, esto detecta si el clic está sobre el polígono real
-                // Si tienes cargada la capa GeoJSON, layer.getLatLngs() nos da la geometría.
-                props = layer.feature.properties;
-            }
-        }
-    });
-
-    // --- SI ESTÁ FUERA (⚠️ ERROR) ---
-    // Si props sigue siendo null, significa que no tocó ningún polígono de tu archivo
+    // --- CASO A: CLIC FUERA DEL POLÍGONO (ERROR) ---
     if (!props) {
         L.marker([lat, lng], { 
             icon: L.icon({ 
@@ -183,7 +167,7 @@ function seleccionar(lat, lng) {
         return;
     }
 
-    // --- SI ESTÁ DENTRO (LÓGICA DE NIVELES) ---
+    // --- CASO B: CLIC DENTRO DEL POLÍGONO (INFO) ---
     const res = getGridInfo(lat, lng);
     const VL1 = props.VM_LEVEL || "N/A";
     const VL2 = props.VM_LEVEL2D || "N/A";
@@ -216,7 +200,7 @@ function seleccionar(lat, lng) {
         }).addTo(selectionLayer);
     }
 
-    // URL DE GOOGLE MAPS (Limpiada de caracteres extraños)
+    // URL Maps corregida
     const urlMaps = `https://www.google.com/maps?q=${lat},${lng}`;
 
     L.marker([lat, lng], { 
@@ -330,7 +314,10 @@ mymap.on('locationfound', (e) => {
     seleccionar(e.latlng.lat, e.latlng.lng); 
 });
 
-mymap.on('click', (e) => seleccionar(e.latlng.lat, e.latlng.lng));
+mymap.on('click', (e) => {
+    // Si llega aquí, es porque no tocó ningún polígono
+    seleccionar(e.latlng.lat, e.latlng.lng, null); 
+});
 mymap.on('moveend', render);
 
 L.control.layers(null, { 
@@ -346,6 +333,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
