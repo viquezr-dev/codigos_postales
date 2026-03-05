@@ -209,10 +209,52 @@ function seleccionar(lat, lng, props = null) {
             let full = `${VL2}${res.macro}${res.micro}${res.nano}${res.pico}`;
             codigoFinal = full.substring(0, 5) + "-" + full.substring(5);
         }
-        const step = (z >= 18) ? PARAMS.RES_PICO : (z >= 16.5) ? PARAMS.RES_NANO : PARAMS.RES_MICRO;
-        const snapLng = ORIGIN.lng + (Math.floor(((lng - ORIGIN.lng) / step) + 0.00001) * step);
-        const snapLat = ORIGIN.lat - (Math.floor(((ORIGIN.lat - lat) / step) + 0.00001) * step);
-        L.rectangle([[snapLat, snapLng], [snapLat - step, snapLng + step]], { color: '#e74c3c', weight: 2, fillOpacity: 0.3, interactive: false }).addTo(selectionLayer);
+    // --- DIBUJO DE PRECISIÓN DINÁMICA ---
+    const stepNano = PARAMS.RES_NANO;
+    const stepPico = PARAMS.RES_PICO;
+    
+    // Calculamos el cuadro Nano que contiene el punto
+    const idxNanoX = Math.floor(((lng - ORIGIN.lng) / stepNano) + 0.00001);
+    const idxNanoY = Math.floor(((ORIGIN.lat - lat) / stepNano) + 0.00001);
+    const snapNanoLng = ORIGIN.lng + (idxNanoX * stepNano);
+    const snapNanoLat = ORIGIN.lat - (idxNanoY * stepNano);
+    
+    if (z >= 18) {
+        // 1. Dibujamos el borde del cuadro Nano seleccionado
+        L.rectangle([[snapNanoLat, snapNanoLng], [snapNanoLat - stepNano, snapNanoLng + stepNano]], {
+            color: '#2c3e50', weight: 2, fill: false, interactive: false
+        }).addTo(selectionLayer);
+    
+        // 2. Dibujamos la rejilla interna de 8x8 (Pico) solo en este cuadro
+        for (let i = 0; i <= 8; i++) {
+            // Líneas Verticales
+            L.polyline([
+                [snapNanoLat, snapNanoLng + (i * stepPico)], 
+                [snapNanoLat - stepNano, snapNanoLng + (i * stepPico)]
+            ], { color: '#e74c3c', weight: 0.5, opacity: 0.5, interactive: false }).addTo(selectionLayer);
+            
+            // Líneas Horizontales
+            L.polyline([
+                [snapNanoLat - (i * stepPico), snapNanoLng], 
+                [snapNanoLat - (i * stepPico), snapNanoLng + stepNano]
+            ], { color: '#e74c3c', weight: 0.5, opacity: 0.5, interactive: false }).addTo(selectionLayer);
+        }
+    
+        // 3. Resaltamos el cuadro Pico específico donde se hizo clic
+        const idxPicoX = Math.floor(((lng - snapNanoLng) / stepPico) + 0.00001);
+        const idxPicoY = Math.floor(((snapNanoLat - lat) / stepPico) + 0.00001);
+        const finalLat = snapNanoLat - (idxPicoY * stepPico);
+        const finalLng = snapNanoLng + (idxPicoX * stepPico);
+    
+        L.rectangle([[finalLat, finalLng], [finalLat - stepPico, finalLng + stepPico]], {
+            color: '#e74c3c', weight: 1, fillOpacity: 0.4, fillColor: '#e74c3c', interactive: false
+        }).addTo(selectionLayer);
+    
+    } else if (z >= 16.5) {
+        // Si el zoom no es tan alto, solo marcamos el cuadro Nano
+        L.rectangle([[snapNanoLat, snapNanoLng], [snapNanoLat - stepNano, snapNanoLng + stepNano]], {
+            color: '#e74c3c', weight: 2, fillOpacity: 0.3, interactive: false
+        }).addTo(selectionLayer);
     }
 
     const urlMaps = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
@@ -356,4 +398,5 @@ render();
 </script>
 </body>
 </html>
+
 
