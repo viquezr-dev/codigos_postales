@@ -165,14 +165,7 @@ function seleccionar(lat, lng, props = null) {
     const z = mymap.getZoom();
     const puntoClic = L.latLng(lat, lng);
 
-    // 1. NAVEGACIÓN INTELIGENTE: Si está a media distancia, acercar al detalle
-    if (z >= 17 && z < 19) {
-        mymap.setView([lat, lng], 20);
-        mymap.once('moveend', function() {
-            seleccionar(lat, lng, props);
-        });
-        return; 
-    }
+    
 
     // 2. BUSCAR PROPIEDADES
     if (!props) {
@@ -223,9 +216,10 @@ function seleccionar(lat, lng, props = null) {
         }
     }
 
-    // 5. DIBUJO GEOMÉTRICO CONDICIONAL (Escalable por nivel de Zoom)
-    if (z >= 19) {
-        // --- MODO PICO: REJILLA TÉCNICA 8x8 ---
+    // 5. DIBUJO GEOMÉTRICO DINÁMICO
+    if (z >= 18.5) { 
+        // --- NIVEL PICO (GRILLA 8x8) ---
+        // Se activa solo cuando el usuario realmente está muy cerca
         const stepN = PARAMS.RES_NANO;
         const stepP = PARAMS.RES_PICO;
         const xN = Math.floor(((lng - ORIGIN.lng) / stepN) + 0.00001);
@@ -254,19 +248,19 @@ function seleccionar(lat, lng, props = null) {
         }).addTo(selectionLayer);
 
     } else {
-        // --- MODO ESCALABLE: Macro, Micro o Nano según el Zoom ---
+        // --- NIVELES MACRO, MICRO, NANO ---
         let currentStep;
-        let colorCuadro = '#e74c3c'; // Rojo por defecto
+        let colorCuadro;
 
-        if (z < 14.5) {
+        if (z < 13) {
             currentStep = PARAMS.RES_MACRO;
-            colorCuadro = '#3498db'; // Azul para Macro
-        } else if (z < 17) {
+            colorCuadro = '#3498db'; // Macro - Azul
+        } else if (z < 16) {
             currentStep = PARAMS.RES_MICRO;
-            colorCuadro = '#f1c40f'; // Amarillo para Micro
+            colorCuadro = '#f1c40f'; // Micro - Amarillo
         } else {
             currentStep = PARAMS.RES_NANO;
-            colorCuadro = '#e67e22'; // Naranja para Nano
+            colorCuadro = '#e67e22'; // Nano - Naranja
         }
 
         const xS = Math.floor(((lng - ORIGIN.lng) / currentStep) + 0.00001);
@@ -425,6 +419,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
