@@ -269,9 +269,9 @@ function seleccionar(lat, lng, props = null) {
     const infoExtra = obtenerInfoAdicional(props.VM_LEVEL2D || "");
     
     // Contenido del QR: Datos limpios para lectura rápida en móvil
-    const contenidoQR = `Código Postal: ${codigoFinal} | Estafeta: ${infoExtra.estafeta} | Provincia: ${infoExtra.provincia}`;
+    const contenidoQR = `CP:${codigoFinal};EST:${infoExtra.estafeta};PROV:${infoExtra.provincia}`;
     const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=" + encodeURIComponent(contenidoQR);
-    console.log("URL generada para el QR:", qrUrl); // ESTO TE MOSTRARÁ LA URL EN TU CONSOLA (F12)
+    console.log("URL generada para el QR:", qrUrl); 
     
     L.marker([lat, lng], { 
         icon: L.icon({ 
@@ -473,6 +473,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
