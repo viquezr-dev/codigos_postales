@@ -272,7 +272,7 @@ function seleccionar(lat, lng, props = null) {
     const infoExtra = obtenerInfoAdicional(props.VM_LEVEL2D || "");
     
     // Contenido del QR: Datos limpios para lectura rápida en móvil
-    const contenidoQR = `CP:${codigoFinal};EST:${infoExtra.estafeta};PROV:${infoExtra.provincia}`;
+    const contenidoQR = "CP:" + codigoFinal + " EST:" + infoExtra.estafeta + " PROV:" + infoExtra.provincia;
     const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&ecc=M&data=" + encodeURIComponent(contenidoQR);
     console.log("URL generada para el QR:", qrUrl); 
     
@@ -298,15 +298,13 @@ function seleccionar(lat, lng, props = null) {
             <a href="https://wa.me/?text=Mi+Dirección:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
             <button onclick="buscarEstafetaCercana(${lat},${lng})" class="btn-cercana">📍 ESTAFETA CERCANA</button>
         </div>
-        <div style="text-align:center; margin-top:10px;">
-            <img src="${qrUrl}" 
-                 class="qr-code-estilo" 
-                 alt="Código QR Postal">
-            <p style="font-size:9px; color:#555; margin-top:2px;">Escanea este QR en la estafeta</p>
+        <div style="text-align:center;">
+            <img src="${qrUrl}" class="qr-code-estilo" alt="QR Postal">
+            <p style="font-size:10px; color:#333;">Escanea para ver datos de envío</p>
         </div>
     `, { 
         offset: offsetConfig,
-        minWidth: 190,
+        minWidth: 200,
         closeButton: true,
         autoPan: true 
     })
@@ -476,6 +474,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
