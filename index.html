@@ -149,13 +149,17 @@ function seleccionar(lat, lng, props = null) {
 
     // --- VALIDACIÓN DE ÁREA ---
     if (!props) {
-        L.marker([lat, lng], { 
-            icon: L.icon({ 
-                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', 
-                iconSize: [18, 28], 
-                iconAnchor: [9, 28] 
-            }) 
-        })
+        const punto = L.latLng(lat, lng);
+        layerZonas.eachLayer(layer => {
+            if (layer.getBounds().contains(punto)) {
+                if (isPointInGeoJSON(punto, layer.toGeoJSON())) {
+                    props = layer.feature.properties;
+                }
+            }
+        });
+    }
+
+    selectionLayer.clearLayers();
         .addTo(selectionLayer)
         .bindPopup(`
             <span class="popup-header">⚠️ ÁREA NO DEFINIDA</span>
@@ -252,15 +256,34 @@ function decodeToLatLng(code8) {
 
 document.getElementById('search-btn').addEventListener('click', function() {
     let raw = document.getElementById('search-input').value.toUpperCase().replace(/-/g, "");
-    // Si mide 10 (ej: AMB8HJFRH4), quitamos los 2 primeros. Si mide 8, lo usamos directo.
-    let code8 = raw.length >= 10 ? raw.substring(2) : raw;
+    let code8 = raw.length >= 10 ? raw.substring(raw.length - 8) : raw;
 
     if (code8.length === 8) {
-        const coords = decodeToLatLng(code8);
-        mymap.setView(coords, 19);
-        seleccionar(coords[0], coords[1]);
+        try {
+            const coords = decodeToLatLng(code8);
+            const puntoBusqueda = L.latLng(coords[0], coords[1]);
+            
+            // BUSCAMOS LOS DATOS DE LA ZONA PARA ESTE PUNTO
+            let zonaEncontrada = null;
+            layerZonas.eachLayer(layer => {
+                if (layer.getBounds().contains(puntoBusqueda)) {
+                    if (isPointInGeoJSON(puntoBusqueda, layer.toGeoJSON())) {
+                        zonaEncontrada = layer.feature.properties;
+                    }
+                }
+            });
+
+            // Movemos el mapa y ejecutamos seleccionar con los datos encontrados
+            mymap.setView(coords, 19);
+            setTimeout(() => { 
+                seleccionar(coords[0], coords[1], zonaEncontrada); 
+            }, 300);
+
+        } catch(e) {
+            alert("Error en el formato del código.");
+        }
     } else {
-        alert("Formato incorrecto. Use: XXXXX-XXXXX o el código de 8 dígitos.");
+        alert("Por favor ingrese un código de 8 o 10 dígitos.");
     }
 });
 
@@ -378,6 +401,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
