@@ -89,10 +89,10 @@ const layerZonas = L.geoJSON(null, {
     style: { color: "#333", weight: 1.5, fillOpacity: 0.1, fillColor: "#3498db" },
     onEachFeature: (f, l) => {
         l.on({
-            mouseover: (e) => { e.target.setStyle({ weight: 3, color: '#f1c40f', fillOpacity: 0.3 }); },
+            mouseover: (e) => { if(mymap.hasLayer(layerZonas)) e.target.setStyle({ weight: 3, color: '#f1c40f', fillOpacity: 0.3 }); },
             mouseout: (e) => { layerZonas.resetStyle(e.target); },
             click: (e) => { 
-                // Si toca el polígono, enviamos las propiedades directamente
+                // Al hacer clic en el polígono, siempre enviamos las propiedades
                 seleccionar(e.latlng.lat, e.latlng.lng, f.properties); 
                 L.DomEvent.stopPropagation(e); 
             }
@@ -148,7 +148,7 @@ function seleccionar(lat, lng, props = null) {
     distanceLayer.clearLayers();
     const z = mymap.getZoom();
 
-    // --- CASO A: CLIC FUERA DEL POLÍGONO (ERROR) ---
+    // --- VALIDACIÓN DE ÁREA ---
     if (!props) {
         L.marker([lat, lng], { 
             icon: L.icon({ 
@@ -161,13 +161,13 @@ function seleccionar(lat, lng, props = null) {
         .bindPopup(`
             <span class="popup-header">⚠️ ÁREA NO DEFINIDA</span>
             <div style="text-align:center; padding:5px; font-size:11px;">
-                Centro de cuadrícula fuera de límites territoriales o zona no mapeada.
+                Fuera de límites territoriales o zona no mapeada.
             </div>
         `, { offset: L.point(0, -25) }).openPopup();
         return;
     }
 
-    // --- CASO B: CLIC DENTRO DEL POLÍGONO (INFO) ---
+    // --- PROCESAMIENTO DE DATOS ---
     const res = getGridInfo(lat, lng);
     const VL1 = props.VM_LEVEL || "N/A";
     const VL2 = props.VM_LEVEL2D || "N/A";
@@ -176,9 +176,11 @@ function seleccionar(lat, lng, props = null) {
     const zonaCapaActiva = mymap.hasLayer(layerZonas);
 
     if (zonaCapaActiva) {
+        // MODO ZONA ACTIVO
         titulo = "ZONA POSTAL";
         codigoFinal = VL1;
     } else {
+        // MODO NIVELES (Capa zona oculta)
         if (z < 16.5) {
             titulo = "ÁREA POSTAL";
             codigoFinal = `${VL2}-${res.macro}`;
@@ -191,6 +193,7 @@ function seleccionar(lat, lng, props = null) {
             codigoFinal = full.substring(0, 5) + "-" + full.substring(5);
         }
 
+        // Dibujo del cuadro de precisión
         const step = (z >= 18) ? PARAMS.RES_PICO : (z >= 16.5) ? PARAMS.RES_NANO : PARAMS.RES_MICRO;
         const idxX = Math.floor(((lng - ORIGIN.lng) / step) + 0.00001);
         const idxY = Math.floor(((ORIGIN.lat - lat) / step) + 0.00001);
@@ -200,7 +203,7 @@ function seleccionar(lat, lng, props = null) {
         }).addTo(selectionLayer);
     }
 
-    // URL Maps corregida
+    // Enlace de Google Maps universal
     const urlMaps = `https://www.google.com/maps?q=${lat},${lng}`;
 
     L.marker([lat, lng], { 
@@ -219,7 +222,7 @@ function seleccionar(lat, lng, props = null) {
         </div>
         <div class="btn-container">
             <a href="${urlMaps}" target="_blank" class="btn-maps">📍 MAPS</a>
-            <a href="https://wa.me/?text=Mi+Código+Postal:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
+            <a href="https://wa.me/?text=Mi+Dirección:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
             <button onclick="buscarEstafetaCercana(${lat}, ${lng})" class="btn-cercana">📍 ESTAFETA CERCANA</button>
         </div>
     `, { offset: L.point(0, -25), minWidth: 160 }).openPopup();
@@ -315,9 +318,17 @@ mymap.on('locationfound', (e) => {
 });
 
 mymap.on('click', (e) => {
-    // Si llega aquí, es porque no tocó ningún polígono
-    seleccionar(e.latlng.lat, e.latlng.lng, null); 
+    // Intentamos buscar la zona manualmente incluso si la capa está oculta
+    let zonaEncontrada = null;
+    layerZonas.eachLayer(layer => {
+        if (layer.getBounds().contains(e.latlng)) {
+            zonaEncontrada = layer.feature.properties;
+        }
+    });
+    // Si zonaEncontrada sigue siendo null, entonces sí es ÁREA NO DEFINIDA
+    seleccionar(e.latlng.lat, e.latlng.lng, zonaEncontrada); 
 });
+    
 mymap.on('moveend', render);
 
 L.control.layers(null, { 
@@ -333,6 +344,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
