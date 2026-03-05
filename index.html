@@ -165,9 +165,7 @@ function seleccionar(lat, lng, props = null) {
     const z = mymap.getZoom();
     const puntoClic = L.latLng(lat, lng);
 
-    
-
-    // 2. BUSCAR PROPIEDADES
+    // 1. BUSCAR PROPIEDADES (Zonas de Panamá)
     if (!props) {
         layerZonas.eachLayer(function(layer) {
             if (layer.getBounds().contains(puntoClic)) {
@@ -178,108 +176,44 @@ function seleccionar(lat, lng, props = null) {
         });
     }
 
-    // 3. VALIDACIÓN DE ÁREA
-    if (!props) {
-        L.marker([lat, lng], { 
-            icon: L.icon({ 
-                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', 
-                iconSize: [18, 28], iconAnchor: [9, 28] 
-            }) 
-        }).addTo(selectionLayer).bindPopup(`
-            <span class="popup-header">⚠️ ÁREA NO DEFINIDA</span>
-            <div style="text-align:center; padding:5px; font-size:11px;">Fuera de límites o zona no mapeada.</div>
-        `, { offset: L.point(0, -25) }).openPopup();
-        return;
-    }
+    if (!props) return; // Si no hay zona, no hacemos nada
 
-    // 4. GENERACIÓN DE TEXTOS Y CÓDIGOS
     const res = getGridInfo(lat, lng);
-    const VL1 = props.VM_LEVEL || "N/A";
     const VL2 = props.VM_LEVEL2D || "N/A";
     let titulo = "", codigoFinal = "";
-    const zonaCapaActiva = mymap.hasLayer(layerZonas);
 
-    if (zonaCapaActiva) {
-        titulo = "ZONA POSTAL";
-        codigoFinal = VL1;
-    } else {
-        if (z < 16.5) {
-            titulo = "ÁREA POSTAL";
-            codigoFinal = VL2 + "-" + res.macro;
-        } else if (z < 18) {
-            titulo = "SITIO POSTAL";
-            codigoFinal = VL2 + "-" + res.macro + res.micro + res.nano;
-        } else {
-            titulo = "CÓDIGO POSTAL";
-            let full = VL2 + res.macro + res.micro + res.nano + res.pico;
-            codigoFinal = full.substring(0, 5) + "-" + full.substring(5);
-        }
-    }
+    // --- LÓGICA DE CLIC POR NIVEL (Sincronía total entre Vista y Datos) ---
+    
+    if (z < 14.5) {
+        // NIVEL MACRO
+        titulo = "ÁREA POSTAL (MACRO)";
+        codigoFinal = VL2 + "-" + res.macro;
+        dibujarCuadro(lat, lng, PARAMS.RES_MACRO, '#3498db');
 
-    // 5. DIBUJO GEOMÉTRICO DINÁMICO
-    if (z >= 18.5) { 
-        // --- NIVEL PICO (GRILLA 8x8) ---
-        // Se activa solo cuando el usuario realmente está muy cerca
-        const stepN = PARAMS.RES_NANO;
-        const stepP = PARAMS.RES_PICO;
-        const xN = Math.floor(((lng - ORIGIN.lng) / stepN) + 0.00001);
-        const yN = Math.floor(((ORIGIN.lat - lat) / stepN) + 0.00001);
-        const sLngN = ORIGIN.lng + (xN * stepN);
-        const sLatN = ORIGIN.lat - (yN * stepN);
-        
-        L.rectangle([[sLatN, sLngN], [sLatN - stepN, sLngN + stepN]], {
-            color: '#2c3e50', weight: 2, fill: false, interactive: false
-        }).addTo(selectionLayer);
-        
-        for (let i = 0; i <= 8; i++) {
-            L.polyline([[sLatN, sLngN + (i * stepP)], [sLatN - stepN, sLngN + (i * stepP)]], 
-                { color: '#e74c3c', weight: 1, opacity: 0.5, interactive: false }).addTo(selectionLayer);
-            L.polyline([[sLatN - (i * stepP), sLngN], [sLatN - (i * stepP), sLngN + stepN]], 
-                { color: '#e74c3c', weight: 1, opacity: 0.5, interactive: false }).addTo(selectionLayer);
-        }
-        
-        const xP = Math.floor(((lng - sLngN) / stepP) + 0.00001);
-        const yP = Math.floor(((sLatN - lat) / stepP) + 0.00001);
-        const fLat = sLatN - (yP * stepP);
-        const fLng = sLngN + (xP * stepP);
-        
-        L.rectangle([[fLat, fLng], [fLat - stepP, fLng + stepP]], {
-            color: '#e74c3c', weight: 1, fillOpacity: 0.4, fillColor: '#e74c3c', interactive: false
-        }).addTo(selectionLayer);
+    } else if (z < 17) {
+        // NIVEL MICRO
+        titulo = "SITIO POSTAL (MICRO)";
+        codigoFinal = VL2 + "-" + res.macro + res.micro;
+        dibujarCuadro(lat, lng, PARAMS.RES_MICRO, '#f1c40f');
+
+    } else if (z < 18.5) {
+        // NIVEL NANO
+        titulo = "UBICACIÓN (NANO)";
+        codigoFinal = VL2 + "-" + res.macro + res.micro + res.nano;
+        dibujarCuadro(lat, lng, PARAMS.RES_NANO, '#e67e22');
 
     } else {
-        // --- NIVELES MACRO, MICRO, NANO ---
-        let currentStep;
-        let colorCuadro;
-
-        if (z < 13) {
-            currentStep = PARAMS.RES_MACRO;
-            colorCuadro = '#3498db'; // Macro - Azul
-        } else if (z < 16) {
-            currentStep = PARAMS.RES_MICRO;
-            colorCuadro = '#f1c40f'; // Micro - Amarillo
-        } else {
-            currentStep = PARAMS.RES_NANO;
-            colorCuadro = '#e67e22'; // Nano - Naranja
-        }
-
-        const xS = Math.floor(((lng - ORIGIN.lng) / currentStep) + 0.00001);
-        const yS = Math.floor(((ORIGIN.lat - lat) / currentStep) + 0.00001);
-        const snapLng = ORIGIN.lng + (xS * currentStep);
-        const snapLat = ORIGIN.lat - (yS * currentStep);
-
-        L.rectangle([[snapLat, snapLng], [snapLat - currentStep, snapLng + currentStep]], {
-            color: colorCuadro, 
-            weight: 3, 
-            fillOpacity: 0.2, 
-            fillColor: colorCuadro, 
-            interactive: false
-        }).addTo(selectionLayer);
+        // NIVEL PICO (EL COMPLETO)
+        titulo = "CÓDIGO POSTAL (PICO)";
+        let full = VL2 + res.macro + res.micro + res.nano + res.pico;
+        codigoFinal = full.substring(0, 5) + "-" + full.substring(5);
+        
+        // Aquí activamos la Rejilla Quirúrgica que ya tenemos
+        dibujarRejillaPico(lat, lng, res);
     }
 
-    // 6. POPUP INFORMATIVO
+    // --- LANZAR POPUP ---
     const urlMaps = "https://www.google.com/maps?q=" + lat + "," + lng;
-
     L.marker([lat, lng], { 
         icon: L.icon({ 
             iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', 
@@ -288,13 +222,51 @@ function seleccionar(lat, lng, props = null) {
     }).addTo(selectionLayer).bindPopup(`
         <span class="popup-header">`+titulo+`</span>
         <div class="codigo-final">`+codigoFinal+`</div>
-        <div style="text-align:center; font-size:11px; margin-bottom:5px; border-top:1px solid #eee; padding-top:3px;">`+VL1+` = `+VL2+`</div>
         <div class="btn-container">
             <a href="`+urlMaps+`" target="_blank" class="btn-maps">📍 MAPS</a>
-            <a href="https://wa.me/?text=Mi+Dirección:+`+codigoFinal+`" target="_blank" class="btn-ws">💬 WS</a>
-            <button onclick="buscarEstafetaCercana(`+lat+`,`+lng+`)" class="btn-cercana">📍 ESTAFETA CERCANA</button>
+            <button onclick="buscarEstafetaCercana(`+lat+`,`+lng+`)" class="btn-cercana">🏢 ESTAFETA</button>
         </div>
-    `, { offset: L.point(0, -25), minWidth: 160 }).openPopup();
+    `, { offset: L.point(0, -25) }).openPopup();
+}
+
+// --- FUNCIONES DE APOYO PARA EL DIBUJO ---
+
+function dibujarCuadro(lat, lng, step, color) {
+    const x = Math.floor(((lng - ORIGIN.lng) / step) + 0.00001);
+    const y = Math.floor(((ORIGIN.lat - lat) / step) + 0.00001);
+    const sLng = ORIGIN.lng + (x * step);
+    const sLat = ORIGIN.lat - (y * step);
+
+    L.rectangle([[sLat, sLng], [sLat - step, sLng + step]], {
+        color: color, weight: 3, fillOpacity: 0.2, fillColor: color, interactive: false
+    }).addTo(selectionLayer);
+}
+
+function dibujarRejillaPico(lat, lng) {
+    const stepN = PARAMS.RES_NANO;
+    const stepP = PARAMS.RES_PICO;
+    const xN = Math.floor(((lng - ORIGIN.lng) / stepN) + 0.00001);
+    const yN = Math.floor(((ORIGIN.lat - lat) / stepN) + 0.00001);
+    const sLngN = ORIGIN.lng + (xN * stepN);
+    const sLatN = ORIGIN.lat - (yN * stepN);
+
+    // Líneas de la rejilla
+    for (let i = 0; i <= 8; i++) {
+        L.polyline([[sLatN, sLngN + (i * stepP)], [sLatN - stepN, sLngN + (i * stepP)]], 
+            { color: '#e74c3c', weight: 1, opacity: 0.5 }).addTo(selectionLayer);
+        L.polyline([[sLatN - (i * stepP), sLngN], [sLatN - (i * stepP), sLngN + stepN]], 
+            { color: '#e74c3c', weight: 1, opacity: 0.5 }).addTo(selectionLayer);
+    }
+    
+    // Cuadro de 3.3m seleccionado
+    const xP = Math.floor(((lng - sLngN) / stepP) + 0.00001);
+    const yP = Math.floor(((sLatN - lat) / stepP) + 0.00001);
+    const fLat = sLatN - (yP * stepP);
+    const fLng = sLngN + (xP * stepP);
+
+    L.rectangle([[fLat, fLng], [fLat - stepP, fLng + stepP]], {
+        color: '#e74c3c', weight: 2, fillOpacity: 0.4, fillColor: '#e74c3c'
+    }).addTo(selectionLayer);
 }
 
 function decodeToLatLng(code8) {
@@ -419,6 +391,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
