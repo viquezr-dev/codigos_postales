@@ -165,18 +165,18 @@ function seleccionar(lat, lng, props = null) {
     const z = mymap.getZoom();
     const puntoClic = L.latLng(lat, lng);
 
-    // 1. AUTO-ZOOM: Si el usuario está lejos, lo acercamos y esperamos a que termine para re-ejecutar
+    // 1. AUTO-ZOOM: Si está lejos, mover y re-ejecutar al terminar
     if (z < 19) {
         mymap.setView([lat, lng], 20);
-        mymap.once('moveend', () => {
+        mymap.once('moveend', function() {
             seleccionar(lat, lng, props);
         });
-        return; // Detenemos esta ejecución para esperar el aterrizaje del zoom
+        return; 
     }
 
-    // 2. BUSCAR PROPIEDADES (Si no existen)
+    // 2. BUSCAR PROPIEDADES
     if (!props) {
-        layerZonas.eachLayer(layer => {
+        layerZonas.eachLayer(function(layer) {
             if (layer.getBounds().contains(puntoClic)) {
                 if (isPointInGeoJSON(puntoClic, layer.toGeoJSON())) {
                     props = layer.feature.properties;
@@ -194,12 +194,12 @@ function seleccionar(lat, lng, props = null) {
             }) 
         }).addTo(selectionLayer).bindPopup(`
             <span class="popup-header">⚠️ ÁREA NO DEFINIDA</span>
-            <div style="text-align:center; padding:5px; font-size:11px;">Fuera de límites territoriales o zona no mapeada.</div>
+            <div style="text-align:center; padding:5px; font-size:11px;">Fuera de límites o zona no mapeada.</div>
         `, { offset: L.point(0, -25) }).openPopup();
         return;
     }
 
-    // 4. GENERACIÓN DE CÓDIGOS
+    // 4. GENERACIÓN DE TEXTOS Y CÓDIGOS
     const res = getGridInfo(lat, lng);
     const VL1 = props.VM_LEVEL || "N/A";
     const VL2 = props.VM_LEVEL2D || "N/A";
@@ -212,32 +212,31 @@ function seleccionar(lat, lng, props = null) {
     } else {
         if (z < 16.5) {
             titulo = "ÁREA POSTAL";
-            codigoFinal = `${VL2}-${res.macro}`;
+            codigoFinal = VL2 + "-" + res.macro;
         } else if (z < 18) {
             titulo = "SITIO POSTAL";
-            codigoFinal = `${VL2}-${res.macro}${res.micro}${res.nano}`;
+            codigoFinal = VL2 + "-" + res.macro + res.micro + res.nano;
         } else {
             titulo = "CÓDIGO POSTAL";
-            let full = `${VL2}${res.macro}${res.micro}${res.nano}${res.pico}`;
+            let full = VL2 + res.macro + res.micro + res.nano + res.pico;
             codigoFinal = full.substring(0, 5) + "-" + full.substring(5);
         }
-    } // <-- Aquí faltaba cerrar la lógica de títulos
+    }
 
-    // --- DIBUJO DE REJILLA TÉCNICA (NIVEL PICO 8x8) ---
+    // 5. DIBUJO DE REJILLA PICO (8x8)
     const stepN = PARAMS.RES_NANO;
     const stepP = PARAMS.RES_PICO;
-    
     const xN = Math.floor(((lng - ORIGIN.lng) / stepN) + 0.00001);
     const yN = Math.floor(((ORIGIN.lat - lat) / stepN) + 0.00001);
     const sLngN = ORIGIN.lng + (xN * stepN);
     const sLatN = ORIGIN.lat - (yN * stepN);
     
-    // Contenedor Nano (26m)
+    // Cuadro Nano
     L.rectangle([[sLatN, sLngN], [sLatN - stepN, sLngN + stepN]], {
         color: '#2c3e50', weight: 2, fill: false, interactive: false
     }).addTo(selectionLayer);
     
-    // Rejilla 8x8 Pico (3.3m)
+    // Líneas Pico
     for (let i = 0; i <= 8; i++) {
         L.polyline([[sLatN, sLngN + (i * stepP)], [sLatN - stepN, sLngN + (i * stepP)]], 
             { color: '#e74c3c', weight: 1, opacity: 0.5, interactive: false }).addTo(selectionLayer);
@@ -245,7 +244,7 @@ function seleccionar(lat, lng, props = null) {
             { color: '#e74c3c', weight: 1, opacity: 0.5, interactive: false }).addTo(selectionLayer);
     }
     
-    // Cuadro Pico resaltado
+    // Cuadro Pico Final
     const xP = Math.floor(((lng - sLngN) / stepP) + 0.00001);
     const yP = Math.floor(((sLatN - lat) / stepP) + 0.00001);
     const fLat = sLatN - (yP * stepP);
@@ -255,8 +254,8 @@ function seleccionar(lat, lng, props = null) {
         color: '#e74c3c', weight: 1, fillOpacity: 0.4, fillColor: '#e74c3c', interactive: false
     }).addTo(selectionLayer);
 
-    // --- POPUP ---
-    const urlMaps = `https://www.google.com/maps?q=${lat},${lng}`;
+    // 6. POPUP
+    const urlMaps = "https://www.google.com/maps?q=" + lat + "," + lng;
 
     L.marker([lat, lng], { 
         icon: L.icon({ 
@@ -264,13 +263,13 @@ function seleccionar(lat, lng, props = null) {
             iconSize: [18, 28], iconAnchor: [9, 28] 
         }) 
     }).addTo(selectionLayer).bindPopup(`
-        <span class="popup-header">${titulo}</span>
-        <div class="codigo-final">${codigoFinal}</div>
-        <div style="text-align:center; font-size:11px; margin-bottom:5px; border-top:1px solid #eee; padding-top:3px;">${VL1} = ${VL2}</div>
+        <span class="popup-header">`+titulo+`</span>
+        <div class="codigo-final">`+codigoFinal+`</div>
+        <div style="text-align:center; font-size:11px; margin-bottom:5px; border-top:1px solid #eee; padding-top:3px;">`+VL1+` = `+VL2+`</div>
         <div class="btn-container">
-            <a href="${urlMaps}" target="_blank" class="btn-maps">📍 MAPS</a>
-            <a href="https://wa.me/?text=Mi+Dirección:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
-            <button onclick="buscarEstafetaCercana(${lat}, ${lng})" class="btn-cercana">📍 ESTAFETA CERCANA</button>
+            <a href="`+urlMaps+`" target="_blank" class="btn-maps">📍 MAPS</a>
+            <a href="https://wa.me/?text=Mi+Dirección:+`+codigoFinal+`" target="_blank" class="btn-ws">💬 WS</a>
+            <button onclick="buscarEstafetaCercana(`+lat+`,`+lng+`)" class="btn-cercana">📍 ESTAFETA CERCANA</button>
         </div>
     `, { offset: L.point(0, -25), minWidth: 160 }).openPopup();
 }
@@ -397,6 +396,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
