@@ -146,9 +146,24 @@ function seleccionar(lat, lng, props = null) {
     selectionLayer.clearLayers();
     distanceLayer.clearLayers();
     const z = mymap.getZoom();
+    const puntoClic = L.latLng(lat, lng);
 
-    // --- VALIDACIÓN DE ÁREA ---
-    if (!props) {10:55 a. m. 05/mar./2026
+    // --- MEJORA: BÚSQUEDA AUTOMÁTICA DE PROPS ---
+    // Si props llega nulo (ej. desde el buscador o clic directo), 
+    // intentamos encontrarlos en la capa de zonas antes de mostrar error.
+    if (!props) {
+        layerZonas.eachLayer(layer => {
+            if (layer.getBounds().contains(puntoClic)) {
+                // Validación exacta de geometría (MultiPolygon)
+                if (isPointInGeoJSON(puntoClic, layer.toGeoJSON())) {
+                    props = layer.feature.properties;
+                }
+            }
+        });
+    }
+
+    // --- VALIDACIÓN DE ÁREA (Ahora sí, si sigue nulo es porque no hay zona) ---
+    if (!props) {
         L.marker([lat, lng], { 
             icon: L.icon({ 
                 iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', 
@@ -175,11 +190,9 @@ function seleccionar(lat, lng, props = null) {
     const zonaCapaActiva = mymap.hasLayer(layerZonas);
 
     if (zonaCapaActiva) {
-        // MODO ZONA ACTIVO
         titulo = "ZONA POSTAL";
         codigoFinal = VL1;
     } else {
-        // MODO NIVELES (Capa zona oculta)
         if (z < 16.5) {
             titulo = "ÁREA POSTAL";
             codigoFinal = `${VL2}-${res.macro}`;
@@ -188,6 +201,7 @@ function seleccionar(lat, lng, props = null) {
             codigoFinal = `${VL2}-${res.macro}${res.micro}${res.nano}`;
         } else {
             titulo = "CÓDIGO POSTAL";
+            // Formato normalizado AMB8H-JFRH4
             let full = `${VL2}${res.macro}${res.micro}${res.nano}${res.pico}`;
             codigoFinal = full.substring(0, 5) + "-" + full.substring(5);
         }
@@ -202,7 +216,8 @@ function seleccionar(lat, lng, props = null) {
         }).addTo(selectionLayer);
     }
 
-    // Enlace de Google Maps universal
+    // --- CORRECCIÓN ENLACE GOOGLE MAPS ---
+    // El formato q=lat,lng es el más confiable para evitar errores 404
     const urlMaps = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
 
     L.marker([lat, lng], { 
@@ -268,8 +283,7 @@ document.getElementById('search-btn').addEventListener('click', function() {
                     }
                 }
             });
-
-            // Movemos el mapa y ejecutamos seleccionar con los datos encontrados
+// Movemos el mapa y ejecutamos seleccionar con los datos encontrados
             mymap.setView(coords, 19);
             setTimeout(() => { 
                 seleccionar(coords[0], coords[1], zonaEncontrada); 
@@ -283,7 +297,8 @@ document.getElementById('search-btn').addEventListener('click', function() {
     }
 });
 
-function buscarEstafetaCercana(lat, lng) {
+            
+    function buscarEstafetaCercana(lat, lng) {
     distanceLayer.clearLayers();
     const userPt = L.latLng(lat, lng);
     let cercana = null, dMin = Infinity;
