@@ -250,17 +250,9 @@ function seleccionar(lat, lng, props = null) {
     }
     const mapCenter = mymap.getCenter();
     const offsetFinal = (lat < mapCenter.lat) ? L.point(0, -70) : L.point(0, -30);
-    // --- LANZAR POPUP ---
-    const offsetConfig = L.point(100, -50); // Mueve el popup 100px a la derecha y 50px arriba
-    const VL1 = props.VM_LEVEL || "N/A";
-    const urlMaps = "https://www.google.com/maps?q=" + lat + "," + lng;
-    const propsActuales = props || {}; 
-    const infoExtra = obtenerInfoAdicional(propsActuales.VM_LEVEL2D);
     
-    // Construimos el título y el contenido del QR
-    const tituloQR = "CODIGO POSTAL";
-    const contenidoQR = `CP: ${codigoFinal}\nESTAFETA: ${infoExtra.estafeta}\nPROVINCIA: ${infoExtra.provincia}`;
     
+    // --- LANZAR POPUP FINAL ---
     const offsetConfig = L.point(100, -50); 
     const VL1 = props.VM_LEVEL || "N/A";
     const urlMaps = "https://www.google.com/maps?q=" + lat + "," + lng;
@@ -467,6 +459,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
