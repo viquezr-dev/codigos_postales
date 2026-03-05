@@ -176,7 +176,18 @@ function seleccionar(lat, lng, props = null) {
         });
     }
 
-    if (!props) return; // Si no hay zona, no hacemos nada
+    if (!props) {
+        L.marker([lat, lng], { 
+            icon: L.icon({ 
+                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', 
+                iconSize: [18, 28], iconAnchor: [9, 28] 
+            }) 
+        }).addTo(selectionLayer).bindPopup(`
+            <span class="popup-header">⚠️ ÁREA NO DEFINIDA</span>
+            <div style="text-align:center; padding:5px; font-size:11px;">Fuera de límites territoriales o zona no mapeada.</div>
+        `, { offset: L.point(0, -25) }).openPopup();
+        return;
+    }
 
     const res = getGridInfo(lat, lng);
     const VL2 = props.VM_LEVEL2D || "N/A";
@@ -391,6 +402,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
