@@ -146,51 +146,71 @@ function seleccionar(lat, lng) {
     
     let props = null;
 
-    // Buscamos manualmente en la capa de zonas si el punto está dentro de algún polígono
+    // 1. Buscar si el clic cayó dentro de un polígono de zona
     layerZonas.eachLayer(layer => {
         if (layer instanceof L.Polygon && layer.getBounds().contains(L.latLng(lat, lng))) {
-            // Verificamos si el punto exacto está dentro (Leaflet pip)
             props = layer.feature.properties;
         }
     });
 
-    // Si no hay propiedades, es que hizo clic fuera de una zona válida
-    if (!props) return;
+    // 2. Si NO hay propiedades (clic fuera de polígono), mostrar aviso de ERROR
+    if (!props) {
+        L.marker([lat, lng], { 
+            icon: L.icon({ 
+                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', 
+                iconSize: [18, 28], 
+                iconAnchor: [9, 28] 
+            }) 
+        })
+        .addTo(selectionLayer)
+        .bindPopup(`
+            <span class="popup-header">⚠️ ÁREA NO DEFINIDA</span>
+            <div style="text-align:center; padding:5px; font-size:11px;">
+                Centro de cuadrícula fuera de límites territoriales o zona no mapeada.
+            </div>
+        `, { offset: L.point(0, -25) }).openPopup();
+        return;
+    }
 
+    // 3. Si hay propiedades, procesar información según visibilidad de la capa Zonas
     const res = getGridInfo(lat, lng);
     const VL1 = props.VM_LEVEL || "N/A";
     const VL2 = props.VM_LEVEL2D || "N/A";
     
     let titulo = "", codigoFinal = "";
+    
+    // Verificamos si la capa "layerZonas" está actualmente en el mapa
+    const zonaCapaActiva = mymap.hasLayer(layerZonas);
 
-    // --- JERARQUÍA DE NIVELES  ---
-    if (z < 13) {
+    if (zonaCapaActiva) {
+        // --- SOLO MODO ZONA ---
         titulo = "ZONA POSTAL";
         codigoFinal = VL1;
-    } else if (z < 16.5) {
-        titulo = "ÁREA POSTAL";
-        codigoFinal = `${VL2}-${res.macro}`;
-    } else if (z < 18) {
-        titulo = "SITIO POSTAL";
-        codigoFinal = `${VL2}-${res.macro}${res.micro}${res.nano}`;
     } else {
-        titulo = "CÓDIGO POSTAL";
-        // Ingeniería para el código de 10 caracteres: AM + B8 + H + J + FRH4...
-        // Formato normalizado 5-5: AMB8H-JFRH4
-        let full = `${VL2}${res.macro}${res.micro}${res.nano}${res.pico}`;
-        codigoFinal = full.substring(0, 5) + "-" + full.substring(5);
-    }
+        // --- NIVELES MACRO A PICO (Solo si la capa Zonas está apagada) ---
+        if (z < 16.5) {
+            titulo = "ÁREA POSTAL";
+            codigoFinal = `${VL2}-${res.macro}`;
+        } else if (z < 18) {
+            titulo = "SITIO POSTAL";
+            codigoFinal = `${VL2}-${res.macro}${res.micro}${res.nano}`;
+        } else {
+            titulo = "CÓDIGO POSTAL";
+            let full = `${VL2}${res.macro}${res.micro}${res.nano}${res.pico}`;
+            codigoFinal = full.substring(0, 5) + "-" + full.substring(5);
+        }
 
-    // Dibujo del cuadro rojo (solo a partir de Área Postal)
-    if (z >= 13) {
+        // Dibujo del cuadro rojo de selección (solo en modo niveles)
         const step = (z >= 18) ? PARAMS.RES_PICO : (z >= 16.5) ? PARAMS.RES_NANO : PARAMS.RES_MICRO;
         const idxX = Math.floor(((lng - ORIGIN.lng) / step) + 0.00001);
         const idxY = Math.floor(((ORIGIN.lat - lat) / step) + 0.00001);
         const snapLng = ORIGIN.lng + (idxX * step), snapLat = ORIGIN.lat - (idxY * step);
-        L.rectangle([[snapLat, snapLng], [snapLat - step, snapLng + step]], { color: '#e74c3c', weight: 2, fillOpacity: 0.3, interactive: false }).addTo(selectionLayer);
+        L.rectangle([[snapLat, snapLng], [snapLat - step, snapLng + step]], { 
+            color: '#e74c3c', weight: 2, fillOpacity: 0.3, interactive: false 
+        }).addTo(selectionLayer);
     }
 
-    // Marker y Popup compacto
+    // 4. Renderizar el Popup final
     L.marker([lat, lng], { 
         icon: L.icon({ 
             iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', 
@@ -206,7 +226,7 @@ function seleccionar(lat, lng) {
             ${VL1} = ${VL2}
         </div>
         <div class="btn-container">
-            <a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" class="btn-maps">📍 MAPS</a>
+            <a href="http://googleusercontent.com/maps.google.com/?q=${lat},${lng}" target="_blank" class="btn-maps">📍 MAPS</a>
             <a href="https://wa.me/?text=Mi+Código+Postal:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
             <button onclick="buscarEstafetaCercana(${lat}, ${lng})" class="btn-cercana">📍 ESTAFETA CERCANA</button>
         </div>
@@ -318,6 +338,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
