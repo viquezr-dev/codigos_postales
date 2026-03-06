@@ -251,6 +251,7 @@ function seleccionar(lat, lng, props = null) {
 
     const res = getGridInfo(centerLat, centerLng);
     const VL2 = props.VM_LEVEL2D || "N/A";
+    const VL1 = props.VM_LEVEL || "N/A";
     let titulo = "", codigoFinal = "";
 
     // Dibujo de capas visuales
@@ -285,6 +286,7 @@ function seleccionar(lat, lng, props = null) {
         <div class="info-popup">
             <span class="popup-header">CÓDIGO POSTAL</span>
             <div class="codigo-final">${codigoFinal}</div>
+            <p style="margin:2px 0; color:#1a73e8; font-weight:bold;">${VL1}=${VL2}</p>
             <p style="margin:2px 0"><b>Estafeta:</b> ${infoExtra.estafeta}</p>
             <p style="margin:2px 0"><b>Provincia:</b> ${infoExtra.provincia}</p>
             <span class="coords-label">Lat: ${centerLat.toFixed(6)} | Lon: ${centerLng.toFixed(6)}</span>
@@ -464,6 +466,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
