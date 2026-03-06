@@ -271,7 +271,7 @@ function seleccionar(lat, lng, props = null) {
 
     // 3. GENERAR POPUP CON COORDENADAS
     const infoExtra = obtenerInfoAdicional(props.VM_LEVEL2D);
-    const contenidoQR = `CP-> ${codigoFinal}\nCOORD-> ${centerLat.toFixed(6)},${centerLng.toFixed(6)}`;
+    const contenidoQR = `CP-> ${codigoFinal}\nCOORD-> ${centerLat.toFixed(6)},${centerLng.toFixed(6)}\nZONA-> ${props.VM_LEVEL}=${props.VM_LEVEL2D}\nESTAFETA-> ${infoExtra.estafeta}\nPROVINCIA-> ${infoExtra.provincia}`;
     const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=" + encodeURIComponent(contenidoQR);
 
     L.marker(puntoCentro, { 
@@ -464,5 +464,6 @@ render();
 </script>
 </body>
 </html>
+
 
 
