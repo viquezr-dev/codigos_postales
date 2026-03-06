@@ -122,30 +122,29 @@ L.control.zoom({ position: 'bottomright' }).addTo(mymap);
 const layerZonas = L.geoJSON(null, { 
     style: { color: "#333", weight: 1.5, fillOpacity: 0.1, fillColor: "#3498db" },
     onEachFeature: (f, l) => {
-        // Al pasar el ratón (Mouseover)
-        l.on('mouseover', (e) => {
-            if(mymap.hasLayer(layerZonas)) {
+        l.on({
+            mouseover: (e) => {
                 e.target.setStyle({ weight: 3, color: '#f1c40f', fillOpacity: 0.3 });
-                
-                // Traemos la info de la zona
+                // Usamos VM_LEVEL como solicitaste
                 const p = f.properties;
                 const info = obtenerInfoAdicional(p.VM_LEVEL2D);
                 
-                // Creamos un popup rápido que sigue al ratón o se abre en el centro
                 l.bindTooltip(`
                     <div style='text-align:center;'>
-                        <b style='color:#1a2a6c;'>ZONA: ${p.VM_LEVEL}=${p.VM_LEVEL2D}</b><br>
-                        <span>${info.estafeta}</span><br>
-                        <small>${info.provincia}</small>
+                        <b style='color:#f1c40f;'>ZONA: ${p.VM_LEVEL}</b><br>
+                        <span style="color:white;">${info.estafeta}</span>
                     </div>
                 `, { sticky: true, direction: 'top', className: 'zona-tooltip' }).openTooltip();
+            },
+            mouseout: (e) => {
+                layerZonas.resetStyle(e.target);
+                l.closeTooltip();
+            },
+            // Si la capa está activa, el clic en el polígono también dispara la selección
+            click: (e) => {
+                L.DomEvent.stopPropagation(e); // Evita doble clic
+                seleccionar(e.latlng.lat, e.latlng.lng, f.properties);
             }
-        });
-
-        // Al quitar el ratón (Mouseout)
-        l.on('mouseout', (e) => {
-            layerZonas.resetStyle(e.target);
-            l.closeTooltip();
         });
     }
 }).addTo(mymap);
@@ -235,23 +234,22 @@ function seleccionar(lat, lng, props = null) {
     distanceLayer.clearLayers();
     const z = mymap.getZoom();
 
-    // --- PASO 1: DETERMINAR EL "STEP" SEGÚN EL ZOOM ---
+    // --- NUEVO: CALCULAR EL CENTRO SEGÚN EL ZOOM ---
     let stepActual;
     if (z < 14.5) stepActual = PARAMS.RES_MACRO;
     else if (z < 17) stepActual = PARAMS.RES_MICRO;
     else if (z < 18.5) stepActual = PARAMS.RES_NANO;
     else stepActual = PARAMS.RES_PICO;
 
-    // --- PASO 2: CALCULAR EL CENTRO DEL CUADRO CORRESPONDIENTE ---
     const x = Math.floor(((lng - ORIGIN.lng) / stepActual) + 0.00001);
     const y = Math.floor(((ORIGIN.lat - lat) / stepActual) + 0.00001);
     
-    const centroLat = ORIGIN.lat - (y * stepActual) - (stepActual / 2);
-    const centroLng = ORIGIN.lng + (x * stepActual) + (stepActual / 2);
-    const puntoCentro = L.latLng(centroLat, centroLng);
+    // Estas son las coordenadas centradas que usaremos para el marcador y el popup
+    const cLat = ORIGIN.lat - (y * stepActual) - (stepActual / 2);
+    const cLng = ORIGIN.lng + (x * stepActual) + (stepActual / 2);
+    const puntoCentro = L.latLng(cLat, cLng);
 
-    // --- PASO 3: BUSCAR PROPIEDADES (Zonas) ---
-    // Usamos el punto original del clic para buscar la zona, para mayor sensibilidad
+    // 1. BUSCAR PROPIEDADES (Usamos lat/lng original para la búsqueda por sensibilidad)
     if (!props) {
         layerZonas.eachLayer(function(layer) {
             if (layer.getBounds().contains(L.latLng(lat, lng))) {
@@ -262,7 +260,6 @@ function seleccionar(lat, lng, props = null) {
         });
     }
 
-    // Si no hay zona, marcamos el error en el punto exacto del clic
     if (!props) {
         L.marker([lat, lng], { 
             icon: L.icon({ 
@@ -271,44 +268,45 @@ function seleccionar(lat, lng, props = null) {
             }) 
         }).addTo(selectionLayer).bindPopup(`
             <span class="popup-header">⚠️ ÁREA NO DEFINIDA</span>
-            <div style="text-align:center; padding:5px; font-size:11px;">Fuera de límites territoriales.</div>
+            <div style="text-align:center; padding:5px; font-size:11px;">Fuera de límites territoriales o zona no mapeada.</div>
         `, { offset: L.point(0, -25) }).openPopup();
         return;
     }
 
-    // --- PASO 4: OBTENER INFO DE GRILLA Y DEFINIR CÓDIGOS ---
-    const res = getGridInfo(centroLat, centroLng);
+    // Usamos el punto CENTRADO para la grilla y visualización
+    const res = getGridInfo(cLat, cLng);
     const VL2 = props.VM_LEVEL2D || "N/A";
     let titulo = "", codigoFinal = "";
 
     if (z < 14.5) {
         titulo = "ÁREA POSTAL (MACRO)";
         codigoFinal = VL2 + "-" + res.macro;
-        dibujarCuadro(centroLat, centroLng, PARAMS.RES_MACRO, '#3498db');
+        dibujarCuadro(cLat, cLng, PARAMS.RES_MACRO, '#3498db');
     } else if (z < 17) {
         titulo = "SITIO POSTAL (MICRO)";
         codigoFinal = VL2 + "-" + res.macro + res.micro;
-        dibujarCuadro(centroLat, centroLng, PARAMS.RES_MICRO, '#f1c40f');
+        dibujarCuadro(cLat, cLng, PARAMS.RES_MICRO, '#f1c40f');
     } else if (z < 18.5) {
         titulo = "UBICACIÓN (NANO)";
         codigoFinal = VL2 + "-" + res.macro + res.micro + res.nano;
-        dibujarCuadro(centroLat, centroLng, PARAMS.RES_NANO, '#e67e22');
+        dibujarCuadro(cLat, cLng, PARAMS.RES_NANO, '#e67e22');
     } else {
         titulo = "CÓDIGO POSTAL (PICO)";
         let full = VL2 + res.macro + res.micro + res.nano + res.pico;
         codigoFinal = full.substring(0, 5) + "-" + full.substring(5);
-        dibujarRejillaPico(centroLat, centroLng); 
+        dibujarRejillaPico(cLat, cLng, res);
     }
 
-    // --- PASO 5: POPUP FINAL ---
+    const offsetConfig = L.point(100, -50); 
+    const urlMaps = `https://www.google.com/maps?q=${cLat},${cLng}`;
     const esNivelPico = (z >= 18.5);
     let infoExtra = obtenerInfoAdicional(props.VM_LEVEL2D);
-    const coordsTexto = `${centroLat.toFixed(7)},${centroLng.toFixed(7)}`;
-    const urlMaps = "https://www.google.com/maps?q=" + centroLat + "," + centroLng;
+    const coordsTexto = `${cLat.toFixed(7)},${cLng.toFixed(7)}`;
+    
     const contenidoQR = `CP-> ${codigoFinal}\nZONA-> ${props.VM_LEVEL}=${props.VM_LEVEL2D}\nCOORD-> ${coordsTexto}\nESTAFETA-> ${infoExtra.estafeta}\nPROVINCIA-> ${infoExtra.provincia}`;
     const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&ecc=M&format=png&data=" + encodeURIComponent(contenidoQR);
 
-    L.marker([centroLat, centroLng], { 
+    L.marker([cLat, cLng], { 
         icon: L.icon({ 
             iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', 
             iconSize: [18, 28], iconAnchor: [9, 28] 
@@ -317,7 +315,7 @@ function seleccionar(lat, lng, props = null) {
     .addTo(selectionLayer)
     .bindPopup(`
     <div class="info-popup">
-        <span class="popup-header">${titulo}</span>
+        <span class="popup-header">CODIGO POSTAL</span>
         <div class="codigo-final">${codigoFinal}</div>
         <p><b>Zona:</b> ${props.VM_LEVEL}=${props.VM_LEVEL2D}</p>
         <p><b>Coord:</b> ${coordsTexto}</p>
@@ -325,16 +323,16 @@ function seleccionar(lat, lng, props = null) {
         <p><b>Provincia:</b> ${infoExtra.provincia}</p>
     </div>
     ${esNivelPico ? `
-    <div style="text-align:center; margin-top:5px; border-top:1px solid #eee; padding-top:5px;">
+    <div style="text-align:center; margin-top:10px; border-top:1px solid #eee; padding-top:10px;">
         <img src="${qrUrl}" class="qr-code-estilo" alt="QR Postal">
-        <p style="font-size:9px; color:#333; font-weight:bold; margin:2px 0;">Escanea datos de envío</p>
+        <p style="font-size:10px; color:#333; font-weight:bold; margin-top:5px;">Escanea para ver datos de envío</p>
     </div>` : ''}
-    <div class="btn-container" style="margin-top:5px; border-top:1px solid #eee; padding-top:5px;">
+    <div class="btn-container" style="margin-top:10px; border-top:1px solid #eee; padding-top:10px;">
         <a href="${urlMaps}" target="_blank" class="btn-maps">📍 MAPS</a>
         <a href="https://wa.me/?text=Dirección:+${codigoFinal}+Coord:+${coordsTexto}" target="_blank" class="btn-ws">💬 WS</a>
-        <button onclick="buscarEstafetaCercana(${centroLat},${centroLng})" class="btn-cercana">📍 ESTAFETA CERCANA</button>
+        <button onclick="buscarEstafetaCercana(${cLat},${cLng})" class="btn-cercana">📍 ESTAFETA CERCANA</button>
     </div>
-`, { offset: L.point(100, -50), minWidth: 160 })
+`, { offset: offsetConfig, minWidth: 160 })
 .openPopup();
 }
 
@@ -499,56 +497,19 @@ ymap.on('click', (e) => {
 
     mymap.on('moveend', render);
 
-L.control.layers(null, { 
+const overlayMaps = {
     "🔲 Zonas": layerZonas, 
     "🟦 Cuadrícula": layerMacro, 
     "⬛ Grillas": layerNano, 
     "🛣️ Rutas": layerRutas, 
     "📍 Estafetas": layerEstafetas, 
     "🔵 Mi Ubicación": layerMiUbicacion 
-}, { collapsed: false }).addTo(mymap);
+};
+
+L.control.layers(null, overlayMaps, { collapsed: false }).addTo(mymap);
 
 render();
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
