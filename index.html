@@ -483,9 +483,11 @@ mymap.on('locationfound', (e) => {
     seleccionar(e.latlng.lat, e.latlng.lng); 
 });
 
-ymap.on('click', (e) => {
-    // Si la capa de zonas está visible, bloqueamos el clic de selección
-    
+mymap.on('locationfound', (e) => { 
+    layerMiUbicacion.clearLayers(); 
+    L.circleMarker(e.latlng, {radius: 9, color: 'white', fillColor: '#1a73e8', fillOpacity: 1, weight: 3}).addTo(layerMiUbicacion); 
+    seleccionar(e.latlng.lat, e.latlng.lng); 
+});
     
     layerZonas.on('mouseover', function(e) {
     if (mymap.hasLayer(layerZonas)) { // Solo si el selector la tiene activada
@@ -503,17 +505,29 @@ ymap.on('click', (e) => {
     }
 });
 
+layerZonas.on('mouseover', function(e) {
+    if (mymap.hasLayer(layerZonas)) { 
+        const p = e.layer.feature.properties;
+        const info = obtenerInfoAdicional(p.VM_LEVEL2D);
+        
+        e.layer.bindTooltip(`
+            <div style="text-align:center;">
+                <b style="color:#f1c40f;">ZONA: ${p.VM_LEVEL}</b><br>
+                <span>${info.estafeta}</span>
+            </div>
+        `, { sticky: true, className: 'zona-tooltip' }).openTooltip();
+        
+        e.layer.setStyle({ fillOpacity: 0.3, color: '#f1c40f', weight: 3 });
+    }
+});
+
 layerZonas.on('mouseout', function(e) {
     layerZonas.resetStyle(e.layer);
 });
-    
-    // Si la capa de zonas está oculta, funciona el sistema de códigos postales
-    seleccionar(e.latlng.lat, e.latlng.lng);
-});
-
 
     mymap.on('moveend', render);
 
+// Definimos las capas para el selector (Asegúrate que los nombres coincidan con tus variables)
 const overlayMaps = {
     "🔲 Zonas": layerZonas, 
     "🟦 Cuadrícula": layerMacro, 
@@ -523,11 +537,14 @@ const overlayMaps = {
     "🔵 Mi Ubicación": layerMiUbicacion 
 };
 
+// Esto restaurará el cuadro de control en la esquina superior derecha
 L.control.layers(null, overlayMaps, { collapsed: false }).addTo(mymap);
 
+// Ejecución inicial
 render();
 </script>
 </body>
 </html>
+
 
 
