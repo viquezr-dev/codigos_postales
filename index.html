@@ -213,7 +213,6 @@ function seleccionar(lat, lng, props = null) {
     const z = mymap.getZoom();
 
     // 1. LÓGICA DE CENTRADO (SNAP TO GRID)
-    // Calculamos el centro del cuadro según el nivel de zoom actual
     let step = PARAMS.RES_PICO;
     if (z < 14.5) step = PARAMS.RES_MACRO;
     else if (z < 17) step = PARAMS.RES_MICRO;
@@ -222,10 +221,8 @@ function seleccionar(lat, lng, props = null) {
     const xGrid = Math.floor(((lng - ORIGIN.lng) / step) + 0.00001);
     const yGrid = Math.floor(((ORIGIN.lat - lat) / step) + 0.00001);
     
-    // Coordenadas del centro del cuadro
     const centerLat = ORIGIN.lat - (yGrid * step) - (step / 2);
     const centerLng = ORIGIN.lng + (xGrid * step) + (step / 2);
-
     const puntoCentro = L.latLng(centerLat, centerLng);
 
     // 2. BUSCAR PROPIEDADES
@@ -252,69 +249,62 @@ function seleccionar(lat, lng, props = null) {
     const res = getGridInfo(centerLat, centerLng);
     const zonaID = props.VM_LEVEL2D;
     const zonaNombre = props.VM_LEVEL;
-    const provincia = props.PROV_NOMB || "POR DEFINIR";
+    const provincia = props.PROV_NOMB || "PANAMÁ";
     const infoExtra = obtenerInfoAdicional(zonaID);
     
     let titulo = "", codigoFinal = "", esNivelZona = false;
-    let codigoFinal = "";
-    let esNivelZona = false;
 
-    // Dibujo de capas visuales
+    // 3. JERARQUÍA DE 5 NIVELES
     if (z < 13) {
-        // NIVEL 1: ZONA POSTAL
         titulo = "ZONA POSTAL";
         esNivelZona = true;
     } else if (z < 17) {
-        // NIVEL 2 y 3: ÁREA POSTAL (Macro-Micro)
         titulo = "ÁREA POSTAL";
         codigoFinal = (z < 15) ? `${zonaID}-${res.macro}` : `${zonaID}-${res.macro}${res.micro}`;
         dibujarCuadro(centerLat, centerLng, (z < 15 ? PARAMS.RES_MACRO : PARAMS.RES_MICRO), '#3498db');
     } else if (z < 19) {
-        // NIVEL 4: SECTOR POSTAL (Nano)
         titulo = "SECTOR POSTAL";
         codigoFinal = `${zonaID}-${res.macro}${res.micro}${res.nano}`;
         dibujarCuadro(centerLat, centerLng, PARAMS.RES_NANO, '#e67e22');
     } else {
-        // NIVEL 5: CÓDIGO POSTAL (Pico)
         titulo = "CÓDIGO POSTAL";
         let zonaLimpia = zonaID.toString().charAt(0) + zonaID.toString().substring(3);
         codigoFinal = `${zonaLimpia}${res.macro}-${res.micro}${res.nano}${res.pico}`;
         dibujarRejillaPico(centerLat, centerLng);
     }
 
-    
-    // 3. GENERAR POPUP CON COORDENADAS
-    const infoExtra = obtenerInfoAdicional(props.VM_LEVEL2D);
-    const contenidoQR = `CP-> ${codigoFinal}\nCOORD-> ${centerLat.toFixed(6)},${centerLng.toFixed(6)}\nZONA-> ${props.VM_LEVEL}=${props.VM_LEVEL2D}\nESTAFETA-> ${infoExtra.estafeta}\nPROVINCIA-> ${infoExtra.provincia}`;
+    // 4. GENERAR CONTENIDO QR
+    const contenidoQR = `CP-> ${codigoFinal}\nCOORD-> ${centerLat.toFixed(6)},${centerLng.toFixed(6)}\nZONA-> ${zonaNombre}=${zonaID}\nESTAFETA-> ${infoExtra.estafeta}\nPROVINCIA-> ${provincia}`;
     const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=" + encodeURIComponent(contenidoQR);
 
-
-    // 3. Renderizamos el Popup
+    // 5. RENDERIZAR EL POPUP ÚNICO
     let htmlPopup = `
-    <div style="text-align: center; min-width: 170px;">
+    <div style="text-align: center; min-width: 175px;">
         <span style="font-size: 9px; color: #666; text-transform: uppercase; font-weight: bold; display: block; margin-bottom: 3px; border-bottom: 1px solid #eee;">${titulo}</span>
         
         ${esNivelZona ? `
             <div style="color: #1a73e8; font-weight: bold; font-size: 16px; margin: 10px 0;">${zonaNombre}</div>
         ` : `
-            <div class="codigo-final" style="margin: 5px 0; font-size: 14px;">${codigoFinal}</div>
-            <div style="color: #1a73e8; font-weight: bold; font-size: 11px; margin-bottom: 5px;">${zonaNombre}=${zonaID}</div>
-            <p style="margin: 2px 0; font-size: 11px;"><b>Estafeta:</b> ${infoExtra.estafeta}</p>
+            <div class="codigo-final" style="margin: 5px 0; font-size: 14px; font-weight: bold;">${codigoFinal}</div>
+            <p style="margin: 5px 0; color: #1a73e8; font-weight: bold; font-family: monospace; font-size: 13px;">
+                ${zonaNombre}=${zonaID}
+            </p>
+            <p style="margin: 3px 0; font-size: 11px;"><b>Estafeta:</b><br>${infoExtra.estafeta}</p>
         `}
 
-        <p style="margin: 2px 0; font-size: 11px;"><b>Provincia:</b> ${provincia}</p>
+        <p style="margin: 3px 0; font-size: 11px;"><b>Provincia:</b> ${provincia}</p>
         
         ${!esNivelZona ? `
-            <div style="margin-top: 5px; padding-top: 5px; border-top: 1px dotted #ccc; font-size: 9px; color: #666; font-family: monospace;">
-                Lat: ${centerLat.toFixed(6)} | Lon: ${centerLng.toFixed(6)}
+            <div style="margin-top: 5px; font-size: 10px; color: #666; font-family: monospace;">
+                Lat: ${centerLat.toFixed(6)}<br>Lon: ${centerLng.toFixed(6)}
             </div>
             
-            ${z >= 19 ? `<div style="margin: 8px 0;"><img src="${qrUrl}" class="qr-code-estilo" style="width: 100px; height: 100px; margin: 0 auto; display: block;"></div>` : ''}
-            
-            <div class="btn-container" style="margin-top: 10px; border-top: 1px solid #eee; padding-top: 8px;">
+            ${z >= 18.5 ? `<div style="text-align: center; margin: 8px 0;"><img src="${qrUrl}" style="width: 100px; height: 100px; margin: 0 auto; display: block;"></div>` : ''}
+
+            <div class="btn-container" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px; text-align: center;">
                 <a href="https://www.google.com/maps?q=${centerLat},${centerLng}" target="_blank" class="btn-maps">📍 MAPS</a>
                 <a href="https://wa.me/?text=Mi+Código+Postal:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
-                <button onclick="buscarEstafetaCercana(${centerLat},${centerLng})" class="btn-cercana" style="width:100%; margin-top:5px;">📍 ESTAFETA</button>
+                <button onclick="buscarEstafetaCercana(${centerLat},${centerLng})" class="btn-cercana" style="display: block; width: 100%; margin-top:5px;">📍 ESTAFETA</button>
             </div>
         ` : ''}
     </div>`;
@@ -326,35 +316,7 @@ function seleccionar(lat, lng, props = null) {
         }) 
     })
     .addTo(selectionLayer)
-    .bindPopup(`
-        <div class="info-popup" style="text-align: center;">
-            <span class="popup-header" style="display: block;">${titulo}</span>
-            <div class="codigo-final" style="display: block; margin: 5px auto;">${esNivelZona ? zonaNombre : codigoFinal}</div>
-            
-            ${!esNivelZona ? `
-                <p style="margin: 5px 0; color: #1a73e8; font-weight: bold; font-family: monospace; font-size: 13px;">
-                    ${zonaNombre}=${zonaID}
-                </p>
-                <p style="margin: 3px 0;"><b>Estafeta:</b><br>${infoExtra.estafeta}</p>
-            ` : ''}
-            
-            <p style="margin: 3px 0;"><b>Provincia:</b> ${provincia}</p>
-            
-            ${!esNivelZona ? `
-                <div style="margin-top: 5px; font-size: 10px; color: #666; font-family: monospace;">
-                    Lat: ${centerLat.toFixed(6)}<br>Lon: ${centerLng.toFixed(6)}
-                </div>
-            ` : ''}
-        </div>
-        
-        ${z >= 18.5 ? `<div style="text-align: center; margin: 5px 0;"><img src="${qrUrl}" class="qr-code-estilo"></div>` : ''}
-
-        <div class="btn-container" style="margin-top:8px; border-top:1px solid #eee; padding-top:5px; text-align: center;">
-            <a href="https://www.google.com/maps?q=${centerLat},${centerLng}" target="_blank" class="btn-maps">📍 MAPS</a>
-            <a href="https://wa.me/?text=Mi+Código+Postal:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
-            <button onclick="buscarEstafetaCercana(${centerLat},${centerLng})" class="btn-cercana" style="display: block; width: 100%;">📍 ESTAFETA</button>
-        </div>
-    `, { minWidth: 180 })
+    .bindPopup(htmlPopup, { minWidth: 180 })
     .openPopup();
 }
 
@@ -521,6 +483,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
