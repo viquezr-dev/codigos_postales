@@ -67,6 +67,8 @@
             image-rendering: crisp-edges;
             display: block;
             margin: 0 auto;
+            max-width: 150px; 
+            height: auto;
         }
     </style>
 </head>
@@ -271,7 +273,7 @@ function seleccionar(lat, lng, props = null) {
 
     
     // Contenido del QR: Datos limpios para lectura rápida en móvil
-    const esNivelPico = (props.NIVEL === "PICO");
+    const esNivelPico = (z >= 18.5);
         // Obtenemos info relacional
     let infoExtra = obtenerInfoAdicional(props.VM_LEVEL2D);
     
@@ -474,6 +476,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
