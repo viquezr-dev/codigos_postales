@@ -227,7 +227,7 @@ function seleccionar(lat, lng, props = null) {
     }
 
     if (!props) {
-        L.marker([Lat, Lng], { 
+        L.marker([centroLat, centroLng], { 
             icon: L.icon({ 
                 iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', 
                 iconSize: [18, 28], iconAnchor: [9, 28] 
@@ -239,7 +239,7 @@ function seleccionar(lat, lng, props = null) {
         return;
     }
 
-    const res = getGridInfo(lat, lng);
+    const res = getGridInfo(centrolat, centrolng);
     const VL2 = props.VM_LEVEL2D || "N/A";
     let titulo = "", codigoFinal = "";
 
@@ -270,10 +270,10 @@ function seleccionar(lat, lng, props = null) {
         codigoFinal = full.substring(0, 5) + "-" + full.substring(5);
         
         // Aquí activamos la Rejilla Quirúrgica que ya tenemos
-        dibujarRejillaPico(lat, lng, res);
+        dibujarRejillaPico(centrolat, centrolng, res);
     }
     const mapCenter = mymap.getCenter();
-    const offsetFinal = (lat < mapCenter.lat) ? L.point(0, -70) : L.point(0, -30);
+    const offsetFinal = (centrolat < mapCenter.lat) ? L.point(0, -70) : L.point(0, -30);
     
     
     // --- LANZAR POPUP FINAL ---
@@ -488,6 +488,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
