@@ -27,9 +27,10 @@
 
         /* Globos de Información */
         .leaflet-popup-content-wrapper { padding: 5px; border-radius: 4px; font-size: 11px; }
-        .leaflet-popup-content { margin: 8px; width: 180px !important; line-height: 1.2; }
+        .leaflet-popup-content { margin: 5px; width: 160px !important; line-height: 1.1; }
         .popup-header { font-weight: bold; display: block; margin-bottom: 3px; border-bottom: 1px solid #eee; padding-bottom: 2px; text-align: center; font-size: 9px; text-transform: uppercase; color: #666; }
-        .codigo-final { background: #1a2a6c; color: white; padding: 6px; border-radius: 4px; font-size: 14px; font-weight: bold; text-align: center; margin-bottom: 5px; border: 1px solid #f1c40f; }
+        .info-popup p { margin: 2px 0; font-size: 10px; }
+        .codigo-final { background: #1a2a6c; color: white; padding: 4px; border-radius: 4px; font-size: 13px; font-weight: bold; text-align: center; margin-bottom: 3px; border: 1px solid #f1c40f; }
         
         .btn-container { display: flex; gap: 3px; justify-content: center; flex-wrap: wrap; }
         .btn-maps, .btn-ws { padding: 4px 8px; border-radius: 3px; text-decoration: none; font-size: 10px; font-weight: bold; color: white !important; }
@@ -58,16 +59,16 @@
         }
 
         .qr-code-estilo {
-            width: 150px !important; 
-            height: 150px !important;
+            width: 120px !important; 
+            height: 120px !important;
             background-color: white !important; 
             border: 5px solid white !important; 
             border-radius: 0px !important;      
             image-rendering: pixelated;         
             image-rendering: crisp-edges;
             display: block;
-            margin: 0 auto;
-            max-width: 150px; 
+            margin: 5px auto;
+            max-width: 120px; 
             height: auto;
         }
     </style>
@@ -277,7 +278,7 @@ function seleccionar(lat, lng, props = null) {
         // Obtenemos info relacional
     let infoExtra = obtenerInfoAdicional(props.VM_LEVEL2D);
     
-    const contenidoQR = `CP-> ${codigoFinal}\nZONA-> ${props.VM_LEVEL}=${props.VM_LEVEL2D}\nESTAFETA-> ${infoExtra.estafeta}\nPROVINCIA-> ${infoExtra.provincia}`;
+    const contenidoQR = `CP-> ${codigoFinal}\nZONA-> ${props.VM_LEVEL}=${props.VM_LEVEL2D}\nCOORD-> ${coordsTexto}\nESTAFETA-> ${infoExtra.estafeta}\nPROVINCIA-> ${infoExtra.provincia}`;
     const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&ecc=M&format=png&data=" + encodeURIComponent(contenidoQR);
     console.log("URL generada para el QR:", qrUrl); 
     
@@ -293,6 +294,7 @@ function seleccionar(lat, lng, props = null) {
         <span class="popup-header">CODIGO POSTAL</span>
         <div class="codigo-final">${codigoFinal}</div>
         <p><b>Zona:</b> ${props.VM_LEVEL}=${props.VM_LEVEL2D}</p>
+        <p><b>Coord:</b> ${coordsTexto}</p>
         <p><b>Estafeta:</b> ${infoExtra.estafeta}</p>
         <p><b>Provincia:</b> ${infoExtra.provincia}</p>
     </div>
@@ -304,12 +306,12 @@ function seleccionar(lat, lng, props = null) {
     </div>
 ` : ''}
 
-    <div class="btn-container" style="margin-top:10px; border-top:1px solid #eee; padding-top:10px;">
+    <div class="btn-container" style="margin-top:5px; border-top:1px solid #eee; padding-top:5px;">
         <a href="${urlMaps}" target="_blank" class="btn-maps">📍 MAPS</a>
-        <a href="https://wa.me/?text=Mi+Dirección:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
+        <a href="https://wa.me/?text=Mi+Dirección:+${codigoFinal}+Coord:+${coordsTexto}" target="_blank" class="btn-ws">💬 WS</a>
         <button onclick="buscarEstafetaCercana(${lat},${lng})" class="btn-cercana">📍 ESTAFETA CERCANA</button>
     </div>
-`, { offset: offsetConfig, minWidth: 200 })
+`, { offset: offsetConfig, minWidth: 160 })
 .openPopup();
 }
 
@@ -476,6 +478,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
