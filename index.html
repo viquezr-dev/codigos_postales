@@ -292,7 +292,7 @@ function seleccionar(lat, lng, props = null) {
     <div class="info-popup">
         <span class="popup-header">CODIGO POSTAL</span>
         <div class="codigo-final">${codigoFinal}</div>
-        <p><b>Zona:</b> ${props.VM_LEVEL}</p>
+        <p><b>Zona:</b> ${props.VM_LEVEL}=${props.VM_LEVEL2D}</p>
         <p><b>Estafeta:</b> ${infoExtra.estafeta}</p>
         <p><b>Provincia:</b> ${infoExtra.provincia}</p>
     </div>
@@ -476,6 +476,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
