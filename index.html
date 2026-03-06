@@ -292,7 +292,7 @@ function seleccionar(lat, lng, props = null) {
     const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&ecc=M&format=png&data=" + encodeURIComponent(contenidoQR);
     console.log("URL generada para el QR:", qrUrl); 
     
-    L.marker([lat, lng], { 
+    L.marker([centrolat, centrolng], { 
         icon: L.icon({ 
             iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', 
             iconSize: [18, 28], iconAnchor: [9, 28] 
@@ -488,6 +488,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
