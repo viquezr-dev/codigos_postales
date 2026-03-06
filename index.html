@@ -53,7 +53,17 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
             border-radius: 8px; /* Opcional: le da esquinas redondeadas */
         }
-    
+
+        .zona-tooltip {
+            background: rgba(26, 42, 108, 0.9) !important;
+            color: white !important;
+            border: 1px solid #f1c40f !important;
+            font-weight: bold;
+            border-radius: 4px;
+            padding: 8px;
+            font-size: 11px;
+        }
+        
         .leaflet-popup-tip {
             background: rgba(255, 255, 255, 0.7) !important;
         }
@@ -112,9 +122,30 @@ L.control.zoom({ position: 'bottomright' }).addTo(mymap);
 const layerZonas = L.geoJSON(null, { 
     style: { color: "#333", weight: 1.5, fillOpacity: 0.1, fillColor: "#3498db" },
     onEachFeature: (f, l) => {
-        l.on({
-            mouseover: (e) => { if(mymap.hasLayer(layerZonas)) e.target.setStyle({ weight: 3, color: '#f1c40f', fillOpacity: 0.3 }); },
-            mouseout: (e) => { layerZonas.resetStyle(e.target); }
+        // Al pasar el ratón (Mouseover)
+        l.on('mouseover', (e) => {
+            if(mymap.hasLayer(layerZonas)) {
+                e.target.setStyle({ weight: 3, color: '#f1c40f', fillOpacity: 0.3 });
+                
+                // Traemos la info de la zona
+                const p = f.properties;
+                const info = obtenerInfoAdicional(p.VM_LEVEL2D);
+                
+                // Creamos un popup rápido que sigue al ratón o se abre en el centro
+                l.bindTooltip(`
+                    <div style='text-align:center;'>
+                        <b style='color:#1a2a6c;'>ZONA: ${p.VM_LEVEL}=${p.VM_LEVEL2D}</b><br>
+                        <span>${info.estafeta}</span><br>
+                        <small>${info.provincia}</small>
+                    </div>
+                `, { sticky: true, direction: 'top', className: 'zona-tooltip' }).openTooltip();
+            }
+        });
+
+        // Al quitar el ratón (Mouseout)
+        l.on('mouseout', (e) => {
+            layerZonas.resetStyle(e.target);
+            l.closeTooltip();
         });
     }
 }).addTo(mymap);
@@ -454,8 +485,19 @@ mymap.on('locationfound', (e) => {
     seleccionar(e.latlng.lat, e.latlng.lng); 
 });
 
-mymap.on('click', (e) => seleccionar(e.latlng.lat, e.latlng.lng));
-mymap.on('moveend', render);
+ymap.on('click', (e) => {
+    // Si la capa de zonas está visible, bloqueamos el clic de selección
+    if (mymap.hasLayer(layerZonas)) {
+        console.log("Modo Exploración: Clic desactivado. Use Hover sobre las zonas.");
+        return; 
+    }
+    
+    // Si la capa de zonas está oculta, funciona el sistema de códigos postales
+    seleccionar(e.latlng.lat, e.latlng.lng);
+});
+
+
+    mymap.on('moveend', render);
 
 L.control.layers(null, { 
     "🔲 Zonas": layerZonas, 
@@ -470,6 +512,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
