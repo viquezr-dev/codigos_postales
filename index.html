@@ -203,95 +203,80 @@ function seleccionar(lat, lng, props = null) {
     selectionLayer.clearLayers();
     distanceLayer.clearLayers();
     const z = mymap.getZoom();
-    // Calculamos el centro del cuadro Pico (el más pequeño)
-    const stepP = PARAMS.RES_PICO;
-    const xP = Math.floor(((lng - ORIGIN.lng) / stepP) + 0.00001);
-    const yP = Math.floor(((ORIGIN.lat - lat) / stepP) + 0.00001);
-    
-    // Coordenadas del centro exacto de ese cuadro
-    const centroLat = ORIGIN.lat - (yP * stepP) - (stepP / 2);
-    const centroLng = ORIGIN.lng + (xP * stepP) + (stepP / 2);
-    
-    // Usamos estas coordenadas para TODO lo visual a partir de aquí
-    const puntoClic = L.latLng(centroLat, centroLng);
 
-    // 1. BUSCAR PROPIEDADES (Zonas de Panamá)
+    // --- PASO 1: DETERMINAR EL "STEP" SEGÚN EL ZOOM ---
+    let stepActual;
+    if (z < 14.5) stepActual = PARAMS.RES_MACRO;
+    else if (z < 17) stepActual = PARAMS.RES_MICRO;
+    else if (z < 18.5) stepActual = PARAMS.RES_NANO;
+    else stepActual = PARAMS.RES_PICO;
+
+    // --- PASO 2: CALCULAR EL CENTRO DEL CUADRO CORRESPONDIENTE ---
+    const x = Math.floor(((lng - ORIGIN.lng) / stepActual) + 0.00001);
+    const y = Math.floor(((ORIGIN.lat - lat) / stepActual) + 0.00001);
+    
+    const centroLat = ORIGIN.lat - (y * stepActual) - (stepActual / 2);
+    const centroLng = ORIGIN.lng + (x * stepActual) + (stepActual / 2);
+    const puntoCentro = L.latLng(centroLat, centroLng);
+
+    // --- PASO 3: BUSCAR PROPIEDADES (Zonas) ---
+    // Usamos el punto original del clic para buscar la zona, para mayor sensibilidad
     if (!props) {
         layerZonas.eachLayer(function(layer) {
-            if (layer.getBounds().contains(puntoClic)) {
-                if (isPointInGeoJSON(puntoClic, layer.toGeoJSON())) {
+            if (layer.getBounds().contains(L.latLng(lat, lng))) {
+                if (isPointInGeoJSON(L.latLng(lat, lng), layer.toGeoJSON())) {
                     props = layer.feature.properties;
                 }
             }
         });
     }
 
+    // Si no hay zona, marcamos el error en el punto exacto del clic
     if (!props) {
-        L.marker([centroLat, centroLng], { 
+        L.marker([lat, lng], { 
             icon: L.icon({ 
                 iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', 
                 iconSize: [18, 28], iconAnchor: [9, 28] 
             }) 
         }).addTo(selectionLayer).bindPopup(`
             <span class="popup-header">⚠️ ÁREA NO DEFINIDA</span>
-            <div style="text-align:center; padding:5px; font-size:11px;">Fuera de límites territoriales o zona no mapeada.</div>
+            <div style="text-align:center; padding:5px; font-size:11px;">Fuera de límites territoriales.</div>
         `, { offset: L.point(0, -25) }).openPopup();
         return;
     }
 
+    // --- PASO 4: OBTENER INFO DE GRILLA Y DEFINIR CÓDIGOS ---
     const res = getGridInfo(centroLat, centroLng);
     const VL2 = props.VM_LEVEL2D || "N/A";
     let titulo = "", codigoFinal = "";
 
-    // --- LÓGICA DE CLIC POR NIVEL (Sincronía total entre Vista y Datos) ---
-    
     if (z < 14.5) {
-        // NIVEL MACRO
         titulo = "ÁREA POSTAL (MACRO)";
         codigoFinal = VL2 + "-" + res.macro;
         dibujarCuadro(centroLat, centroLng, PARAMS.RES_MACRO, '#3498db');
-
     } else if (z < 17) {
-        // NIVEL MICRO
         titulo = "SITIO POSTAL (MICRO)";
         codigoFinal = VL2 + "-" + res.macro + res.micro;
         dibujarCuadro(centroLat, centroLng, PARAMS.RES_MICRO, '#f1c40f');
-
     } else if (z < 18.5) {
-        // NIVEL NANO
         titulo = "UBICACIÓN (NANO)";
         codigoFinal = VL2 + "-" + res.macro + res.micro + res.nano;
         dibujarCuadro(centroLat, centroLng, PARAMS.RES_NANO, '#e67e22');
-
     } else {
-        // NIVEL PICO (EL COMPLETO)
         titulo = "CÓDIGO POSTAL (PICO)";
         let full = VL2 + res.macro + res.micro + res.nano + res.pico;
         codigoFinal = full.substring(0, 5) + "-" + full.substring(5);
-        
-        // Aquí activamos la Rejilla Quirúrgica que ya tenemos
-        dibujarRejillaPico(centroLat, centroLng, res);
+        dibujarRejillaPico(centroLat, centroLng); 
     }
-    const mapCenter = mymap.getCenter();
-    const offsetFinal = (centroLat < mapCenter.lat) ? L.point(0, -70) : L.point(0, -30);
-    
-    
-    // --- LANZAR POPUP FINAL ---
-    const offsetConfig = L.point(100, -50); 
-    const VL1 = props.VM_LEVEL || "N/A";
-    const urlMaps = "https://www.google.com/maps?q=" + centroLat + "," + centroLng;
-    
 
-    
-    // Contenido del QR: Datos limpios para lectura rápida en móvil
+    // --- PASO 5: POPUP FINAL ---
     const esNivelPico = (z >= 18.5);
-        // Obtenemos info relacional
     let infoExtra = obtenerInfoAdicional(props.VM_LEVEL2D);
     const coordsTexto = `${centroLat.toFixed(7)},${centroLng.toFixed(7)}`;
+    const urlMaps = "https://www.google.com/maps?q=" + centroLat + "," + centroLng;
     const contenidoQR = `CP-> ${codigoFinal}\nZONA-> ${props.VM_LEVEL}=${props.VM_LEVEL2D}\nCOORD-> ${coordsTexto}\nESTAFETA-> ${infoExtra.estafeta}\nPROVINCIA-> ${infoExtra.provincia}`;
     const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&ecc=M&format=png&data=" + encodeURIComponent(contenidoQR);
-    console.log("URL generada para el QR:", qrUrl); 
-    
+
     L.marker([centroLat, centroLng], { 
         icon: L.icon({ 
             iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', 
@@ -301,27 +286,24 @@ function seleccionar(lat, lng, props = null) {
     .addTo(selectionLayer)
     .bindPopup(`
     <div class="info-popup">
-        <span class="popup-header">CODIGO POSTAL</span>
+        <span class="popup-header">${titulo}</span>
         <div class="codigo-final">${codigoFinal}</div>
         <p><b>Zona:</b> ${props.VM_LEVEL}=${props.VM_LEVEL2D}</p>
         <p><b>Coord:</b> ${coordsTexto}</p>
         <p><b>Estafeta:</b> ${infoExtra.estafeta}</p>
         <p><b>Provincia:</b> ${infoExtra.provincia}</p>
     </div>
-    
     ${esNivelPico ? `
     <div style="text-align:center; margin-top:5px; border-top:1px solid #eee; padding-top:5px;">
         <img src="${qrUrl}" class="qr-code-estilo" alt="QR Postal">
-        <p style="font-size:9px; color:#333; font-weight:bold; margin:2px 0;">Escanea para ver datos de envío</p>
-    </div>
-    ` : ''}
-
+        <p style="font-size:9px; color:#333; font-weight:bold; margin:2px 0;">Escanea datos de envío</p>
+    </div>` : ''}
     <div class="btn-container" style="margin-top:5px; border-top:1px solid #eee; padding-top:5px;">
         <a href="${urlMaps}" target="_blank" class="btn-maps">📍 MAPS</a>
-        <a href="https://wa.me/?text=Mi+Dirección:+${codigoFinal}+Coord:+${coordsTexto}" target="_blank" class="btn-ws">💬 WS</a>
+        <a href="https://wa.me/?text=Dirección:+${codigoFinal}+Coord:+${coordsTexto}" target="_blank" class="btn-ws">💬 WS</a>
         <button onclick="buscarEstafetaCercana(${centroLat},${centroLng})" class="btn-cercana">📍 ESTAFETA CERCANA</button>
     </div>
-`, { offset: offsetConfig, minWidth: 160 })
+`, { offset: L.point(100, -50), minWidth: 160 })
 .openPopup();
 }
 
@@ -488,6 +470,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
