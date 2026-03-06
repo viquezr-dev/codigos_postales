@@ -285,12 +285,12 @@ function seleccionar(lat, lng, props = null) {
     })
     .addTo(selectionLayer)
     .bindPopup(`
+    <div class="info-popup">
         <span class="popup-header">CODIGO POSTAL</span>
         <div class="codigo-final">${codigoFinal}</div>
-        <div style="font-size:11px; margin-top:8px; color:#222; text-align:left; padding:0 5px;">
-        <p style="margin:2px 0;"><b>Zona:</b> ${props.VM_LEVEL}</p>
-        <p style="margin:2px 0;"><b>Estafeta:</b> ${infoExtra.estafeta}</p>
-        <p style="margin:2px 0;"><b>Provincia:</b> ${infoExtra.provincia}</p>
+        <p><b>Zona:</b> ${props.VM_LEVEL}</p>
+        <p><b>Estafeta:</b> ${infoExtra.estafeta}</p>
+        <p><b>Provincia:</b> ${infoExtra.provincia}</p>
     </div>
     
     ${esNivelPico ? `
@@ -299,22 +299,19 @@ function seleccionar(lat, lng, props = null) {
             <p style="font-size:9px; color:#666; margin-top:2px;">Ticket digital listo para escaneo</p>
         </div>
     ` : ''}
-        <div class="btn-container" style="margin-top:10px;">
-            <a href="${urlMaps}" target="_blank" class="btn-maps">📍 MAPS</a>
-            <a href="https://wa.me/?text=Mi+Dirección:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
-            <button onclick="buscarEstafetaCercana(${lat},${lng})" class="btn-cercana">📍 ESTAFETA CERCANA</button>
-        </div>
-        <div style="text-align:center;">
-            <img src="${qrUrl}" class="qr-code-estilo" alt="QR Postal">
-            <p style="font-size:10px; color:#333;">Escanea para ver datos de envío</p>
-        </div>
-    `, { 
-        offset: offsetConfig,
-        minWidth: 200,
-        closeButton: true,
-        autoPan: true 
-    })
-    .openPopup();
+
+    <div class="btn-container" style="margin-top:10px; border-top:1px solid #eee; padding-top:10px;">
+        <a href="${urlMaps}" target="_blank" class="btn-maps">📍 MAPS</a>
+        <a href="https://wa.me/?text=Mi+Dirección:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
+        <button onclick="buscarEstafetaCercana(${lat},${lng})" class="btn-cercana">📍 ESTAFETA CERCANA</button>
+    </div>
+`, { 
+    offset: offsetConfig,
+    minWidth: 200,
+    closeButton: true,
+    autoPan: true 
+})
+.openPopup();
 }
 
 // --- FUNCIONES DE APOYO PARA EL DIBUJO ---
@@ -480,6 +477,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
