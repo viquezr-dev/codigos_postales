@@ -268,11 +268,13 @@ function seleccionar(lat, lng, props = null) {
     const VL1 = props.VM_LEVEL || "N/A";
     const urlMaps = "https://www.google.com/maps?q=" + lat + "," + lng;
     
-    // Obtenemos info relacional
-    const infoExtra = obtenerInfoAdicional(props.VM_LEVEL2D || "");
+
     
     // Contenido del QR: Datos limpios para lectura rápida en móvil
     const esNivelPico = (props.NIVEL === "PICO");
+        // Obtenemos info relacional
+    let infoExtra = obtenerInfoAdicional(props.VM_LEVEL2D);
+    
     const contenidoQR = `CP: ${codigoFinal}\nZONA POSTAL: ${props.VM_LEVEL}\nESTAFETA: ${infoExtra.estafeta}\nPROVINCIA: ${infoExtra.provincia}`;
     const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&ecc=M&charset-source=UTF-8&data=" + encodeURIComponent(contenidoQR);
     console.log("URL generada para el QR:", qrUrl); 
@@ -294,23 +296,18 @@ function seleccionar(lat, lng, props = null) {
     </div>
     
     ${esNivelPico ? `
-        <div style="text-align:center; margin-top:10px; border-top:1px solid #eee; padding-top:10px;">
-            <img src="${qrUrl}" class="qr-code-estilo" alt="QR Postal">
-            <p style="font-size:9px; color:#666; margin-top:2px;">Ticket digital listo para escaneo</p>
-        </div>
-    ` : ''}
+    <div style="text-align:center; margin-top:10px; border-top:1px solid #eee; padding-top:10px;">
+        <img src="${qrUrl}" class="qr-code-estilo" alt="QR Postal">
+        <p style="font-size:10px; color:#333; font-weight:bold; margin-top:5px;">Escanea para ver datos de envío</p>
+    </div>
+` : ''}
 
     <div class="btn-container" style="margin-top:10px; border-top:1px solid #eee; padding-top:10px;">
         <a href="${urlMaps}" target="_blank" class="btn-maps">📍 MAPS</a>
         <a href="https://wa.me/?text=Mi+Dirección:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
         <button onclick="buscarEstafetaCercana(${lat},${lng})" class="btn-cercana">📍 ESTAFETA CERCANA</button>
     </div>
-`, { 
-    offset: offsetConfig,
-    minWidth: 200,
-    closeButton: true,
-    autoPan: true 
-})
+`, { offset: offsetConfig, minWidth: 200 })
 .openPopup();
 }
 
@@ -477,6 +474,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
