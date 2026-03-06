@@ -272,7 +272,8 @@ function seleccionar(lat, lng, props = null) {
     const infoExtra = obtenerInfoAdicional(props.VM_LEVEL2D || "");
     
     // Contenido del QR: Datos limpios para lectura rápida en móvil
-    const contenidoQR = "DATOS COTEL: CP " + codigoFinal + " | ESTAFETA " + infoExtra.estafeta + " | PROVINCIA " + infoExtra.provincia;
+    const esNivelPico = (props.NIVEL === "PICO");
+    const contenidoQR = `CP: ${codigoFinal}\nZONA POSTAL: ${props.VM_LEVEL}\nESTAFETA: ${infoExtra.estafeta}\nPROVINCIA: ${infoExtra.provincia}`;
     const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&ecc=M&charset-source=UTF-8&data=" + encodeURIComponent(contenidoQR);
     console.log("URL generada para el QR:", qrUrl); 
     
@@ -286,14 +287,19 @@ function seleccionar(lat, lng, props = null) {
     .bindPopup(`
         <span class="popup-header">CODIGO POSTAL</span>
         <div class="codigo-final">${codigoFinal}</div>
-        <div style="text-align:center; font-size:10px; color:#555; margin-bottom:5px; border-bottom:1px solid #eee; padding-bottom:3px;">
-            ${VL1} = ${VL2}
+        <div style="font-size:11px; margin-top:8px; color:#222; text-align:left; padding:0 5px;">
+        <p style="margin:2px 0;"><b>Zona:</b> ${props.VM_LEVEL}</p>
+        <p style="margin:2px 0;"><b>Estafeta:</b> ${infoExtra.estafeta}</p>
+        <p style="margin:2px 0;"><b>Provincia:</b> ${infoExtra.provincia}</p>
+    </div>
+    
+    ${esNivelPico ? `
+        <div style="text-align:center; margin-top:10px; border-top:1px solid #eee; padding-top:10px;">
+            <img src="${qrUrl}" class="qr-code-estilo" alt="QR Postal">
+            <p style="font-size:9px; color:#666; margin-top:2px;">Ticket digital listo para escaneo</p>
         </div>
-        <div style="font-size:10px; margin-bottom:5px; color:#333;">
-            <b>Estafeta:</b> ${infoExtra.estafeta}<br>
-            <b>Provincia:</b> ${infoExtra.provincia}
-        </div>
-        <div class="btn-container">
+    ` : ''}
+        <div class="btn-container" style="margin-top:10px;">
             <a href="${urlMaps}" target="_blank" class="btn-maps">📍 MAPS</a>
             <a href="https://wa.me/?text=Mi+Dirección:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
             <button onclick="buscarEstafetaCercana(${lat},${lng})" class="btn-cercana">📍 ESTAFETA CERCANA</button>
@@ -474,6 +480,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
