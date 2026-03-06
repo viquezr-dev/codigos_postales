@@ -277,8 +277,8 @@ function seleccionar(lat, lng, props = null) {
         // Obtenemos info relacional
     let infoExtra = obtenerInfoAdicional(props.VM_LEVEL2D);
     
-    const contenidoQR = `CP: ${codigoFinal}\nZONA: ${props.VM_LEVEL}=${props.VM_LEVEL2D}\nESTAFETA: ${infoExtra.estafeta}\nPROVINCIA: ${infoExtra.provincia}`;;
-    const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&ecc=M&data=" + encodeURIComponent(contenidoQR);
+    const contenidoQR = `CP ${codigoFinal}\nZONA ${props.VM_LEVEL}=${props.VM_LEVEL2D}\nESTAFETA ${infoExtra.estafeta}\nPROVINCIA ${infoExtra.provincia}`;
+    const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&ecc=M&format=png&data=" + encodeURIComponent(contenidoQR);
     console.log("URL generada para el QR:", qrUrl); 
     
     L.marker([lat, lng], { 
@@ -476,6 +476,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
