@@ -300,11 +300,11 @@ function seleccionar(lat, lng, props = null) {
     </div>
     
     ${esNivelPico ? `
-    <div style="text-align:center; margin-top:10px; border-top:1px solid #eee; padding-top:10px;">
+    <div style="text-align:center; margin-top:5px; border-top:1px solid #eee; padding-top:5px;">
         <img src="${qrUrl}" class="qr-code-estilo" alt="QR Postal">
-        <p style="font-size:10px; color:#333; font-weight:bold; margin-top:5px;">Escanea para ver datos de envío</p>
+        <p style="font-size:9px; color:#333; font-weight:bold; margin:2px 0;">Escanea para ver datos de envío</p>
     </div>
-` : ''}
+    ` : ''}
 
     <div class="btn-container" style="margin-top:5px; border-top:1px solid #eee; padding-top:5px;">
         <a href="${urlMaps}" target="_blank" class="btn-maps">📍 MAPS</a>
@@ -478,6 +478,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
