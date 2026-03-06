@@ -27,10 +27,9 @@
 
         /* Globos de Información */
         .leaflet-popup-content-wrapper { padding: 5px; border-radius: 4px; font-size: 11px; }
-        .leaflet-popup-content { margin: 5px; width: 160px !important; line-height: 1.1; }
+        .leaflet-popup-content { margin: 8px; width: 180px !important; line-height: 1.2; }
         .popup-header { font-weight: bold; display: block; margin-bottom: 3px; border-bottom: 1px solid #eee; padding-bottom: 2px; text-align: center; font-size: 9px; text-transform: uppercase; color: #666; }
-        .info-popup p { margin: 2px 0; font-size: 10px; }
-        .codigo-final { background: #1a2a6c; color: white; padding: 4px; border-radius: 4px; font-size: 13px; font-weight: bold; text-align: center; margin-bottom: 3px; border: 1px solid #f1c40f; }
+        .codigo-final { background: #1a2a6c; color: white; padding: 6px; border-radius: 4px; font-size: 14px; font-weight: bold; text-align: center; margin-bottom: 5px; border: 1px solid #f1c40f; }
         
         .btn-container { display: flex; gap: 3px; justify-content: center; flex-wrap: wrap; }
         .btn-maps, .btn-ws { padding: 4px 8px; border-radius: 3px; text-decoration: none; font-size: 10px; font-weight: bold; color: white !important; }
@@ -53,32 +52,22 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
             border-radius: 8px; /* Opcional: le da esquinas redondeadas */
         }
-
-        .zona-tooltip {
-            background: rgba(26, 42, 108, 0.9) !important;
-            color: white !important;
-            border: 1px solid #f1c40f !important;
-            font-weight: bold;
-            border-radius: 4px;
-            padding: 8px;
-            font-size: 11px;
-        }
-        
+    
         .leaflet-popup-tip {
             background: rgba(255, 255, 255, 0.7) !important;
         }
 
         .qr-code-estilo {
-            width: 120px !important; 
-            height: 120px !important;
+            width: 150px !important; 
+            height: 150px !important;
             background-color: white !important; 
             border: 5px solid white !important; 
             border-radius: 0px !important;      
             image-rendering: pixelated;         
             image-rendering: crisp-edges;
             display: block;
-            margin: 5px auto;
-            max-width: 120px; 
+            margin: 0 auto;
+            max-width: 150px; 
             height: auto;
         }
     </style>
@@ -123,28 +112,8 @@ const layerZonas = L.geoJSON(null, {
     style: { color: "#333", weight: 1.5, fillOpacity: 0.1, fillColor: "#3498db" },
     onEachFeature: (f, l) => {
         l.on({
-            mouseover: (e) => {
-                e.target.setStyle({ weight: 3, color: '#f1c40f', fillOpacity: 0.3 });
-                // Usamos VM_LEVEL como solicitaste
-                const p = f.properties;
-                const info = obtenerInfoAdicional(p.VM_LEVEL2D);
-                
-                l.bindTooltip(`
-                    <div style='text-align:center;'>
-                        <b style='color:#f1c40f;'>ZONA: ${p.VM_LEVEL}</b><br>
-                        <span style="color:white;">${info.estafeta}</span>
-                    </div>
-                `, { sticky: true, direction: 'top', className: 'zona-tooltip' }).openTooltip();
-            },
-            mouseout: (e) => {
-                layerZonas.resetStyle(e.target);
-                l.closeTooltip();
-            },
-            // Si la capa está activa, el clic en el polígono también dispara la selección
-            click: (e) => {
-                L.DomEvent.stopPropagation(e); // Evita doble clic
-                seleccionar(e.latlng.lat, e.latlng.lng, f.properties);
-            }
+            mouseover: (e) => { if(mymap.hasLayer(layerZonas)) e.target.setStyle({ weight: 3, color: '#f1c40f', fillOpacity: 0.3 }); },
+            mouseout: (e) => { layerZonas.resetStyle(e.target); }
         });
     }
 }).addTo(mymap);
@@ -233,27 +202,13 @@ function seleccionar(lat, lng, props = null) {
     selectionLayer.clearLayers();
     distanceLayer.clearLayers();
     const z = mymap.getZoom();
+    const puntoClic = L.latLng(lat, lng);
 
-    // --- NUEVO: CALCULAR EL CENTRO SEGÚN EL ZOOM ---
-    let stepActual;
-    if (z < 14.5) stepActual = PARAMS.RES_MACRO;
-    else if (z < 17) stepActual = PARAMS.RES_MICRO;
-    else if (z < 18.5) stepActual = PARAMS.RES_NANO;
-    else stepActual = PARAMS.RES_PICO;
-
-    const x = Math.floor(((lng - ORIGIN.lng) / stepActual) + 0.00001);
-    const y = Math.floor(((ORIGIN.lat - lat) / stepActual) + 0.00001);
-    
-    // Estas son las coordenadas centradas que usaremos para el marcador y el popup
-    const cLat = ORIGIN.lat - (y * stepActual) - (stepActual / 2);
-    const cLng = ORIGIN.lng + (x * stepActual) + (stepActual / 2);
-    const puntoCentro = L.latLng(cLat, cLng);
-
-    // 1. BUSCAR PROPIEDADES (Usamos lat/lng original para la búsqueda por sensibilidad)
+    // 1. BUSCAR PROPIEDADES (Zonas de Panamá)
     if (!props) {
         layerZonas.eachLayer(function(layer) {
-            if (layer.getBounds().contains(L.latLng(lat, lng))) {
-                if (isPointInGeoJSON(L.latLng(lat, lng), layer.toGeoJSON())) {
+            if (layer.getBounds().contains(puntoClic)) {
+                if (isPointInGeoJSON(puntoClic, layer.toGeoJSON())) {
                     props = layer.feature.properties;
                 }
             }
@@ -273,40 +228,60 @@ function seleccionar(lat, lng, props = null) {
         return;
     }
 
-    // Usamos el punto CENTRADO para la grilla y visualización
-    const res = getGridInfo(cLat, cLng);
+    const res = getGridInfo(lat, lng);
     const VL2 = props.VM_LEVEL2D || "N/A";
     let titulo = "", codigoFinal = "";
 
+    // --- LÓGICA DE CLIC POR NIVEL (Sincronía total entre Vista y Datos) ---
+    
     if (z < 14.5) {
+        // NIVEL MACRO
         titulo = "ÁREA POSTAL (MACRO)";
         codigoFinal = VL2 + "-" + res.macro;
-        dibujarCuadro(cLat, cLng, PARAMS.RES_MACRO, '#3498db');
+        dibujarCuadro(lat, lng, PARAMS.RES_MACRO, '#3498db');
+
     } else if (z < 17) {
+        // NIVEL MICRO
         titulo = "SITIO POSTAL (MICRO)";
         codigoFinal = VL2 + "-" + res.macro + res.micro;
-        dibujarCuadro(cLat, cLng, PARAMS.RES_MICRO, '#f1c40f');
+        dibujarCuadro(lat, lng, PARAMS.RES_MICRO, '#f1c40f');
+
     } else if (z < 18.5) {
+        // NIVEL NANO
         titulo = "UBICACIÓN (NANO)";
         codigoFinal = VL2 + "-" + res.macro + res.micro + res.nano;
-        dibujarCuadro(cLat, cLng, PARAMS.RES_NANO, '#e67e22');
+        dibujarCuadro(lat, lng, PARAMS.RES_NANO, '#e67e22');
+
     } else {
+        // NIVEL PICO (EL COMPLETO)
         titulo = "CÓDIGO POSTAL (PICO)";
         let full = VL2 + res.macro + res.micro + res.nano + res.pico;
         codigoFinal = full.substring(0, 5) + "-" + full.substring(5);
-        dibujarRejillaPico(cLat, cLng, res);
+        
+        // Aquí activamos la Rejilla Quirúrgica que ya tenemos
+        dibujarRejillaPico(lat, lng, res);
     }
-
-    const offsetConfig = L.point(100, -50); 
-    const urlMaps = `https://www.google.com/maps?q=${cLat},${cLng}`;
-    const esNivelPico = (z >= 18.5);
-    let infoExtra = obtenerInfoAdicional(props.VM_LEVEL2D);
-    const coordsTexto = `${cLat.toFixed(7)},${cLng.toFixed(7)}`;
+    const mapCenter = mymap.getCenter();
+    const offsetFinal = (lat < mapCenter.lat) ? L.point(0, -70) : L.point(0, -30);
     
-    const contenidoQR = `CP-> ${codigoFinal}\nZONA-> ${props.VM_LEVEL}=${props.VM_LEVEL2D}\nCOORD-> ${coordsTexto}\nESTAFETA-> ${infoExtra.estafeta}\nPROVINCIA-> ${infoExtra.provincia}`;
-    const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&ecc=M&format=png&data=" + encodeURIComponent(contenidoQR);
+    
+    // --- LANZAR POPUP FINAL ---
+    const offsetConfig = L.point(100, -50); 
+    const VL1 = props.VM_LEVEL || "N/A";
+    const urlMaps = "https://www.google.com/maps?q=" + lat + "," + lng;
+    
 
-    L.marker([cLat, cLng], { 
+    
+    // Contenido del QR: Datos limpios para lectura rápida en móvil
+    const esNivelPico = (z >= 18.5);
+        // Obtenemos info relacional
+    let infoExtra = obtenerInfoAdicional(props.VM_LEVEL2D);
+    
+    const contenidoQR = `CP-> ${codigoFinal}\nZONA-> ${props.VM_LEVEL}=${props.VM_LEVEL2D}\nESTAFETA-> ${infoExtra.estafeta}\nPROVINCIA-> ${infoExtra.provincia}`;
+    const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&ecc=M&format=png&data=" + encodeURIComponent(contenidoQR);
+    console.log("URL generada para el QR:", qrUrl); 
+    
+    L.marker([lat, lng], { 
         icon: L.icon({ 
             iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', 
             iconSize: [18, 28], iconAnchor: [9, 28] 
@@ -318,21 +293,23 @@ function seleccionar(lat, lng, props = null) {
         <span class="popup-header">CODIGO POSTAL</span>
         <div class="codigo-final">${codigoFinal}</div>
         <p><b>Zona:</b> ${props.VM_LEVEL}=${props.VM_LEVEL2D}</p>
-        <p><b>Coord:</b> ${coordsTexto}</p>
         <p><b>Estafeta:</b> ${infoExtra.estafeta}</p>
         <p><b>Provincia:</b> ${infoExtra.provincia}</p>
     </div>
+    
     ${esNivelPico ? `
     <div style="text-align:center; margin-top:10px; border-top:1px solid #eee; padding-top:10px;">
         <img src="${qrUrl}" class="qr-code-estilo" alt="QR Postal">
         <p style="font-size:10px; color:#333; font-weight:bold; margin-top:5px;">Escanea para ver datos de envío</p>
-    </div>` : ''}
+    </div>
+` : ''}
+
     <div class="btn-container" style="margin-top:10px; border-top:1px solid #eee; padding-top:10px;">
         <a href="${urlMaps}" target="_blank" class="btn-maps">📍 MAPS</a>
-        <a href="https://wa.me/?text=Dirección:+${codigoFinal}+Coord:+${coordsTexto}" target="_blank" class="btn-ws">💬 WS</a>
-        <button onclick="buscarEstafetaCercana(${cLat},${cLng})" class="btn-cercana">📍 ESTAFETA CERCANA</button>
+        <a href="https://wa.me/?text=Mi+Dirección:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
+        <button onclick="buscarEstafetaCercana(${lat},${lng})" class="btn-cercana">📍 ESTAFETA CERCANA</button>
     </div>
-`, { offset: offsetConfig, minWidth: 160 })
+`, { offset: offsetConfig, minWidth: 200 })
 .openPopup();
 }
 
@@ -483,68 +460,20 @@ mymap.on('locationfound', (e) => {
     seleccionar(e.latlng.lat, e.latlng.lng); 
 });
 
-mymap.on('locationfound', (e) => { 
-    layerMiUbicacion.clearLayers(); 
-    L.circleMarker(e.latlng, {radius: 9, color: 'white', fillColor: '#1a73e8', fillOpacity: 1, weight: 3}).addTo(layerMiUbicacion); 
-    seleccionar(e.latlng.lat, e.latlng.lng); 
-});
-    
-    layerZonas.on('mouseover', function(e) {
-    if (mymap.hasLayer(layerZonas)) { // Solo si el selector la tiene activada
-        const p = e.layer.feature.properties;
-        const info = obtenerInfoAdicional(p.VM_LEVEL2D);
-        
-        e.layer.bindTooltip(`
-            <div style="text-align:center;">
-                <b style="color:#f1c40f;">ZONA: ${p.VM_LEVEL}</b><br>
-                <span>${info.estafeta}</span>
-            </div>
-        `, { sticky: true, className: 'zona-tooltip' }).openTooltip();
-        
-        e.layer.setStyle({ fillOpacity: 0.3, color: '#f1c40f', weight: 3 });
-    }
-});
+mymap.on('click', (e) => seleccionar(e.latlng.lat, e.latlng.lng));
+mymap.on('moveend', render);
 
-layerZonas.on('mouseover', function(e) {
-    if (mymap.hasLayer(layerZonas)) { 
-        const p = e.layer.feature.properties;
-        const info = obtenerInfoAdicional(p.VM_LEVEL2D);
-        
-        e.layer.bindTooltip(`
-            <div style="text-align:center;">
-                <b style="color:#f1c40f;">ZONA: ${p.VM_LEVEL}</b><br>
-                <span>${info.estafeta}</span>
-            </div>
-        `, { sticky: true, className: 'zona-tooltip' }).openTooltip();
-        
-        e.layer.setStyle({ fillOpacity: 0.3, color: '#f1c40f', weight: 3 });
-    }
-});
-
-layerZonas.on('mouseout', function(e) {
-    layerZonas.resetStyle(e.layer);
-});
-
-    mymap.on('moveend', render);
-
-// Definimos las capas para el selector (Asegúrate que los nombres coincidan con tus variables)
-const overlayMaps = {
+L.control.layers(null, { 
     "🔲 Zonas": layerZonas, 
     "🟦 Cuadrícula": layerMacro, 
     "⬛ Grillas": layerNano, 
     "🛣️ Rutas": layerRutas, 
     "📍 Estafetas": layerEstafetas, 
     "🔵 Mi Ubicación": layerMiUbicacion 
-};
+}, { collapsed: false }).addTo(mymap);
 
-// Esto restaurará el cuadro de control en la esquina superior derecha
-L.control.layers(null, overlayMaps, { collapsed: false }).addTo(mymap);
-
-// Ejecución inicial
 render();
 </script>
 </body>
 </html>
-
-
 
