@@ -27,7 +27,7 @@
 
         /* Globos de Información */
         .leaflet-popup-content-wrapper { padding: 5px; border-radius: 4px; font-size: 11px; }
-        .leaflet-popup-content { margin: 8px; width: 180px !important; line-height: 1.2; }
+        .leaflet-popup-content { margin: 8px; width: 170px !important; line-height: 1.1; }
         .popup-header { font-weight: bold; display: block; margin-bottom: 3px; border-bottom: 1px solid #eee; padding-bottom: 2px; text-align: center; font-size: 9px; text-transform: uppercase; color: #666; }
         .codigo-final { background: #1a2a6c; color: white; padding: 6px; border-radius: 4px; font-size: 14px; font-weight: bold; text-align: center; margin-bottom: 5px; border: 1px solid #f1c40f; }
         
@@ -58,17 +58,26 @@
         }
 
         .qr-code-estilo {
-            width: 150px !important; 
-            height: 150px !important;
+            width: 120px !important; 
+            height: 120px !important;
             background-color: white !important; 
             border: 5px solid white !important; 
             border-radius: 0px !important;      
             image-rendering: pixelated;         
             image-rendering: crisp-edges;
             display: block;
-            margin: 0 auto;
+            margin: 5px auto;
             max-width: 150px; 
             height: auto;
+        }
+
+            .coords-label {
+            font-size: 9px;
+            color: #666;
+            text-align: center;
+            display: block;
+            margin-top: 5px;
+            font-family: monospace;
         }
     </style>
 </head>
@@ -202,13 +211,28 @@ function seleccionar(lat, lng, props = null) {
     selectionLayer.clearLayers();
     distanceLayer.clearLayers();
     const z = mymap.getZoom();
-    const puntoClic = L.latLng(lat, lng);
 
-    // 1. BUSCAR PROPIEDADES (Zonas de Panamá)
+    // 1. LÓGICA DE CENTRADO (SNAP TO GRID)
+    // Calculamos el centro del cuadro según el nivel de zoom actual
+    let step = PARAMS.RES_PICO;
+    if (z < 14.5) step = PARAMS.RES_MACRO;
+    else if (z < 17) step = PARAMS.RES_MICRO;
+    else if (z < 18.5) step = PARAMS.RES_NANO;
+
+    const xGrid = Math.floor(((lng - ORIGIN.lng) / step) + 0.00001);
+    const yGrid = Math.floor(((ORIGIN.lat - lat) / step) + 0.00001);
+    
+    // Coordenadas del centro del cuadro
+    const centerLat = ORIGIN.lat - (yGrid * step) - (step / 2);
+    const centerLng = ORIGIN.lng + (xGrid * step) + (step / 2);
+
+    const puntoCentro = L.latLng(centerLat, centerLng);
+
+    // 2. BUSCAR PROPIEDADES
     if (!props) {
         layerZonas.eachLayer(function(layer) {
-            if (layer.getBounds().contains(puntoClic)) {
-                if (isPointInGeoJSON(puntoClic, layer.toGeoJSON())) {
+            if (layer.getBounds().contains(puntoCentro)) {
+                if (isPointInGeoJSON(puntoCentro, layer.toGeoJSON())) {
                     props = layer.feature.properties;
                 }
             }
@@ -216,72 +240,41 @@ function seleccionar(lat, lng, props = null) {
     }
 
     if (!props) {
-        L.marker([lat, lng], { 
+        L.marker(puntoCentro, { 
             icon: L.icon({ 
                 iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', 
                 iconSize: [18, 28], iconAnchor: [9, 28] 
             }) 
-        }).addTo(selectionLayer).bindPopup(`
-            <span class="popup-header">⚠️ ÁREA NO DEFINIDA</span>
-            <div style="text-align:center; padding:5px; font-size:11px;">Fuera de límites territoriales o zona no mapeada.</div>
-        `, { offset: L.point(0, -25) }).openPopup();
+        }).addTo(selectionLayer).bindPopup(`<b>ÁREA NO DEFINIDA</b>`).openPopup();
         return;
     }
 
-    const res = getGridInfo(lat, lng);
+    const res = getGridInfo(centerLat, centerLng);
     const VL2 = props.VM_LEVEL2D || "N/A";
     let titulo = "", codigoFinal = "";
 
-    // --- LÓGICA DE CLIC POR NIVEL (Sincronía total entre Vista y Datos) ---
-    
+    // Dibujo de capas visuales
     if (z < 14.5) {
-        // NIVEL MACRO
-        titulo = "ÁREA POSTAL (MACRO)";
+        dibujarCuadro(centerLat, centerLng, PARAMS.RES_MACRO, '#3498db');
         codigoFinal = VL2 + "-" + res.macro;
-        dibujarCuadro(lat, lng, PARAMS.RES_MACRO, '#3498db');
-
     } else if (z < 17) {
-        // NIVEL MICRO
-        titulo = "SITIO POSTAL (MICRO)";
+        dibujarCuadro(centerLat, centerLng, PARAMS.RES_MICRO, '#f1c40f');
         codigoFinal = VL2 + "-" + res.macro + res.micro;
-        dibujarCuadro(lat, lng, PARAMS.RES_MICRO, '#f1c40f');
-
     } else if (z < 18.5) {
-        // NIVEL NANO
-        titulo = "UBICACIÓN (NANO)";
+        dibujarCuadro(centerLat, centerLng, PARAMS.RES_NANO, '#e67e22');
         codigoFinal = VL2 + "-" + res.macro + res.micro + res.nano;
-        dibujarCuadro(lat, lng, PARAMS.RES_NANO, '#e67e22');
-
     } else {
-        // NIVEL PICO (EL COMPLETO)
-        titulo = "CÓDIGO POSTAL (PICO)";
         let full = VL2 + res.macro + res.micro + res.nano + res.pico;
         codigoFinal = full.substring(0, 5) + "-" + full.substring(5);
-        
-        // Aquí activamos la Rejilla Quirúrgica que ya tenemos
-        dibujarRejillaPico(lat, lng, res);
+        dibujarRejillaPico(centerLat, centerLng);
     }
-    const mapCenter = mymap.getCenter();
-    const offsetFinal = (lat < mapCenter.lat) ? L.point(0, -70) : L.point(0, -30);
-    
-    
-    // --- LANZAR POPUP FINAL ---
-    const offsetConfig = L.point(100, -50); 
-    const VL1 = props.VM_LEVEL || "N/A";
-    const urlMaps = "https://www.google.com/maps?q=" + lat + "," + lng;
-    
 
-    
-    // Contenido del QR: Datos limpios para lectura rápida en móvil
-    const esNivelPico = (z >= 18.5);
-        // Obtenemos info relacional
-    let infoExtra = obtenerInfoAdicional(props.VM_LEVEL2D);
-    
-    const contenidoQR = `CP-> ${codigoFinal}\nZONA-> ${props.VM_LEVEL}=${props.VM_LEVEL2D}\nESTAFETA-> ${infoExtra.estafeta}\nPROVINCIA-> ${infoExtra.provincia}`;
-    const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&ecc=M&format=png&data=" + encodeURIComponent(contenidoQR);
-    console.log("URL generada para el QR:", qrUrl); 
-    
-    L.marker([lat, lng], { 
+    // 3. GENERAR POPUP CON COORDENADAS
+    const infoExtra = obtenerInfoAdicional(props.VM_LEVEL2D);
+    const contenidoQR = `CP-> ${codigoFinal}\nCOORD-> ${centerLat.toFixed(6)},${centerLng.toFixed(6)}`;
+    const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=" + encodeURIComponent(contenidoQR);
+
+    L.marker(puntoCentro, { 
         icon: L.icon({ 
             iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', 
             iconSize: [18, 28], iconAnchor: [9, 28] 
@@ -289,28 +282,23 @@ function seleccionar(lat, lng, props = null) {
     })
     .addTo(selectionLayer)
     .bindPopup(`
-    <div class="info-popup">
-        <span class="popup-header">CODIGO POSTAL</span>
-        <div class="codigo-final">${codigoFinal}</div>
-        <p><b>Zona:</b> ${props.VM_LEVEL}=${props.VM_LEVEL2D}</p>
-        <p><b>Estafeta:</b> ${infoExtra.estafeta}</p>
-        <p><b>Provincia:</b> ${infoExtra.provincia}</p>
-    </div>
-    
-    ${esNivelPico ? `
-    <div style="text-align:center; margin-top:10px; border-top:1px solid #eee; padding-top:10px;">
-        <img src="${qrUrl}" class="qr-code-estilo" alt="QR Postal">
-        <p style="font-size:10px; color:#333; font-weight:bold; margin-top:5px;">Escanea para ver datos de envío</p>
-    </div>
-` : ''}
+        <div class="info-popup">
+            <span class="popup-header">CÓDIGO POSTAL</span>
+            <div class="codigo-final">${codigoFinal}</div>
+            <p style="margin:2px 0"><b>Estafeta:</b> ${infoExtra.estafeta}</p>
+            <p style="margin:2px 0"><b>Provincia:</b> ${infoExtra.provincia}</p>
+            <span class="coords-label">Lat: ${centerLat.toFixed(6)} | Lon: ${centerLng.toFixed(6)}</span>
+        </div>
+        
+        ${z >= 18.5 ? `<img src="${qrUrl}" class="qr-code-estilo">` : ''}
 
-    <div class="btn-container" style="margin-top:10px; border-top:1px solid #eee; padding-top:10px;">
-        <a href="${urlMaps}" target="_blank" class="btn-maps">📍 MAPS</a>
-        <a href="https://wa.me/?text=Mi+Dirección:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
-        <button onclick="buscarEstafetaCercana(${lat},${lng})" class="btn-cercana">📍 ESTAFETA CERCANA</button>
-    </div>
-`, { offset: offsetConfig, minWidth: 200 })
-.openPopup();
+        <div class="btn-container" style="margin-top:8px; border-top:1px solid #eee; padding-top:5px;">
+            <a href="https://www.google.com/maps?q=${centerLat},${centerLng}" target="_blank" class="btn-maps">📍 MAPS</a>
+            <a href="https://wa.me/?text=Mi+Código+Postal:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
+            <button onclick="buscarEstafetaCercana(${centerLat},${centerLng})" class="btn-cercana">📍 ESTAFETA</button>
+        </div>
+    `, { minWidth: 180 })
+    .openPopup();
 }
 
 // --- FUNCIONES DE APOYO PARA EL DIBUJO ---
@@ -476,4 +464,5 @@ render();
 </script>
 </body>
 </html>
+
 
