@@ -253,8 +253,9 @@ function seleccionar(lat, lng, props = null) {
     const zonaID = props.VM_LEVEL2D;
     const zonaNombre = props.VM_LEVEL;
     const provincia = props.PROV_NOMB || "POR DEFINIR";
+    const infoExtra = obtenerInfoAdicional(zonaID);
     
-    let titulo = "";
+    let titulo = "", codigoFinal = "", esNivelZona = false;
     let codigoFinal = "";
     let esNivelZona = false;
 
@@ -327,19 +328,23 @@ function seleccionar(lat, lng, props = null) {
     .addTo(selectionLayer)
     .bindPopup(`
         <div class="info-popup" style="text-align: center;">
-            <span class="popup-header" style="display: block;">CÓDIGO POSTAL</span>
-            <div class="codigo-final" style="display: block; margin: 5px auto;">${codigoFinal}</div>
+            <span class="popup-header" style="display: block;">${titulo}</span>
+            <div class="codigo-final" style="display: block; margin: 5px auto;">${esNivelZona ? zonaNombre : codigoFinal}</div>
             
-            <p style="margin: 5px 0; color: #1a73e8; font-weight: bold; font-family: monospace; font-size: 13px; display: block;">
-                ${VL1}=${VL2}
-            </p>
+            ${!esNivelZona ? `
+                <p style="margin: 5px 0; color: #1a73e8; font-weight: bold; font-family: monospace; font-size: 13px;">
+                    ${zonaNombre}=${zonaID}
+                </p>
+                <p style="margin: 3px 0;"><b>Estafeta:</b><br>${infoExtra.estafeta}</p>
+            ` : ''}
             
-            <p style="margin: 3px 0; display: block;"><b>Estafeta:</b><br>${infoExtra.estafeta}</p>
-            <p style="margin: 3px 0; display: block;"><b>Provincia:</b> ${infoExtra.provincia}</p>
+            <p style="margin: 3px 0;"><b>Provincia:</b> ${provincia}</p>
             
-            <div style="margin-top: 5px; font-size: 10px; color: #666; font-family: monospace; display: block;">
-                Lat: ${centerLat.toFixed(6)}<br>Lon: ${centerLng.toFixed(6)}
-            </div>
+            ${!esNivelZona ? `
+                <div style="margin-top: 5px; font-size: 10px; color: #666; font-family: monospace;">
+                    Lat: ${centerLat.toFixed(6)}<br>Lon: ${centerLng.toFixed(6)}
+                </div>
+            ` : ''}
         </div>
         
         ${z >= 18.5 ? `<div style="text-align: center; margin: 5px 0;"><img src="${qrUrl}" class="qr-code-estilo"></div>` : ''}
@@ -516,6 +521,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
