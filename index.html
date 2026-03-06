@@ -239,7 +239,7 @@ function seleccionar(lat, lng, props = null) {
         return;
     }
 
-    const res = getGridInfo(centrolat, centrolng);
+    const res = getGridInfo(centroLat, centroLng);
     const VL2 = props.VM_LEVEL2D || "N/A";
     let titulo = "", codigoFinal = "";
 
@@ -249,19 +249,19 @@ function seleccionar(lat, lng, props = null) {
         // NIVEL MACRO
         titulo = "ÁREA POSTAL (MACRO)";
         codigoFinal = VL2 + "-" + res.macro;
-        dibujarCuadro(lat, lng, PARAMS.RES_MACRO, '#3498db');
+        dibujarCuadro(centroLat, centroLng, PARAMS.RES_MACRO, '#3498db');
 
     } else if (z < 17) {
         // NIVEL MICRO
         titulo = "SITIO POSTAL (MICRO)";
         codigoFinal = VL2 + "-" + res.macro + res.micro;
-        dibujarCuadro(lat, lng, PARAMS.RES_MICRO, '#f1c40f');
+        dibujarCuadro(centroLat, centroLng, PARAMS.RES_MICRO, '#f1c40f');
 
     } else if (z < 18.5) {
         // NIVEL NANO
         titulo = "UBICACIÓN (NANO)";
         codigoFinal = VL2 + "-" + res.macro + res.micro + res.nano;
-        dibujarCuadro(lat, lng, PARAMS.RES_NANO, '#e67e22');
+        dibujarCuadro(centroLat, centroLng, PARAMS.RES_NANO, '#e67e22');
 
     } else {
         // NIVEL PICO (EL COMPLETO)
@@ -270,16 +270,16 @@ function seleccionar(lat, lng, props = null) {
         codigoFinal = full.substring(0, 5) + "-" + full.substring(5);
         
         // Aquí activamos la Rejilla Quirúrgica que ya tenemos
-        dibujarRejillaPico(centrolat, centrolng, res);
+        dibujarRejillaPico(centroLat, centroLng, res);
     }
     const mapCenter = mymap.getCenter();
-    const offsetFinal = (centrolat < mapCenter.lat) ? L.point(0, -70) : L.point(0, -30);
+    const offsetFinal = (centroLat < mapCenter.lat) ? L.point(0, -70) : L.point(0, -30);
     
     
     // --- LANZAR POPUP FINAL ---
     const offsetConfig = L.point(100, -50); 
     const VL1 = props.VM_LEVEL || "N/A";
-    const urlMaps = "https://www.google.com/maps?q=" + centrolat + "," + centrolng;
+    const urlMaps = "https://www.google.com/maps?q=" + centroLat + "," + centroLng;
     
 
     
@@ -287,12 +287,12 @@ function seleccionar(lat, lng, props = null) {
     const esNivelPico = (z >= 18.5);
         // Obtenemos info relacional
     let infoExtra = obtenerInfoAdicional(props.VM_LEVEL2D);
-    const coordsTexto = `${centrolat.toFixed(7)},${centrolng.toFixed(7)}`;
+    const coordsTexto = `${centroLat.toFixed(7)},${centroLng.toFixed(7)}`;
     const contenidoQR = `CP-> ${codigoFinal}\nZONA-> ${props.VM_LEVEL}=${props.VM_LEVEL2D}\nCOORD-> ${coordsTexto}\nESTAFETA-> ${infoExtra.estafeta}\nPROVINCIA-> ${infoExtra.provincia}`;
     const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&ecc=M&format=png&data=" + encodeURIComponent(contenidoQR);
     console.log("URL generada para el QR:", qrUrl); 
     
-    L.marker([centrolat, centrolng], { 
+    L.marker([centroLat, centroLng], { 
         icon: L.icon({ 
             iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', 
             iconSize: [18, 28], iconAnchor: [9, 28] 
@@ -319,7 +319,7 @@ function seleccionar(lat, lng, props = null) {
     <div class="btn-container" style="margin-top:5px; border-top:1px solid #eee; padding-top:5px;">
         <a href="${urlMaps}" target="_blank" class="btn-maps">📍 MAPS</a>
         <a href="https://wa.me/?text=Mi+Dirección:+${codigoFinal}+Coord:+${coordsTexto}" target="_blank" class="btn-ws">💬 WS</a>
-        <button onclick="buscarEstafetaCercana(${lat},${lng})" class="btn-cercana">📍 ESTAFETA CERCANA</button>
+        <button onclick="buscarEstafetaCercana(${centroLat},${centroLng})" class="btn-cercana">📍 ESTAFETA CERCANA</button>
     </div>
 `, { offset: offsetConfig, minWidth: 160 })
 .openPopup();
@@ -488,6 +488,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
