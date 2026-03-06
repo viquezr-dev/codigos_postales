@@ -283,21 +283,28 @@ function seleccionar(lat, lng, props = null) {
     })
     .addTo(selectionLayer)
     .bindPopup(`
-        <div class="info-popup">
-            <span class="popup-header">CÓDIGO POSTAL</span>
-            <div class="codigo-final">${codigoFinal}</div>
-            <p style="margin: 4px 0; color: #1a73e8; font-weight: bold; font-family: monospace; font-size: 12px;">${VL1}=${VL2}</p>
-            <p style="margin:2px 0"><b>Estafeta:</b> ${infoExtra.estafeta}</p>
-            <p style="margin:2px 0"><b>Provincia:</b> ${infoExtra.provincia}</p>
-            <span class="coords-label">Lat: ${centerLat.toFixed(6)} | Lon: ${centerLng.toFixed(6)}</span>
+        <div class="info-popup" style="text-align: center;">
+            <span class="popup-header" style="display: block;">CÓDIGO POSTAL</span>
+            <div class="codigo-final" style="display: block; margin: 5px auto;">${codigoFinal}</div>
+            
+            <p style="margin: 5px 0; color: #1a73e8; font-weight: bold; font-family: monospace; font-size: 13px; display: block;">
+                ${VL1}=${VL2}
+            </p>
+            
+            <p style="margin: 3px 0; display: block;"><b>Estafeta:</b><br>${infoExtra.estafeta}</p>
+            <p style="margin: 3px 0; display: block;"><b>Provincia:</b> ${infoExtra.provincia}</p>
+            
+            <div style="margin-top: 5px; font-size: 10px; color: #666; font-family: monospace; display: block;">
+                Lat: ${centerLat.toFixed(6)}<br>Lon: ${centerLng.toFixed(6)}
+            </div>
         </div>
         
-        ${z >= 18.5 ? `<img src="${qrUrl}" class="qr-code-estilo">` : ''}
+        ${z >= 18.5 ? `<div style="text-align: center; margin: 5px 0;"><img src="${qrUrl}" class="qr-code-estilo"></div>` : ''}
 
-        <div class="btn-container" style="margin-top:8px; border-top:1px solid #eee; padding-top:5px;">
+        <div class="btn-container" style="margin-top:8px; border-top:1px solid #eee; padding-top:5px; text-align: center;">
             <a href="https://www.google.com/maps?q=${centerLat},${centerLng}" target="_blank" class="btn-maps">📍 MAPS</a>
             <a href="https://wa.me/?text=Mi+Código+Postal:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
-            <button onclick="buscarEstafetaCercana(${centerLat},${centerLng})" class="btn-cercana">📍 ESTAFETA</button>
+            <button onclick="buscarEstafetaCercana(${centerLat},${centerLng})" class="btn-cercana" style="display: block; width: 100%;">📍 ESTAFETA</button>
         </div>
     `, { minWidth: 180 })
     .openPopup();
@@ -466,6 +473,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
