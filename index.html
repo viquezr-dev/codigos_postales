@@ -203,7 +203,17 @@ function seleccionar(lat, lng, props = null) {
     selectionLayer.clearLayers();
     distanceLayer.clearLayers();
     const z = mymap.getZoom();
-    const puntoClic = L.latLng(lat, lng);
+    // Calculamos el centro del cuadro Pico (el más pequeño)
+    const stepP = PARAMS.RES_PICO;
+    const xP = Math.floor(((lng - ORIGIN.lng) / stepP) + 0.00001);
+    const yP = Math.floor(((ORIGIN.lat - lat) / stepP) + 0.00001);
+    
+    // Coordenadas del centro exacto de ese cuadro
+    const centroLat = ORIGIN.lat - (yP * stepP) - (stepP / 2);
+    const centroLng = ORIGIN.lng + (xP * stepP) + (stepP / 2);
+    
+    // Usamos estas coordenadas para TODO lo visual a partir de aquí
+    const puntoClic = L.latLng(centroLat, centroLng);
 
     // 1. BUSCAR PROPIEDADES (Zonas de Panamá)
     if (!props) {
@@ -217,7 +227,7 @@ function seleccionar(lat, lng, props = null) {
     }
 
     if (!props) {
-        L.marker([lat, lng], { 
+        L.marker([Lat, Lng], { 
             icon: L.icon({ 
                 iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', 
                 iconSize: [18, 28], iconAnchor: [9, 28] 
@@ -269,7 +279,7 @@ function seleccionar(lat, lng, props = null) {
     // --- LANZAR POPUP FINAL ---
     const offsetConfig = L.point(100, -50); 
     const VL1 = props.VM_LEVEL || "N/A";
-    const urlMaps = "https://www.google.com/maps?q=" + lat + "," + lng;
+    const urlMaps = "https://www.google.com/maps?q=" + centrolat + "," + centrolng;
     
 
     
@@ -277,7 +287,7 @@ function seleccionar(lat, lng, props = null) {
     const esNivelPico = (z >= 18.5);
         // Obtenemos info relacional
     let infoExtra = obtenerInfoAdicional(props.VM_LEVEL2D);
-    const coordsTexto = `${lat.toFixed(7)},${lng.toFixed(7)}`;
+    const coordsTexto = `${centrolat.toFixed(7)},${centrolng.toFixed(7)}`;
     const contenidoQR = `CP-> ${codigoFinal}\nZONA-> ${props.VM_LEVEL}=${props.VM_LEVEL2D}\nCOORD-> ${coordsTexto}\nESTAFETA-> ${infoExtra.estafeta}\nPROVINCIA-> ${infoExtra.provincia}`;
     const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&ecc=M&format=png&data=" + encodeURIComponent(contenidoQR);
     console.log("URL generada para el QR:", qrUrl); 
@@ -478,6 +488,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
