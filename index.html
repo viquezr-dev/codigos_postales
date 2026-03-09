@@ -246,17 +246,6 @@ function getGridInfo(lat, lng) {
     const centerLng = ORIGIN.lng + (xGrid * step) + (step / 2);
     const puntoCentro = L.latLng(centerLat, centerLng);
 
-    // 2. BUSCAR PROPIEDADES (Búsqueda nativa optimizada)
-    if (!props) {
-        // Recorremos cada capa para verificar si el punto está dentro del polígono
-        layerZonas.eachLayer(function(layer) {
-            // isPointInGeoJSON es tu función personalizada para validar el punto
-            if (isPointInGeoJSON(puntoCentro, layer.toGeoJSON())) {
-                props = layer.feature.properties;
-            }
-        });
-    }
-
     // Si después de buscar no hay propiedades, mostramos el globo profesional
     if (!props) {
     let poligonosCandidatos = [];
@@ -292,31 +281,40 @@ if (!props) {
 }
 
     const res = getGridInfo(centerLat, centerLng);
-    const zonaID = props.VM_LEVEL2D;
-    const zonaNombre = props.VM_LEVEL;
+    
+    // USANDO TUS CAMPOS REALES DEL GEOJSON
+    const zonaID = props.VM_LEVEL2D;    // Ejemplo: "BA"
+    const zonaNombre = props.VM_LEVEL;  // Ejemplo: "B7241"
     const provincia = props.PROV_NOMB || "PANAMÁ";
-    const infoExtra = obtenerInfoAdicional(zonaID);
+    const estafetaReal = props.ESTAF_NAME || "POR DEFINIR";
+    
+    // Si tienes una función externa para info adicional, úsala, 
+    // pero aquí ya tienes casi todo en el 'props'
+    const infoExtra = {
+        estafeta: estafetaReal,
+        provincia: provincia
+    };
     
     let titulo = "", codigoFinal = "", esNivelZona = false;
 
-    // 3. JERARQUÍA DE 5 NIVELES
+    // LÓGICA DE NIVELES
     if (z < 13) {
         titulo = "ZONA POSTAL";
         esNivelZona = true;
     } else if (z < 17) {
         titulo = "ÁREA POSTAL";
+        // Formato: BA-H o BA-HG
         codigoFinal = (z < 15) ? `${zonaID}-${res.macro}` : `${zonaID}-${res.macro}${res.micro}`;
-        dibujarCuadro(centerLat, centerLng, (z < 15 ? PARAMS.RES_MACRO : PARAMS.RES_MICRO), '#3498db');
     } else if (z < 19) {
         titulo = "SECTOR POSTAL";
+        // Formato: BA-HGN
         codigoFinal = `${zonaID}-${res.macro}${res.micro}${res.nano}`;
-        dibujarCuadro(centerLat, centerLng, PARAMS.RES_NANO, '#e67e22');
     } else {
         titulo = "CÓDIGO POSTAL";
-        let zonaLimpia = zonaID.toString().charAt(0) + zonaID.toString().substring(3);
-        let cadenaCompleta = zonaID.toString() + res.macro + res.micro + res.nano + res.pico;
+        // Tu formato especial para el nivel Pico: AAB8H-NGN3Q
+        // Nota: Aquí 'zonaNombre' es "B7241" (5 caracteres)
+        let cadenaCompleta = zonaNombre + res.macro + res.micro + res.nano + res.pico;
         codigoFinal = cadenaCompleta.substring(0, 5) + "-" + cadenaCompleta.substring(5);
-        dibujarRejillaPico(centerLat, centerLng);
     }
 
     // 4. GENERAR CONTENIDO QR
@@ -529,6 +527,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
