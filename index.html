@@ -278,23 +278,19 @@ function getGridInfo(lat, lng) {
     
     // 2. BÚSQUEDA ÚNICA Y ROBUSTA
     if (!props) {
-        let poligonosCandidatos = [];
-        layerZonas.eachLayer(function(layer) {
-            // Buscamos si el clic cae en algún polígono
-            if (isPointInGeoJSON(clicReal, layer.toGeoJSON())) {
-                poligonosCandidatos.push(layer);
-            }
-        });
-
-        if (poligonosCandidatos.length > 0) {
-            // Ordenamos por área: el más pequeño (más específico) primero
-            poligonosCandidatos.sort((a, b) => {
-                let areaA = parseFloat(a.feature.properties.AREA || 0);
-                let areaB = parseFloat(b.feature.properties.AREA || 0);
-                return areaA - areaB;
-            });
-            props = poligonosCandidatos[0].feature.properties;
-        }
+        const popupError = `
+            <div style="text-align: center; padding: 10px; min-width: 150px;">
+                <div style="color: #f39c12; font-size: 24px; margin-bottom: 5px;">⚠️</div>
+                <b style="color: #2c3e50; display: block; margin-bottom: 4px; font-size: 13px;">UBICACIÓN EXTERNA</b>
+                <p style="margin: 0; font-size: 11px; color: #7f8c8d;">Punto fuera de la jurisdicción postal.</p>
+                <div style="margin-top: 8px; border-top: 1px solid #eee; padding-top: 8px; font-size: 10px; color: #95a5a6; font-family: monospace;">
+                    ${lat.toFixed(6)}, ${lng.toFixed(6)}
+                </div>
+            </div>
+        `;
+        L.marker(clicReal, { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-grey.png', iconSize: [18, 28], iconAnchor: [9, 28] }) })
+         .addTo(selectionLayer).bindPopup(popupError).openPopup();
+        return;
     }
 
     // Si no hay props, mostramos el globo de UBICACIÓN EXTERNA
@@ -558,6 +554,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
