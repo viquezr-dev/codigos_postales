@@ -46,8 +46,8 @@
         .map-title span { font-size: 10px; color: #333; display: block; font-weight: bold; margin-top: -2px; }
         
         .leaflet-popup-content-wrapper {
-            background: rgba(255, 255, 255, 0.7) !important; 
-            backdrop-filter: blur(5px); 
+            background: rgba(255, 255, 255, 0.85) !important; 
+            backdrop-filter: blur(8px); 
             border: 1px solid rgba(0, 0, 0, 0.2);
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
             border-radius: 8px; /* Opcional: le da esquinas redondeadas */
@@ -331,10 +331,22 @@ function getGridInfo(lat, lng) {
             </div>
         ` : ''}
     </div>`;
-
-    L.marker(puntoCentro, { 
-        icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [18, 28], iconAnchor: [9, 28] }) 
-    }).addTo(selectionLayer).bindPopup(htmlPopup, { minWidth: 180 }).openPopup();
+    const popupOptions = {
+            minWidth: 180,
+            offset: [0, -30], // [X, Y] - Mueve el globo 30px hacia arriba para liberar espacio
+            autoPan: true,    // Asegura que se vea en pantalla sin tapar el centro
+            closeButton: true
+        };
+    
+        L.marker(puntoCentro, { 
+            icon: L.icon({ 
+                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', 
+                iconSize: [18, 28], iconAnchor: [9, 28] 
+            }) 
+        })
+        .addTo(selectionLayer)
+        .bindPopup(htmlPopup, popupOptions) // Aplicamos las opciones
+        .openPopup();
 }
 
 // --- FUNCIONES DE APOYO PARA EL DIBUJO ---
@@ -500,6 +512,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
