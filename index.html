@@ -226,23 +226,36 @@ function seleccionar(lat, lng, props = null) {
     const puntoCentro = L.latLng(centerLat, centerLng);
 
     // 2. BUSCAR PROPIEDADES
+    // 2. BUSCAR PROPIEDADES (Búsqueda robusta)
     if (!props) {
+        // Buscamos directamente en las capas del GeoJSON cargado
         layerZonas.eachLayer(function(layer) {
-            if (layer.getBounds().contains(puntoCentro)) {
-                if (isPointInGeoJSON(puntoCentro, layer.toGeoJSON())) {
-                    props = layer.feature.properties;
-                }
+            // Verificamos si el punto central cae dentro del polígono real
+            if (leafletPip.pointInLayer(puntoCentro, layerZonas, true).length > 0) {
+                props = leafletPip.pointInLayer(puntoCentro, layerZonas, true)[0].feature.properties;
             }
         });
     }
 
+    // Si después de buscar no hay propiedades (clic fuera de los polígonos de estafetas.geojson)
     if (!props) {
+        const popupError = `
+            <div style="text-align: center; padding: 10px; min-width: 150px;">
+                <div style="color: #e74c3c; font-size: 24px; margin-bottom: 5px;">📍</div>
+                <b style="color: #2c3e50; display: block; margin-bottom: 4px; font-size: 13px;">UBICACIÓN EXTERNA</b>
+                <p style="margin: 0; font-size: 11px; color: #7f8c8d;">Punto fuera de la jurisdicción postal definida.</p>
+                <div style="margin-top: 8px; border-top: 1px solid #eee; padding-top: 8px; font-size: 10px; color: #95a5a6; font-family: monospace;">
+                    ${centerLat.toFixed(6)}, ${centerLng.toFixed(6)}
+                </div>
+            </div>
+        `;
+
         L.marker(puntoCentro, { 
             icon: L.icon({ 
                 iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', 
                 iconSize: [18, 28], iconAnchor: [9, 28] 
             }) 
-        }).addTo(selectionLayer).bindPopup(`<b>ÁREA NO DEFINIDA</b>`).openPopup();
+        }).addTo(selectionLayer).bindPopup(popupError).openPopup();
         return;
     }
 
@@ -484,6 +497,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
