@@ -229,8 +229,8 @@ function getGridInfo(lat, lng) {
     selectionLayer.clearLayers();
     distanceLayer.clearLayers();
     const z = mymap.getZoom();
-
-        // 1. Buscamos TODOS los polígonos que contienen el punto (Clic Real)
+        
+    // 1. Buscamos TODOS los polígonos que contienen el punto
     let poligonosCandidatos = [];
     layerZonas.eachLayer(function(layer) {
         if (isPointInGeoJSON(clicReal, layer.toGeoJSON())) {
@@ -238,14 +238,21 @@ function getGridInfo(lat, lng) {
         }
     });
     
-    // 2. Si hay candidatos, aplicamos la jerarquía espacial
+    // 2. Selección Inteligente y Blindada
     if (poligonosCandidatos.length > 0) {
-        // ORDENAMOS: El área más pequeña va al principio (índice 0)
-        // Esto garantiza que el polígono más específico gane la selección.
-        poligonosCandidatos.sort((a, b) => a.feature.properties.AREA - b.feature.properties.AREA);
+        // Usamos una función de comparación robusta
+        poligonosCandidatos.sort((a, b) => {
+            // Aseguramos que tratamos con números válidos
+            let valA = parseFloat(a.feature.properties.AREA) || 0;
+            let valB = parseFloat(b.feature.properties.AREA) || 0;
+            return valA - valB;
+        });
         
-        // Seleccionamos el ganador (el de menor área)
+        // Seleccionamos el primero (el de menor área)
         props = poligonosCandidatos[0].feature.properties;
+    } else {
+        // Si no hay candidatos, props se queda null
+        props = null;
     }
         
         // 1. LÓGICA DE CENTRADO (SNAP TO GRID)
@@ -535,6 +542,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
