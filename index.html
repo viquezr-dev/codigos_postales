@@ -230,9 +230,6 @@ function getGridInfo(lat, lng) {
         return; // Salimos de la función inmediatamente
     }
 
-    selectionLayer.clearLayers();
-    distanceLayer.clearLayers();
-    
     // 1. LÓGICA DE CENTRADO (SNAP TO GRID)
     let step = PARAMS.RES_PICO;
     if (z < 14.5) step = PARAMS.RES_MACRO;
@@ -248,37 +245,36 @@ function getGridInfo(lat, lng) {
 
     // Si después de buscar no hay propiedades, mostramos el globo profesional
     if (!props) {
-    let poligonosCandidatos = [];
-    layerZonas.eachLayer(function(layer) {
-        if (isPointInGeoJSON(puntoCentro, layer.toGeoJSON())) {
-            poligonosCandidatos.push(layer);
+        let poligonosCandidatos = [];
+        layerZonas.eachLayer(function(layer) {
+            if (isPointInGeoJSON(puntoCentro, layer.toGeoJSON())) {
+                poligonosCandidatos.push(layer);
+            }
+        });
+
+        if (poligonosCandidatos.length > 0) {
+            props = poligonosCandidatos[poligonosCandidatos.length - 1].feature.properties;
         }
-    });
-
-    if (poligonosCandidatos.length > 0) {
-        // Tomamos el último polígono encontrado (generalmente el de nivel más alto/específico)
-        props = poligonosCandidatos[poligonosCandidatos.length - 1].feature.properties;
     }
-}
 
-// Si después de la búsqueda no hay props, mostramos el globo de error profesional
-if (!props) {
-    const popupError = `
-        <div style="text-align: center; padding: 10px; min-width: 150px;">
-            <div style="color: #f39c12; font-size: 24px; margin-bottom: 5px;">⚠️</div>
-            <b style="color: #2c3e50; display: block; margin-bottom: 4px; font-size: 13px;">UBICACIÓN EXTERNA</b>
-            <p style="margin: 0; font-size: 11px; color: #7f8c8d;">Punto fuera de la jurisdicción postal.</p>
-            <div style="margin-top: 8px; border-top: 1px solid #eee; padding-top: 8px; font-size: 10px; color: #95a5a6; font-family: monospace;">
-                ${centerLat.toFixed(6)}, ${centerLng.toFixed(6)}
+    // Si después de la búsqueda sigue sin haber props, globo de error profesional
+    if (!props) {
+        const popupError = `
+            <div style="text-align: center; padding: 10px; min-width: 150px;">
+                <div style="color: #f39c12; font-size: 24px; margin-bottom: 5px;">⚠️</div>
+                <b style="color: #2c3e50; display: block; margin-bottom: 4px; font-size: 13px;">UBICACIÓN EXTERNA</b>
+                <p style="margin: 0; font-size: 11px; color: #7f8c8d;">Punto fuera de la jurisdicción postal.</p>
+                <div style="margin-top: 8px; border-top: 1px solid #eee; padding-top: 8px; font-size: 10px; color: #95a5a6; font-family: monospace;">
+                    ${centerLat.toFixed(6)}, ${centerLng.toFixed(6)}
+                </div>
             </div>
-        </div>
-    `;
+        `;
 
-    L.marker(puntoCentro, { 
-        icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-grey.png', iconSize: [18, 28], iconAnchor: [9, 28] }) 
-    }).addTo(selectionLayer).bindPopup(popupError).openPopup();
-    return;
-}
+        L.marker(puntoCentro, { 
+            icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-grey.png', iconSize: [18, 28], iconAnchor: [9, 28] }) 
+        }).addTo(selectionLayer).bindPopup(popupError).openPopup();
+        return;
+    }
 
     const res = getGridInfo(centerLat, centerLng);
     
@@ -527,6 +523,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
