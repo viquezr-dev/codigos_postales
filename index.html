@@ -356,10 +356,18 @@ function getCentroide(coordinates) {
     const contenidoQR = `CP-> ${codigoFinal}\nCOORD-> ${centerLat.toFixed(6)},${centerLng.toFixed(6)}\nZONA-> ${zonaNombre}=${zonaID}\nESTAFETA-> ${estafetaReal}\nPROVINCIA-> ${provincia}`;
     const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=" + encodeURIComponent(contenidoQR);
 
-    let btnCentrar = `<button onclick="mymap.setView([${centroide.lat}, ${centroide.lng}], 16)" 
-                  style="margin-top:5px; background:#27ae60; color:white; border:none; padding:5px; width:100%; border-radius:3px;">
-                  📍 IR AL CENTRO DE LA ZONA
-                  </button>`;
+    let btnCentrar = "";
+    if (props && props.geometry) { // Verificamos que geometry exista
+        try {
+            const centroide = getCentroide(props.geometry);
+            btnCentrar = `<button onclick="mymap.setView([${centroide.lat}, ${centroide.lng}], 16)" 
+                          style="margin-top:5px; background:#27ae60; color:white; border:none; padding:5px; width:100%; border-radius:3px;">
+                          📍 IR AL CENTRO DE LA ZONA
+                          </button>`;
+        } catch (e) {
+            console.error("Error calculando centroide:", e);
+        }
+    }
         
     let htmlPopup = `
     <div style="text-align: center; min-width: 175px;">
@@ -573,6 +581,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
