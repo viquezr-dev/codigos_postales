@@ -106,7 +106,7 @@ const PARAMS = {
     ALFA: "23456789ABCDEFGHJKLMNPQRSTVWXZ", 
     MACRO_X_COUNT: Math.ceil((77.0 - 83.0) / -0.143)
 };
-
+let modoSelectorZonasActivo = false
 const mymap = L.map('mapid', { zoomSnap: 0.1, zoomControl: false, maxZoom: 22 }).setView([8.5, -80.0], 8);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
     maxZoom: 22, 
@@ -207,11 +207,29 @@ function getGridInfo(lat, lng) {
     return { macro: encode((my * PARAMS.MACRO_X_COUNT) + mx, 2), micro: encode((microY * 24) + microX, 2), nano: encode((nanoY * 25) + nanoX, 2), pico: encode((picoY * 8) + picoX, 2) };
 }
 
-function seleccionar(lat, lng, props = null) {
+    function toggleSelectorZonas() {
+    modoSelectorZonasActivo = !modoSelectorZonasActivo;
+    
+    if (modoSelectorZonasActivo) {
+        // Limpiamos todo al activar el modo selección
+        selectionLayer.clearLayers();
+        // Opcional: podrías poner el cursor en modo "crosshair"
+    }
+}
+
+    function seleccionar(lat, lng, props = null) {
     selectionLayer.clearLayers();
     distanceLayer.clearLayers();
     const z = mymap.getZoom();
 
+
+    if (typeof modoSelectorZonasActivo !== 'undefined' && modoSelectorZonasActivo) {
+        return; // Salimos de la función inmediatamente
+    }
+
+    selectionLayer.clearLayers();
+    distanceLayer.clearLayers();
+    
     // 1. LÓGICA DE CENTRADO (SNAP TO GRID)
     let step = PARAMS.RES_PICO;
     if (z < 14.5) step = PARAMS.RES_MACRO;
@@ -508,6 +526,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
