@@ -223,22 +223,12 @@ function getGridInfo(lat, lng) {
     }
 }
 
-    // Función para obtener el centroide de un polígono (promedio de coordenadas)
-function getCentroide(coordinates) {
-    let latSum = 0, lngSum = 0, count = 0;
-    
-    // Si es MultiPolygon, tomamos el primer anillo
-    let coords = coordinates[0][0] ? coordinates[0][0] : coordinates[0];
-    
-    coords.forEach(coord => {
-        lngSum += coord[0];
-        latSum += coord[1];
-        count++;
-    });
-    
-    return L.latLng(latSum / count, lngSum / count);
-}
-    
+   function getCentroide(geometry) {
+        let coords = geometry.type === "MultiPolygon" ? geometry.coordinates[0][0] : geometry.coordinates[0];
+        let latSum = 0, lngSum = 0;
+        coords.forEach(coord => { lngSum += coord[0]; latSum += coord[1]; });
+        return { lat: latSum / coords.length, lng: lngSum / coords.length };
+    }
     
     function seleccionar(lat, lng, props = null) {
     if (modoSelectorZonasActivo) return;
@@ -331,8 +321,13 @@ function getCentroide(coordinates) {
     const zonaNombre = props.VM_LEVEL || "SIN NOMBRE";
     const provincia = props.PROV_NOMB || "PANAMÁ";
     const estafetaReal = props.ESTAF_NAME || "POR DEFINIR";
-    const centroide = getCentroide(props.geometry.coordinates); // Obtienes el centro real
-    let titulo = "", codigoFinal = "", esNivelZona = false;
+
+    // Cálculo del botón de centrado (Aquí se usa la geometría capturada)
+    let btnCentrar = "";
+    if (geometriaSeleccionada) {
+        const centro = getCentroide(geometriaSeleccionada);
+        btnCentrar = `<button onclick="mymap.setView([${centro.lat}, ${centro.lng}], 16)" style="margin-top:8px; background:#27ae60; color:white; border:none; padding:5px; width:100%; border-radius:3px; cursor:pointer;">📍 IR AL CENTRO DE LA ZONA</button>`;
+    }
 
     // LÓGICA DE NIVELES (Corregida para usar zonaID en niveles altos y zonaNombre en Pico)
     if (z < 13) {
@@ -356,20 +351,7 @@ function getCentroide(coordinates) {
     const contenidoQR = `CP-> ${codigoFinal}\nCOORD-> ${centerLat.toFixed(6)},${centerLng.toFixed(6)}\nZONA-> ${zonaNombre}=${zonaID}\nESTAFETA-> ${estafetaReal}\nPROVINCIA-> ${provincia}`;
     const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=" + encodeURIComponent(contenidoQR);
 
-    let btnCentrar = "";
-    if (props && props.geometry) { // Verificamos que geometry exista
-        try {
-            const centroide = getCentroide(props.geometry);
-            btnCentrar = `<button onclick="mymap.setView([${centroide.lat}, ${centroide.lng}], 16)" 
-                          style="margin-top:5px; background:#27ae60; color:white; border:none; padding:5px; width:100%; border-radius:3px;">
-                          📍 IR AL CENTRO DE LA ZONA
-                          </button>`;
-        } catch (e) {
-            console.error("Error calculando centroide:", e);
-        }
-    }
-        
-    let htmlPopup = `
+   let htmlPopup = `
     <div style="text-align: center; min-width: 175px;">
         <span style="font-size: 9px; color: #666; text-transform: uppercase; font-weight: bold; display: block; margin-bottom: 3px; border-bottom: 1px solid #eee;">${titulo}</span>
         
@@ -407,15 +389,10 @@ function getCentroide(coordinates) {
     autoPanPadding: [50, 50] 
 };
     
-        L.marker(puntoCentro, { 
-            icon: L.icon({ 
-                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', 
-                iconSize: [18, 28], iconAnchor: [9, 28] 
-            }) 
-        })
-        .addTo(selectionLayer)
-        .bindPopup(htmlPopup, popupOptions) // Aplicamos las opciones
-        .openPopup();
+        L.marker(puntoCentro, { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [18, 28], iconAnchor: [9, 28] }) })
+    .addTo(selectionLayer)
+    .bindPopup(htmlPopup, popupOptions)
+    .openPopup();
 }
 
 // --- FUNCIONES DE APOYO PARA EL DIBUJO ---
@@ -581,6 +558,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
