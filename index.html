@@ -106,7 +106,7 @@ const PARAMS = {
     ALFA: "23456789ABCDEFGHJKLMNPQRSTVWXZ", 
     MACRO_X_COUNT: Math.ceil((77.0 - 83.0) / -0.143)
 };
-let modoSelectorZonasActivo = false
+
 const mymap = L.map('mapid', { zoomSnap: 0.1, zoomControl: false, maxZoom: 22 }).setView([8.5, -80.0], 8);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
     maxZoom: 22, 
@@ -135,7 +135,7 @@ const layerEstafetas = L.layerGroup().addTo(mymap);
 const layerMiUbicacion = L.layerGroup().addTo(mymap);
 const selectionLayer = L.layerGroup().addTo(mymap);
 const distanceLayer = L.layerGroup().addTo(mymap);
-
+let modoSelectorZonasActivo = false
 fetch('estafetas.geojson').then(r => r.json()).then(data => layerZonas.addData(data));
 
 fetch('estafetasl.geojson').then(r => r.json()).then(data => {
@@ -526,6 +526,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
