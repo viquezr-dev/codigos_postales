@@ -108,6 +108,7 @@ const PARAMS = {
 };
 
 const mymap = L.map('mapid', { zoomSnap: 0.1, zoomControl: false, maxZoom: 22 }).setView([8.5, -80.0], 8);
+let modoSelectorZonasActivo = false
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
     maxZoom: 22, 
     maxNativeZoom: 19,
@@ -526,6 +527,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
