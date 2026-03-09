@@ -239,28 +239,27 @@ function getGridInfo(lat, lng) {
     const clicReal = L.latLng(lat, lng);    
     
         // 1. Buscamos TODOS los polígonos que contienen el punto
-    let poligonosCandidatos = [];
+    llet poligonosCandidatos = [];
     layerZonas.eachLayer(function(layer) {
-        if (isPointInGeoJSON(clicReal, layer.toGeoJSON())) {
+        // Probamos si la función detecta el polígono
+        const detectado = isPointInGeoJSON(clicReal, layer.toGeoJSON());
+        if (detectado) {
             poligonosCandidatos.push(layer);
         }
     });
-    
-    // 2. Selección Inteligente y Blindada
+
+    // DEBUG: Mira esto en la consola (F12) al hacer clic
+    console.log("Candidatos encontrados:", poligonosCandidatos.length);
+
     if (poligonosCandidatos.length > 0) {
-        // Usamos una función de comparación robusta
+        // ... (tu lógica de sort se mantiene igual)
         poligonosCandidatos.sort((a, b) => {
-            // Aseguramos que tratamos con números válidos
-            let valA = parseFloat(a.feature.properties.AREA) || 0;
-            let valB = parseFloat(b.feature.properties.AREA) || 0;
-            return valA - valB;
+            let areaA = parseFloat(a.feature.properties.AREA || 0);
+            let areaB = parseFloat(b.feature.properties.AREA || 0);
+            return areaA - areaB;
         });
-        
-        // Seleccionamos el primero (el de menor área)
         props = poligonosCandidatos[0].feature.properties;
-    } else {
-        // Si no hay candidatos, props se queda null
-        props = null;
+        geometriaSeleccionada = poligonosCandidatos[0].feature.geometry;
     }
         
         // 1. LÓGICA DE CENTRADO (SNAP TO GRID)
@@ -536,6 +535,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
