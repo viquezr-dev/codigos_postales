@@ -79,6 +79,9 @@
             margin-top: 5px;
             font-family: monospace;
         }
+        
+
+        
     </style>
 </head>
 <body>
@@ -227,7 +230,25 @@ function getGridInfo(lat, lng) {
     distanceLayer.clearLayers();
     const z = mymap.getZoom();
 
-    // 1. LÓGICA DE CENTRADO (SNAP TO GRID)
+        // 1. Buscamos TODOS los polígonos que contienen el punto (Clic Real)
+    let poligonosCandidatos = [];
+    layerZonas.eachLayer(function(layer) {
+        if (isPointInGeoJSON(clicReal, layer.toGeoJSON())) {
+            poligonosCandidatos.push(layer);
+        }
+    });
+    
+    // 2. Si hay candidatos, aplicamos la jerarquía espacial
+    if (poligonosCandidatos.length > 0) {
+        // ORDENAMOS: El área más pequeña va al principio (índice 0)
+        // Esto garantiza que el polígono más específico gane la selección.
+        poligonosCandidatos.sort((a, b) => a.feature.properties.AREA - b.feature.properties.AREA);
+        
+        // Seleccionamos el ganador (el de menor área)
+        props = poligonosCandidatos[0].feature.properties;
+    }
+        
+        // 1. LÓGICA DE CENTRADO (SNAP TO GRID)
     let step = PARAMS.RES_PICO;
     if (z < 14.5) step = PARAMS.RES_MACRO;
     else if (z < 17) step = PARAMS.RES_MICRO;
@@ -332,11 +353,13 @@ function getGridInfo(lat, lng) {
         ` : ''}
     </div>`;
     const popupOptions = {
-            minWidth: 180,
-            offset: [0, -30], // [X, Y] - Mueve el globo 30px hacia arriba para liberar espacio
-            autoPan: true,    // Asegura que se vea en pantalla sin tapar el centro
-            closeButton: true
-        };
+    minWidth: 180,
+    offset: [0, -10], 
+    autoPan: true,
+    // Esto evita que el globo intente "centrarse" sobre el marcador 
+    // y lo deja más libre
+    autoPanPadding: [50, 50] 
+};
     
         L.marker(puntoCentro, { 
             icon: L.icon({ 
@@ -512,6 +535,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
