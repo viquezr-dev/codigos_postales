@@ -294,8 +294,8 @@ function getGridInfo(lat, lng) {
     } else {
         titulo = "CÓDIGO POSTAL";
         // Formato AAB8H-NGN3Q: zonaNombre (5) + macro (1) + guion + resto
-        let full = zonaNombre + res.macro + res.micro + res.nano + res.pico;
-        codigoFinal = full.substring(0, 5) + "-" + full.substring(5);
+        let cadenaCompleta = zonaID + res.macro + res.micro + res.nano + res.pico;
+        codigoFinal = cadenaCompleta.substring(0, 5) + "-" + cadenaCompleta.substring(5);
         dibujarRejillaPico(centerLat, centerLng);
     }
 
@@ -500,6 +500,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
