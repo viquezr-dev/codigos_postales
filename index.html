@@ -269,7 +269,8 @@ function seleccionar(lat, lng, props = null) {
     } else {
         titulo = "CÓDIGO POSTAL";
         let zonaLimpia = zonaID.toString().charAt(0) + zonaID.toString().substring(3);
-        codigoFinal = `${zonaLimpia}${res.macro}-${res.micro}${res.nano}${res.pico}`;
+        let cadenaCompleta = zonaID.toString() + res.macro + res.micro + res.nano + res.pico;
+        codigoFinal = cadenaCompleta.substring(0, 5) + "-" + cadenaCompleta.substring(5);
         dibujarRejillaPico(centerLat, centerLng);
     }
 
@@ -483,6 +484,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
