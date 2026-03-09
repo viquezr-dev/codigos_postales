@@ -225,34 +225,31 @@ function seleccionar(lat, lng, props = null) {
     const centerLng = ORIGIN.lng + (xGrid * step) + (step / 2);
     const puntoCentro = L.latLng(centerLat, centerLng);
 
-    // 2. BUSCAR PROPIEDADES
-    // 2. BUSCAR PROPIEDADES (Búsqueda robusta)
+    // 2. BUSCAR PROPIEDADES (Búsqueda nativa optimizada)
     if (!props) {
-        // Buscamos directamente en las capas del GeoJSON cargado
+        // Recorremos cada capa para verificar si el punto está dentro del polígono
         layerZonas.eachLayer(function(layer) {
-            // Verificamos si el punto central cae dentro del polígono real
-            if (leafletPip.pointInLayer(puntoCentro, layerZonas, true).length > 0) {
-                props = leafletPip.pointInLayer(puntoCentro, layerZonas, true)[0].feature.properties;
+            // isPointInGeoJSON es tu función personalizada para validar el punto
+            if (isPointInGeoJSON(puntoCentro, layer.toGeoJSON())) {
+                props = layer.feature.properties;
             }
         });
     }
 
-    // Si después de buscar no hay propiedades (clic fuera de los polígonos de estafetas.geojson)
+    // Si después de buscar no hay propiedades, mostramos el globo profesional
     if (!props) {
         const popupError = `
-            <div style="text-align: center; padding: 10px; min-width: 150px;">
-                <div style="color: #e74c3c; font-size: 24px; margin-bottom: 5px;">📍</div>
-                <b style="color: #2c3e50; display: block; margin-bottom: 4px; font-size: 13px;">UBICACIÓN EXTERNA</b>
-                <p style="margin: 0; font-size: 11px; color: #7f8c8d;">Punto fuera de la jurisdicción postal definida.</p>
-                <div style="margin-top: 8px; border-top: 1px solid #eee; padding-top: 8px; font-size: 10px; color: #95a5a6; font-family: monospace;">
-                    ${centerLat.toFixed(6)}, ${centerLng.toFixed(6)}
-                </div>
+            <div style="text-align: center; padding: 5px; min-width: 150px;">
+                <div style="color: #f39c12; font-size: 20px; margin-bottom: 5px;">⚠️</div>
+                <b style="color: #2c3e50; display: block; font-size: 12px; border-bottom: 1px solid #eee; margin-bottom: 5px;">UBICACIÓN EXTERNA</b>
+                <p style="margin: 5px 0; font-size: 11px; color: #555;">Punto fuera de la jurisdicción postal.</p>
+                <div style="font-size: 9px; color: #999; font-family: monospace;">${centerLat.toFixed(6)}, ${centerLng.toFixed(6)}</div>
             </div>
         `;
 
         L.marker(puntoCentro, { 
             icon: L.icon({ 
-                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png', 
+                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-grey.png', 
                 iconSize: [18, 28], iconAnchor: [9, 28] 
             }) 
         }).addTo(selectionLayer).bindPopup(popupError).openPopup();
@@ -497,6 +494,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
