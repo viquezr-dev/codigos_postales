@@ -235,24 +235,20 @@ function getGridInfo(lat, lng) {
 
     selectionLayer.clearLayers();
     distanceLayer.clearLayers();
-    const z = mymap.getZoom();
-    const clicReal = L.latLng(lat, lng);    
     
-        // 1. Buscamos TODOS los polígonos que contienen el punto
-    llet poligonosCandidatos = [];
+    const z = mymap.getZoom();
+    const clicReal = L.latLng(lat, lng);
+    let geometriaSeleccionada = null;
+
+    // 1. BÚSQUEDA Y SELECCIÓN INTELIGENTE
+    let poligonosCandidatos = [];
     layerZonas.eachLayer(function(layer) {
-        // Probamos si la función detecta el polígono
-        const detectado = isPointInGeoJSON(clicReal, layer.toGeoJSON());
-        if (detectado) {
+        if (isPointInGeoJSON(clicReal, layer.toGeoJSON())) {
             poligonosCandidatos.push(layer);
         }
     });
 
-    // DEBUG: Mira esto en la consola (F12) al hacer clic
-    console.log("Candidatos encontrados:", poligonosCandidatos.length);
-
     if (poligonosCandidatos.length > 0) {
-        // ... (tu lógica de sort se mantiene igual)
         poligonosCandidatos.sort((a, b) => {
             let areaA = parseFloat(a.feature.properties.AREA || 0);
             let areaB = parseFloat(b.feature.properties.AREA || 0);
@@ -261,8 +257,8 @@ function getGridInfo(lat, lng) {
         props = poligonosCandidatos[0].feature.properties;
         geometriaSeleccionada = poligonosCandidatos[0].feature.geometry;
     }
-        
-        // 1. LÓGICA DE CENTRADO (SNAP TO GRID)
+
+    // 2. LÓGICA DE CENTRADO (SNAP TO GRID)
     let step = PARAMS.RES_PICO;
     if (z < 14.5) step = PARAMS.RES_MACRO;
     else if (z < 17) step = PARAMS.RES_MICRO;
@@ -270,12 +266,11 @@ function getGridInfo(lat, lng) {
 
     const xGrid = Math.floor(((lng - ORIGIN.lng) / step) + 0.00001);
     const yGrid = Math.floor(((ORIGIN.lat - lat) / step) + 0.00001);
-    
     const centerLat = ORIGIN.lat - (yGrid * step) - (step / 2);
     const centerLng = ORIGIN.lng + (xGrid * step) + (step / 2);
     const puntoCentro = L.latLng(centerLat, centerLng);
-    
-    // 2. BÚSQUEDA ÚNICA Y ROBUSTA
+
+    // 3. VALIDACIÓN DE UBICACIÓN EXTERNA
     if (!props) {
         const popupError = `
             <div style="text-align: center; padding: 10px; min-width: 150px;">
@@ -285,93 +280,65 @@ function getGridInfo(lat, lng) {
                 <div style="margin-top: 8px; border-top: 1px solid #eee; padding-top: 8px; font-size: 10px; color: #95a5a6; font-family: monospace;">
                     ${lat.toFixed(6)}, ${lng.toFixed(6)}
                 </div>
-            </div>
-        `;
+            </div>`;
         L.marker(clicReal, { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-grey.png', iconSize: [18, 28], iconAnchor: [9, 28] }) })
          .addTo(selectionLayer).bindPopup(popupError).openPopup();
         return;
     }
 
-    // 3. PROCESAMIENTO DE DATOS
+    // 4. PROCESAMIENTO DE DATOS
     const res = getGridInfo(centerLat, centerLng);
     const zonaID = props.VM_LEVEL2D || "XX";
     const zonaNombre = props.VM_LEVEL || "SIN NOMBRE";
     const provincia = props.PROV_NOMB || "PANAMÁ";
     const estafetaReal = props.ESTAF_NAME || "POR DEFINIR";
 
-    // Cálculo del botón de centrado (Aquí se usa la geometría capturada)
     let btnCentrar = "";
     if (geometriaSeleccionada) {
         const centro = getCentroide(geometriaSeleccionada);
         btnCentrar = `<button onclick="mymap.setView([${centro.lat}, ${centro.lng}], 16)" style="margin-top:8px; background:#27ae60; color:white; border:none; padding:5px; width:100%; border-radius:3px; cursor:pointer;">📍 IR AL CENTRO DE LA ZONA</button>`;
     }
-}
-    // LÓGICA DE NIVELES (Corregida para usar zonaID en niveles altos y zonaNombre en Pico)
-    if (z < 13) {
-        titulo = "ZONA POSTAL";
-        esNivelZona = true;
-    } else if (z < 17) {
-        titulo = "ÁREA POSTAL";
-        codigoFinal = (z < 15) ? `${zonaID}-${res.macro}` : `${zonaID}-${res.macro}${res.micro}`;
-    } else if (z < 19) {
-        titulo = "SECTOR POSTAL";
-        codigoFinal = `${zonaID}-${res.macro}${res.micro}${res.nano}`;
-    } else {
+
+    let titulo = "", codigoFinal = "", esNivelZona = false;
+    if (z < 13) { titulo = "ZONA POSTAL"; esNivelZona = true; }
+    else if (z < 17) { titulo = "ÁREA POSTAL"; codigoFinal = (z < 15) ? `${zonaID}-${res.macro}` : `${zonaID}-${res.macro}${res.micro}`; }
+    else if (z < 19) { titulo = "SECTOR POSTAL"; codigoFinal = `${zonaID}-${res.macro}${res.micro}${res.nano}`; }
+    else { 
         titulo = "CÓDIGO POSTAL";
-        // Formato AAB8H-NGN3Q: zonaNombre (5) + macro (1) + guion + resto
         let cadenaCompleta = zonaID + res.macro + res.micro + res.nano + res.pico;
         codigoFinal = cadenaCompleta.substring(0, 5) + "-" + cadenaCompleta.substring(5);
         dibujarRejillaPico(centerLat, centerLng);
     }
 
-    // 4. QR Y POPUP (Mantenemos tu diseño profesional)
     const contenidoQR = `CP-> ${codigoFinal}\nCOORD-> ${centerLat.toFixed(6)},${centerLng.toFixed(6)}\nZONA-> ${zonaNombre}=${zonaID}\nESTAFETA-> ${estafetaReal}\nPROVINCIA-> ${provincia}`;
     const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=" + encodeURIComponent(contenidoQR);
 
-   let htmlPopup = `
+    let htmlPopup = `
     <div style="text-align: center; min-width: 175px;">
         <span style="font-size: 9px; color: #666; text-transform: uppercase; font-weight: bold; display: block; margin-bottom: 3px; border-bottom: 1px solid #eee;">${titulo}</span>
-        
-        ${esNivelZona ? `
-            <div style="color: #1a73e8; font-weight: bold; font-size: 18px; margin: 10px 0;">${zonaNombre}</div>
-        ` : `
+        ${esNivelZona ? `<div style="color: #1a73e8; font-weight: bold; font-size: 18px; margin: 10px 0;">${zonaNombre}</div>` : `
             <div class="codigo-final" style="margin: 5px 0; font-size: 14px; font-weight: bold;">${codigoFinal}</div>
-            <p style="margin: 5px 0; color: #1a73e8; font-weight: bold; font-family: monospace; font-size: 13px;">
-                ${zonaNombre}=${zonaID}
-            </p>
+            <p style="margin: 5px 0; color: #1a73e8; font-weight: bold; font-family: monospace; font-size: 13px;">${zonaNombre}=${zonaID}</p>
             <p style="margin: 3px 0; font-size: 11px;"><b>Estafeta:</b><br>${estafetaReal}</p>
         `}
-
         <p style="margin: 3px 0; font-size: 11px;"><b>Provincia:</b> ${provincia}</p>
-        
         ${!esNivelZona ? `
-            <div style="margin-top: 5px; font-size: 10px; color: #666; font-family: monospace;">
-                Lat: ${centerLat.toFixed(6)}<br>Lon: ${centerLng.toFixed(6)}
-            </div>
+            <div style="margin-top: 5px; font-size: 10px; color: #666; font-family: monospace;">Lat: ${centerLat.toFixed(6)}<br>Lon: ${centerLng.toFixed(6)}</div>
             ${z >= 18.5 ? `<div style="text-align: center; margin: 8px 0;"><img src="${qrUrl}" class="qr-code-estilo"></div>` : ''}
             <div class="btn-container" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
-                <a href="https://www.google.com/maps?q=${centerLat},${centerLng}" target="_blank" class="btn-maps">📍 MAPS</a>
+                <a href="https://www.google.com/maps?q=$${centerLat},${centerLng}" target="_blank" class="btn-maps">📍 MAPS</a>
                 <a href="https://wa.me/?text=Mi+Código+Postal:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
                 <button onclick="buscarEstafetaCercana(${centerLat},${centerLng})" class="btn-cercana">📍 ESTAFETA</button>
                 ${btnCentrar}
             </div>
         ` : ''}
     </div>`;
-    const popupOptions = {
-    minWidth: 180,
-    offset: [0, -10], 
-    autoPan: true,
-    // Esto evita que el globo intente "centrarse" sobre el marcador 
-    // y lo deja más libre
-    autoPanPadding: [50, 50] 
-};
-    
-        L.marker(puntoCentro, { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [18, 28], iconAnchor: [9, 28] }) })
+
+    L.marker(puntoCentro, { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [18, 28], iconAnchor: [9, 28] }) })
     .addTo(selectionLayer)
-    .bindPopup(htmlPopup, popupOptions)
+    .bindPopup(htmlPopup, { minWidth: 180, offset: [0, -10], autoPanPadding: [50, 50] })
     .openPopup();
 }
-
 // --- FUNCIONES DE APOYO PARA EL DIBUJO ---
 
 function dibujarCuadro(lat, lng, step, color) {
@@ -535,6 +502,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
