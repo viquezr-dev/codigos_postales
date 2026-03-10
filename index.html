@@ -238,7 +238,6 @@ function getGridInfo(lat, lng) {
     
     const z = mymap.getZoom();
     const clicReal = L.latLng(lat, lng);
-    let geometriaSeleccionada = null;
 
     // 1. BÚSQUEDA Y SELECCIÓN INTELIGENTE
     let poligonosCandidatos = [];
@@ -255,7 +254,6 @@ function getGridInfo(lat, lng) {
             return areaA - areaB;
         });
         props = poligonosCandidatos[0].feature.properties;
-        geometriaSeleccionada = poligonosCandidatos[0].feature.geometry;
     }
 
     // 2. LÓGICA DE CENTRADO (SNAP TO GRID)
@@ -293,12 +291,6 @@ function getGridInfo(lat, lng) {
     const provincia = props.PROV_NOMB || "PANAMÁ";
     const estafetaReal = props.ESTAF_NAME || "POR DEFINIR";
 
-    let btnCentrar = "";
-    if (geometriaSeleccionada) {
-        const centro = getCentroide(geometriaSeleccionada);
-        btnCentrar = `<button onclick="mymap.setView([${centro.lat}, ${centro.lng}], 16)" style="margin-top:8px; background:#27ae60; color:white; border:none; padding:5px; width:100%; border-radius:3px; cursor:pointer;">📍 IR AL CENTRO DE LA ZONA</button>`;
-    }
-
     let titulo = "", codigoFinal = "", esNivelZona = false;
     if (z < 13) { titulo = "ZONA POSTAL"; esNivelZona = true; }
     else if (z < 17) { titulo = "ÁREA POSTAL"; codigoFinal = (z < 15) ? `${zonaID}-${res.macro}` : `${zonaID}-${res.macro}${res.micro}`; }
@@ -329,14 +321,19 @@ function getGridInfo(lat, lng) {
                 <a href="https://www.google.com/maps?q=$${centerLat},${centerLng}" target="_blank" class="btn-maps">📍 MAPS</a>
                 <a href="https://wa.me/?text=Mi+Código+Postal:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
                 <button onclick="buscarEstafetaCercana(${centerLat},${centerLng})" class="btn-cercana">📍 ESTAFETA</button>
-                ${btnCentrar}
             </div>
         ` : ''}
     </div>`;
 
     L.marker(puntoCentro, { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [18, 28], iconAnchor: [9, 28] }) })
     .addTo(selectionLayer)
-    .bindPopup(htmlPopup, { minWidth: 180, offset: [0, -10], autoPanPadding: [50, 50] })
+    .bindPopup(htmlPopup, { 
+        minWidth: 175, 
+        maxWidth: 200, 
+        offset: [0, -10], 
+        autoPan: true, 
+        autoPanPadding: [50, 50] 
+    })
     .openPopup();
 }
 // --- FUNCIONES DE APOYO PARA EL DIBUJO ---
@@ -502,6 +499,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
