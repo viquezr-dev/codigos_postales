@@ -318,7 +318,7 @@ function getGridInfo(lat, lng) {
             <div style="margin-top: 5px; font-size: 10px; color: #666; font-family: monospace;">Lat: ${centerLat.toFixed(6)}<br>Lon: ${centerLng.toFixed(6)}</div>
             ${z >= 18.5 ? `<div style="text-align: center; margin: 8px 0;"><img src="${qrUrl}" class="qr-code-estilo"></div>` : ''}
             <div class="btn-container" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
-                <a href="https://www.google.com/maps?q=$${centerLat},${centerLng}" target="_blank" class="btn-maps">📍 MAPS</a>
+                <a href="https://www.google.com/maps/search/?api=1&query=${cLat},${cLng}" target="_blank" class="btn-maps">📍 MAPS</a>
                 <a href="https://wa.me/?text=Mi+Código+Postal:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
                 <button onclick="buscarEstafetaCercana(${centerLat},${centerLng})" class="btn-cercana">📍 ESTAFETA MAS CERCANA</button>
             </div>
@@ -530,6 +530,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
