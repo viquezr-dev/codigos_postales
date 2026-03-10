@@ -112,16 +112,27 @@ const PARAMS = {
     MACRO_X_COUNT: Math.ceil((77.0 - 83.0) / -0.143)
 };
 
-const mymap = L.map('mapid', { zoomSnap: 0.1, zoomControl: false, maxZoom: 22 }).setView([8.5, -80.0], 8);
-
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
-    maxZoom: 22, 
+const mapaCalles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 22,
     maxNativeZoom: 19,
-    attribution: 'COTEL Panamá'
-}).addTo(mymap);
+    attribution: 'COTEL Panamá | © OpenStreetMap'
+});
 
+const mapaSatelite = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+    maxZoom: 22,
+    attribution: 'COTEL Panamá | © Google Maps'
+});
+
+// 2. Inicializamos el mapa con el de calles por defecto
+const mymap = L.map('mapid', { 
+    zoomSnap: 0.1, 
+    zoomControl: false, 
+    maxZoom: 22,
+    layers: [mapaCalles] // Esto carga el mapa de calles al abrir
+}).setView([8.5, -80.0], 8);
+
+// 3. El control del Zoom se mantiene igual
 L.control.zoom({ position: 'bottomright' }).addTo(mymap);
-
 // Capas
 const layerZonas = L.geoJSON(null, { 
     style: { color: "#333", weight: 1.5, fillOpacity: 0.1, fillColor: "#3498db" },
@@ -318,7 +329,7 @@ function getGridInfo(lat, lng) {
             <div style="margin-top: 5px; font-size: 10px; color: #666; font-family: monospace;">Lat: ${centerLat.toFixed(6)}<br>Lon: ${centerLng.toFixed(6)}</div>
             ${z >= 18.5 ? `<div style="text-align: center; margin: 8px 0;"><img src="${qrUrl}" class="qr-code-estilo"></div>` : ''}
             <div class="btn-container" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
-                <a href="https://www.google.com/maps/search/?api=1&query=${cLat},${cLng}" target="_blank" class="btn-maps">📍 MAPS</a>
+                <a href="https://www.google.com/maps/search/?api=1&query=${centerLat},${centerLng}" target="_blank" class="btn-maps">📍 MAPS</a>
                 <a href="https://wa.me/?text=Mi+Código+Postal:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
                 <button onclick="buscarEstafetaCercana(${centerLat},${centerLng})" class="btn-cercana">📍 ESTAFETA MAS CERCANA</button>
             </div>
@@ -506,30 +517,39 @@ mymap.on('locationfound', (e) => {
     }).addTo(layerMiUbicacion); 
 
     // 3. lógica de selección postal
-    seleccionar(e.latlng.lat, e.latlng.lng); 
-});
-
-
+    // --- 1. CONFIGURACIÓN DE EVENTOS ---
 mymap.on('locationerror', (e) => {
     alert("No se pudo obtener tu ubicación: " + e.message);
 });
 
+// Evento de clic para generar códigos
 mymap.on('click', (e) => seleccionar(e.latlng.lat, e.latlng.lng));
+
+// Renderizado de cuadrícula al mover el mapa
 mymap.on('moveend', render);
 
-L.control.layers(null, { 
+// --- 4. SELECTOR DE CAPAS (BASE Y SUPERPUESTAS) ---
+const baseMaps = {
+    "🗺️ Calles": mapaCalles,
+    "🌍 Satélite": mapaSatelite
+};
+
+const overlayMaps = {
     "🔲 Zonas": layerZonas, 
     "🟦 Cuadrícula": layerMacro, 
     "⬛ Grillas": layerNano, 
     "🛣️ Rutas": layerRutas, 
     "📍 Estafetas": layerEstafetas, 
     "🔵 Mi Ubicación": layerMiUbicacion 
-}, { collapsed: false }).addTo(mymap);
+};
 
+// IMPORTANTE: Ahora pasamos 'baseMaps' como primer argumento en lugar de 'null'
+L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(mymap);
 render();
 </script>
 </body>
 </html>
+
 
 
 
