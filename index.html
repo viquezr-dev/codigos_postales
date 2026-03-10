@@ -320,7 +320,7 @@ function getGridInfo(lat, lng) {
             <div class="btn-container" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
                 <a href="https://www.google.com/maps?q=$${centerLat},${centerLng}" target="_blank" class="btn-maps">📍 MAPS</a>
                 <a href="https://wa.me/?text=Mi+Código+Postal:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
-                <button onclick="buscarEstafetaCercana(${centerLat},${centerLng})" class="btn-cercana">📍 ESTAFETA</button>
+                <button onclick="buscarEstafetaCercana(${centerLat},${centerLng})" class="btn-cercana">📍 ESTAFETA MAS CERCANA</button>
             </div>
         ` : ''}
     </div>`;
@@ -499,6 +499,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
