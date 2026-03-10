@@ -476,11 +476,42 @@ function render() {
     if (z >= 16.5) draw(PARAMS.RES_NANO, layerNano, '', '#2c3e50', 0.5, 0.2, 1500);
 }
 
-function findMe() { mymap.locate({setView: true, maxZoom: 19}); }
+function findMe() { 
+    // Usamos watch: true si quieres que se actualice si el usuario se mueve
+    mymap.locate({setView: true, maxZoom: 18, enableHighAccuracy: true}); 
+}
+
 mymap.on('locationfound', (e) => { 
     layerMiUbicacion.clearLayers(); 
-    L.circleMarker(e.latlng, {radius: 9, color: 'white', fillColor: '#1a73e8', fillOpacity: 1, weight: 3}).addTo(layerMiUbicacion); 
+
+    // 1. Dibujamos el círculo de precisión (radio de exactitud)
+    
+    if (e.accuracy) {
+        L.circle(e.latlng, {
+            radius: e.accuracy / 2, 
+            color: '#1a73e8',
+            fillColor: '#1a73e8',
+            fillOpacity: 0.1,  
+            weight: 1
+        }).addTo(layerMiUbicacion);
+    }
+
+    // 2. Dibujamos tu marcador de ubicación (el punto azul con borde blanco)
+    L.circleMarker(e.latlng, {
+        radius: 9, 
+        color: 'white', 
+        fillColor: '#1a73e8', 
+        fillOpacity: 1, 
+        weight: 3
+    }).addTo(layerMiUbicacion); 
+
+    // 3. lógica de selección postal
     seleccionar(e.latlng.lat, e.latlng.lng); 
+});
+
+
+mymap.on('locationerror', (e) => {
+    alert("No se pudo obtener tu ubicación: " + e.message);
 });
 
 mymap.on('click', (e) => seleccionar(e.latlng.lat, e.latlng.lng));
@@ -499,6 +530,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
