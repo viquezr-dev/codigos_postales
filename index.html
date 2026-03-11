@@ -341,7 +341,7 @@ function getGridInfo(lat, lng) {
     .bindPopup(htmlPopup, { 
         minWidth: 160, 
         maxWidth: 200, 
-        offset: offsetPopup, 
+        offset: L.point(0, -25), 
         autoPan: true, 
         autoPanPadding: [50, 50] 
     })
@@ -550,6 +550,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
