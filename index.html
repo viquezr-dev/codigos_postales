@@ -339,9 +339,9 @@ function getGridInfo(lat, lng) {
     L.marker(puntoCentro, { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [18, 28], iconAnchor: [9, 28] }) })
     .addTo(selectionLayer)
     .bindPopup(htmlPopup, { 
-        minWidth: 175, 
+        minWidth: 160, 
         maxWidth: 200, 
-        offset: [0, -10], 
+        offset: offsetPopup, 
         autoPan: true, 
         autoPanPadding: [50, 50] 
     })
@@ -550,44 +550,6 @@ render();
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
