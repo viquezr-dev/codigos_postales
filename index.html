@@ -46,7 +46,7 @@
         .map-title span { font-size: 10px; color: #333; display: block; font-weight: bold; margin-top: -2px; }
         
         .leaflet-popup-content-wrapper {
-            background: rgba(255, 255, 255, 0.85) !important; 
+            background: rgba(255, 255, 255, 0.75) !important; 
             backdrop-filter: blur(8px); 
             border: 1px solid rgba(0, 0, 0, 0.2);
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
@@ -54,7 +54,7 @@
         }
     
         .leaflet-popup-tip {
-            background: rgba(255, 255, 255, 0.7) !important;
+            display:none;            /* background: rgba(255, 255, 255, 0.7) !important; */
         }
 
         .qr-code-estilo {
@@ -341,7 +341,7 @@ function getGridInfo(lat, lng) {
     .bindPopup(htmlPopup, { 
         minWidth: 160, 
         maxWidth: 200, 
-        offset: L.point(0, -25), 
+        offset: (z >= 18.5) ? L.point(0, -40) : L.point(0, -20), 
         autoPan: true, 
         autoPanPadding: [50, 50] 
     })
@@ -550,6 +550,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
