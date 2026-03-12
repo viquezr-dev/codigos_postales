@@ -372,9 +372,9 @@ function dibujarRejillaPico(lat, lng) {
     // Líneas de la rejilla
     for (let i = 0; i <= 8; i++) {
         L.polyline([[sLatN, sLngN + (i * stepP)], [sLatN - stepN, sLngN + (i * stepP)]], 
-            { color: '#ffffff', weight: 2, opacity: 0.8 }).addTo(selectionLayer);
+            { color: '#f1c40f', weight: 2, opacity: 0.8 }).addTo(selectionLayer);
         L.polyline([[sLatN - (i * stepP), sLngN], [sLatN - (i * stepP), sLngN + stepN]], 
-            { color: '#ffffff', weight: 2, opacity: 0.8 }).addTo(selectionLayer);
+            { color: '#f1c40f', weight: 2, opacity: 0.8 }).addTo(selectionLayer);
     }
     
     // Cuadro de 3.3m seleccionado
@@ -550,6 +550,7 @@ render();
 </script>
 </body>
 </html>
+
 
 
 
