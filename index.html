@@ -54,7 +54,7 @@
         }
     
         .leaflet-popup-tip {
-            display:none;            /* background: rgba(255, 255, 255, 0.7) !important; */
+            display:none;    
         }
 
         .qr-code-estilo {
@@ -100,7 +100,7 @@
 <div id="mapid"></div>
 
 <script>
-
+//Código diseñado por Raul Viquez, no copie o plagie este cod. Fuente...propiedad intelectual de viquezr@gmail.com
 let modoSelectorZonasActivo = false;
 const ORIGIN = { lat: 10.0, lng: -83.0 };
 const PARAMS = {
@@ -230,7 +230,7 @@ function getGridInfo(lat, lng) {
     if (modoSelectorZonasActivo) {
         // Limpiamos todo al activar el modo selección
         selectionLayer.clearLayers();
-        // Opcional: podrías poner el cursor en modo "crosshair"
+        
     }
 }
 
@@ -421,7 +421,7 @@ function buscarEstafetaCercana(lat, lng) {
     let cercana = null;
     let dMin = Infinity;
 
-    // Escaneamos la capa de estafetas de forma correcta
+    // Escaneamos la capa de estafetas
     layerEstafetas.eachLayer(group => {
         // Como es un GeoJSON, recorremos sus sub-layers (los puntos)
         group.eachLayer(l => {
@@ -527,10 +527,10 @@ mymap.on('click', (e) => seleccionar(e.latlng.lat, e.latlng.lng));
 mymap.on('moveend', render);
 
 // --- 3. SELECTOR DE CAPAS (BASE Y OVERLAYS) ---
-// Asegúrate de que estas variables coincidan con las que definiste al inicio
+
 const baseMaps = {
-    "🗺️ Calles": mapaCalles,  // Cámbialo a 'osm' si usaste ese nombre arriba
-    "🌍 Satélite": mapaSatelite // Cámbialo a 'googleSatelite' si usaste ese nombre arriba
+    "🗺️ Calles": mapaCalles,  
+    "🌍 Satélite": mapaSatelite 
 };
 
 const overlayMaps = {
@@ -550,11 +550,3 @@ render();
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
