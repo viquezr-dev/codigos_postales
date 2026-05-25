@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <!-- Librería QR rápida y local -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Librería QR optimizada -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 
     <style>
         body, html, #mapid { width: 100%; height: 100%; margin: 0; padding: 0; background: #ddd; }
@@ -73,6 +73,7 @@
             image-rendering: crisp-edges;
             display: block;
             margin: 5px auto;
+            background: white;
         }
 
         .coords-label {
@@ -243,22 +244,32 @@ function getCentroide(geometry) {
 }
 
 function generateQRCode(contenido) {
-    const container = document.createElement('div');
-    container.style.display = 'inline-block';
-    try {
-        new QRCode(container, {
-            text: contenido,
-            width: 120,
-            height: 120,
-            colorDark: "#000000",
-            colorLight: "#ffffff",
-            correctLevel: QRCode.CorrectLevel.H
-        });
-        return container.innerHTML;
-    } catch(e) {
-        console.error('Error generando QR:', e);
-        return '';
-    }
+    return new Promise((resolve) => {
+        try {
+            const canvas = document.createElement('canvas');
+            QRCode.toCanvas(canvas, contenido, {
+                errorCorrectionLevel: 'H',
+                type: 'image/png',
+                quality: 0.95,
+                margin: 0,
+                width: 120,
+                color: {
+                    dark: '#000000',
+                    light: '#ffffff'
+                }
+            }, (error) => {
+                if (error) {
+                    console.error('Error QR:', error);
+                    resolve('');
+                } else {
+                    resolve(canvas.outerHTML);
+                }
+            });
+        } catch(e) {
+            console.error('Error generando QR:', e);
+            resolve('');
+        }
+    });
 }
     
 function seleccionar(lat, lng, props = null) {
@@ -335,41 +346,68 @@ function seleccionar(lat, lng, props = null) {
 
     const contenidoQR = `CP-> ${codigoFinal}\nCOORD-> ${centerLat.toFixed(6)},${centerLng.toFixed(6)}\nZONA-> ${zonaNombre}=${zonaID}\nESTAFETA-> ${estafetaReal}\nPROVINCIA-> ${provincia}`;
     
-    let qrHtml = '';
+    // Generar QR de forma asincrónica
     if (z >= 18.5) {
-        qrHtml = `<div class="qr-code-container">${generateQRCode(contenidoQR)}</div>`;
+        generateQRCode(contenidoQR).then(qrHtml => {
+            const htmlPopup = `
+            <div style="text-align: center; min-width: 175px;">
+                <span style="font-size: 9px; color: #666; text-transform: uppercase; font-weight: bold; display: block; margin-bottom: 3px; border-bottom: 1px solid #eee;">${titulo}</span>
+                <div class="codigo-final" style="margin: 5px 0; font-size: 14px; font-weight: bold;">${codigoFinal}</div>
+                <p style="margin: 5px 0; color: #1a73e8; font-weight: bold; font-family: monospace; font-size: 13px;">${zonaNombre}=${zonaID}</p>
+                <p style="margin: 3px 0; font-size: 11px;"><b>Estafeta:</b><br>${estafetaReal}</p>
+                <p style="margin: 3px 0; font-size: 11px;"><b>Provincia:</b> ${provincia}</p>
+                <div style="margin-top: 5px; font-size: 10px; color: #666; font-family: monospace;">Lat: ${centerLat.toFixed(6)}<br>Lon: ${centerLng.toFixed(6)}</div>
+                <div class="qr-code-container">${qrHtml}</div>
+                <div class="btn-container" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
+                    <a href="https://www.google.com/maps/search/?api=1&query=${centerLat},${centerLng}" target="_blank" class="btn-maps">📍 MAPS</a>
+                    <a href="https://wa.me/?text=Mi+Código+Postal:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
+                    <button onclick="buscarEstafetaCercana(${centerLat},${centerLng})" class="btn-cercana">📍 ESTAFETA MAS CERCANA</button>
+                </div>
+            </div>`;
+
+            const marker = L.marker(puntoCentro, { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [18, 28], iconAnchor: [9, 28] }) })
+                .addTo(selectionLayer)
+                .bindPopup(htmlPopup, { 
+                    minWidth: 160, 
+                    maxWidth: 200, 
+                    offset: L.point(0, -40), 
+                    autoPan: true, 
+                    autoPanPadding: [50, 50] 
+                });
+            
+            marker.openPopup();
+        });
+    } else {
+        const htmlPopup = `
+        <div style="text-align: center; min-width: 175px;">
+            <span style="font-size: 9px; color: #666; text-transform: uppercase; font-weight: bold; display: block; margin-bottom: 3px; border-bottom: 1px solid #eee;">${titulo}</span>
+            ${esNivelZona ? `<div style="color: #1a73e8; font-weight: bold; font-size: 18px; margin: 10px 0;">${zonaNombre}</div>` : `
+                <div class="codigo-final" style="margin: 5px 0; font-size: 14px; font-weight: bold;">${codigoFinal}</div>
+                <p style="margin: 5px 0; color: #1a73e8; font-weight: bold; font-family: monospace; font-size: 13px;">${zonaNombre}=${zonaID}</p>
+                <p style="margin: 3px 0; font-size: 11px;"><b>Estafeta:</b><br>${estafetaReal}</p>
+            `}
+            <p style="margin: 3px 0; font-size: 11px;"><b>Provincia:</b> ${provincia}</p>
+            ${!esNivelZona ? `
+                <div style="margin-top: 5px; font-size: 10px; color: #666; font-family: monospace;">Lat: ${centerLat.toFixed(6)}<br>Lon: ${centerLng.toFixed(6)}</div>
+                <div class="btn-container" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
+                    <a href="https://www.google.com/maps/search/?api=1&query=${centerLat},${centerLng}" target="_blank" class="btn-maps">📍 MAPS</a>
+                    <a href="https://wa.me/?text=Mi+Código+Postal:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
+                    <button onclick="buscarEstafetaCercana(${centerLat},${centerLng})" class="btn-cercana">📍 ESTAFETA MAS CERCANA</button>
+                </div>
+            ` : ''}
+        </div>`;
+
+        L.marker(puntoCentro, { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [18, 28], iconAnchor: [9, 28] }) })
+        .addTo(selectionLayer)
+        .bindPopup(htmlPopup, { 
+            minWidth: 160, 
+            maxWidth: 200, 
+            offset: L.point(0, -20), 
+            autoPan: true, 
+            autoPanPadding: [50, 50] 
+        })
+        .openPopup();
     }
-
-    let htmlPopup = `
-    <div style="text-align: center; min-width: 175px;">
-        <span style="font-size: 9px; color: #666; text-transform: uppercase; font-weight: bold; display: block; margin-bottom: 3px; border-bottom: 1px solid #eee;">${titulo}</span>
-        ${esNivelZona ? `<div style="color: #1a73e8; font-weight: bold; font-size: 18px; margin: 10px 0;">${zonaNombre}</div>` : `
-            <div class="codigo-final" style="margin: 5px 0; font-size: 14px; font-weight: bold;">${codigoFinal}</div>
-            <p style="margin: 5px 0; color: #1a73e8; font-weight: bold; font-family: monospace; font-size: 13px;">${zonaNombre}=${zonaID}</p>
-            <p style="margin: 3px 0; font-size: 11px;"><b>Estafeta:</b><br>${estafetaReal}</p>
-        `}
-        <p style="margin: 3px 0; font-size: 11px;"><b>Provincia:</b> ${provincia}</p>
-        ${!esNivelZona ? `
-            <div style="margin-top: 5px; font-size: 10px; color: #666; font-family: monospace;">Lat: ${centerLat.toFixed(6)}<br>Lon: ${centerLng.toFixed(6)}</div>
-            ${qrHtml}
-            <div class="btn-container" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
-                <a href="https://www.google.com/maps/search/?api=1&query=${centerLat},${centerLng}" target="_blank" class="btn-maps">📍 MAPS</a>
-                <a href="https://wa.me/?text=Mi+Código+Postal:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
-                <button onclick="buscarEstafetaCercana(${centerLat},${centerLng})" class="btn-cercana">📍 ESTAFETA MAS CERCANA</button>
-            </div>
-        ` : ''}
-    </div>`;
-
-    L.marker(puntoCentro, { icon: L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', iconSize: [18, 28], iconAnchor: [9, 28] }) })
-    .addTo(selectionLayer)
-    .bindPopup(htmlPopup, { 
-        minWidth: 160, 
-        maxWidth: 200, 
-        offset: (z >= 18.5) ? L.point(0, -40) : L.point(0, -20), 
-        autoPan: true, 
-        autoPanPadding: [50, 50] 
-    })
-    .openPopup();
 }
 // --- FUNCIONES DE APOYO PARA EL DIBUJO ---
 
