@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Librería QR rápida y local -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
     <style>
         body, html, #mapid { width: 100%; height: 100%; margin: 0; padding: 0; background: #ddd; }
@@ -21,14 +23,14 @@
         .leaflet-top.leaflet-right { margin-top: 70px !important; }
         
         /* Etiquetas de Cuadrícula */
-        .leaflet-tooltip.watermark-tooltip { background: transparent!important; border: none!important; box-shadow: none!important; color: rgba(0,0,0,0.5); font-weight: bold; font-family: monospace; text-shadow: 1px 1px 0px white; pointer-events: none; }
+        .leaflet-tooltip.watermark-tooltip { background: transparent!important; border: none!important; box-shadow: none!important; color: rgba(0,0,0,0.5); font-weight: bold; font-family: monospace; font-size: 12px; }
         .label-macro { color: #1a73e8!important; font-size: 15px; }
         .label-micro { color: #e67e22!important; font-size: 11px; }
 
         /* Globos de Información */
         .leaflet-popup-content-wrapper { padding: 5px; border-radius: 4px; font-size: 11px; }
         .leaflet-popup-content { margin: 8px; width: 170px !important; line-height: 1.1; }
-        .popup-header { font-weight: bold; display: block; margin-bottom: 3px; border-bottom: 1px solid #eee; padding-bottom: 2px; text-align: center; font-size: 9px; text-transform: uppercase; color: #666; }
+        .popup-header { font-weight: bold; display: block; margin-bottom: 3px; border-bottom: 1px solid #eee; padding-bottom: 2px; text-align: center; font-size: 9px; text-transform: uppercase; color: #333; }
         .codigo-final { background: #1a2a6c; color: white; padding: 6px; border-radius: 4px; font-size: 14px; font-weight: bold; text-align: center; margin-bottom: 5px; border: 1px solid #f1c40f; }
         
         .btn-container { display: flex; gap: 3px; justify-content: center; flex-wrap: wrap; }
@@ -38,7 +40,7 @@
         .btn-cercana { background: #003366; color: white !important; border: none; padding: 5px; border-radius: 3px; cursor: pointer; font-size: 10px; font-weight: bold; width: 100%; margin-top: 3px; }
         
         .distancia-label { background: #e74c3c; color: black; border: none; font-weight: bold; border-radius: 10px; padding: 2px 8px; font-size: 11px; }
-        .locate-button { position: absolute; bottom: 30px; left: 10px; z-index: 1000; background: white; width: 36px; height: 36px; border-radius: 4px; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: none; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+        .locate-button { position: absolute; bottom: 30px; left: 10px; z-index: 1000; background: white; width: 36px; height: 36px; border-radius: 4px; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
         .inv { background: none; border: none; }
 
         .map-title { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 1000; text-align: center; pointer-events: none; width: 100%; }
@@ -50,28 +52,30 @@
             backdrop-filter: blur(8px); 
             border: 1px solid rgba(0, 0, 0, 0.2);
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            border-radius: 8px; /* Opcional: le da esquinas redondeadas */
+            border-radius: 8px;
         }
     
         .leaflet-popup-tip {
             display:none;    
         }
 
-        .qr-code-estilo {
-            width: 120px !important; 
+        .qr-code-container {
+            text-align: center;
+            margin: 8px 0;
+        }
+
+        .qr-code-container canvas {
+            width: 120px !important;
             height: 120px !important;
-            background-color: white !important; 
-            border: 5px solid white !important; 
-            border-radius: 0px !important;      
-            image-rendering: pixelated;         
+            border: 5px solid white;
+            border-radius: 0px;
+            image-rendering: pixelated;
             image-rendering: crisp-edges;
             display: block;
             margin: 5px auto;
-            max-width: 150px; 
-            height: auto;
         }
 
-            .coords-label {
+        .coords-label {
             font-size: 9px;
             color: #666;
             text-align: center;
@@ -79,8 +83,6 @@
             margin-top: 5px;
             font-family: monospace;
         }
-        
-
         
     </style>
 </head>
@@ -224,24 +226,42 @@ function getGridInfo(lat, lng) {
     return { macro: encode((my * PARAMS.MACRO_X_COUNT) + mx, 2), micro: encode((microY * 24) + microX, 2), nano: encode((nanoY * 25) + nanoX, 2), pico: encode((picoY * 8) + picoX, 2) };
 }
 
-    function toggleSelectorZonas() {
+function toggleSelectorZonas() {
     modoSelectorZonasActivo = !modoSelectorZonasActivo;
     
     if (modoSelectorZonasActivo) {
         // Limpiamos todo al activar el modo selección
         selectionLayer.clearLayers();
-        
     }
 }
 
-   function getCentroide(geometry) {
-        let coords = geometry.type === "MultiPolygon" ? geometry.coordinates[0][0] : geometry.coordinates[0];
-        let latSum = 0, lngSum = 0;
-        coords.forEach(coord => { lngSum += coord[0]; latSum += coord[1]; });
-        return { lat: latSum / coords.length, lng: lngSum / coords.length };
+function getCentroide(geometry) {
+    let coords = geometry.type === "MultiPolygon" ? geometry.coordinates[0][0] : geometry.coordinates[0];
+    let latSum = 0, lngSum = 0;
+    coords.forEach(coord => { lngSum += coord[0]; latSum += coord[1]; });
+    return { lat: latSum / coords.length, lng: lngSum / coords.length };
+}
+
+function generateQRCode(contenido) {
+    const container = document.createElement('div');
+    container.style.display = 'inline-block';
+    try {
+        new QRCode(container, {
+            text: contenido,
+            width: 120,
+            height: 120,
+            colorDark: "#000000",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.H
+        });
+        return container.innerHTML;
+    } catch(e) {
+        console.error('Error generando QR:', e);
+        return '';
     }
+}
     
-    function seleccionar(lat, lng, props = null) {
+function seleccionar(lat, lng, props = null) {
     if (modoSelectorZonasActivo) return;
 
     selectionLayer.clearLayers();
@@ -314,7 +334,11 @@ function getGridInfo(lat, lng) {
     }
 
     const contenidoQR = `CP-> ${codigoFinal}\nCOORD-> ${centerLat.toFixed(6)},${centerLng.toFixed(6)}\nZONA-> ${zonaNombre}=${zonaID}\nESTAFETA-> ${estafetaReal}\nPROVINCIA-> ${provincia}`;
-    const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=" + encodeURIComponent(contenidoQR);
+    
+    let qrHtml = '';
+    if (z >= 18.5) {
+        qrHtml = `<div class="qr-code-container">${generateQRCode(contenidoQR)}</div>`;
+    }
 
     let htmlPopup = `
     <div style="text-align: center; min-width: 175px;">
@@ -327,7 +351,7 @@ function getGridInfo(lat, lng) {
         <p style="margin: 3px 0; font-size: 11px;"><b>Provincia:</b> ${provincia}</p>
         ${!esNivelZona ? `
             <div style="margin-top: 5px; font-size: 10px; color: #666; font-family: monospace;">Lat: ${centerLat.toFixed(6)}<br>Lon: ${centerLng.toFixed(6)}</div>
-            ${z >= 18.5 ? `<div style="text-align: center; margin: 8px 0;"><img src="${qrUrl}" class="qr-code-estilo"></div>` : ''}
+            ${qrHtml}
             <div class="btn-container" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
                 <a href="https://www.google.com/maps/search/?api=1&query=${centerLat},${centerLng}" target="_blank" class="btn-maps">📍 MAPS</a>
                 <a href="https://wa.me/?text=Mi+Código+Postal:+${codigoFinal}" target="_blank" class="btn-ws">💬 WS</a>
@@ -477,7 +501,7 @@ function render() {
                 L.rectangle([[la, lo], [la - step, lo + step]], { color: color, weight: weight, fill: false, opacity: opacity, interactive: false }).addTo(layer);
                 if (labelClass && ((labelClass==='label-macro' && z < 13) || (labelClass==='label-micro' && z >= 13 && z < 16.5))) {
                     const txt = labelClass === 'label-macro' ? info.macro : info.micro;
-                    L.marker([la - step/2, lo + step/2], { icon: L.divIcon({className: 'inv'}) }).bindTooltip(txt, { permanent: true, direction: 'center', className: `watermark-tooltip ${labelClass}` }).addTo(layer);
+                    L.marker([la - step/2, lo + step/2], { icon: L.divIcon({className: 'inv'}) }).bindTooltip(txt, { permanent: true, direction: 'center', className: `watermark-tooltip ${labelClass}` });
                 }
             }
         }
