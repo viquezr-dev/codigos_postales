@@ -314,8 +314,8 @@ function seleccionar(lat, lng, props = null) {
     }
 
     const contenidoQR = `CP-> ${codigoFinal}\nCOORD-> ${centerLat.toFixed(6)},${centerLng.toFixed(6)}\nZONA-> ${zonaNombre}=${zonaID}\nESTAFETA-> ${estafetaReal}\nPROVINCIA-> ${provincia}`;
-    const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=" + encodeURIComponent(contenidoQR);
-
+    // const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=" + encodeURIComponent(contenidoQR);
+    const qrUrl = "https://quickchart.io/qr?size=120&text=" + encodeURIComponent(contenidoQR);
     let qrHtml = '';
     if (z >= 18.5) {
         qrHtml = `<div class="qr-code-container"><img src="${qrUrl}" alt="QR Code" loading="lazy"></div>`;
